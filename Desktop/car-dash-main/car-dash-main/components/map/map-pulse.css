@@ -1,0 +1,96 @@
+/* Specialized CSS for the pulse animation to ensure it works across browsers */
+.leaflet-pulsing-marker {
+    background: none !important;
+    border: none !important;
+}
+
+/* Make sure marker icons use proper z-index for positioning */
+.leaflet-marker-icon {
+    z-index: 500;
+}
+
+/* Make sure the regular markers are above the pulse animations */
+.leaflet-marker-pane {
+    z-index: 500;
+}
+
+/* Put circle markers on top of regular markers */
+.leaflet-pane.leaflet-overlay-pane {
+    z-index: 600;
+}
+
+.marker-pulse-container {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    left: 16px;
+    top: 16px;
+    /* Center the container properly */
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    /* Ensure the pulse is below other elements */
+    z-index: 400;
+}
+
+/* Outer pulse circle */
+.marker-pulse-outer {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: rgba(59, 130, 246, 0.5);
+    animation: pulse-outer 2s infinite;
+    /* Keep pulse effect below other elements */
+    z-index: 300;
+}
+
+/* Middle pulse circle */
+.marker-pulse-middle {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    left: 5px;
+    top: 5px;
+    border-radius: 50%;
+    background-color: rgba(59, 130, 246, 0.6);
+    animation: pulse-middle 2s infinite;
+    animation-delay: 0.3s;
+}
+
+/* We're using a Leaflet CircleMarker for the inner dot now instead of CSS
+   This keeps the centering consistent across the app */
+.leaflet-circle-marker {
+    z-index: 600 !important; /* Ensure circle markers are above other markers */
+}
+
+/* Animation for outer circle */
+@keyframes pulse-outer {
+    0% {
+        transform: scale(0.7);
+        opacity: 0.9;
+    }
+    70% {
+        transform: scale(2);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+}
+
+/* Animation for middle circle */
+@keyframes pulse-middle {
+    0% {
+        transform: scale(0.7);
+        opacity: 0.9;
+    }
+    70% {
+        transform: scale(1.8);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+}

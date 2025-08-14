@@ -1,0 +1,6 @@
+/* Styles for PDF generation */
+@media print {
+    #contract-template input[type='checkbox'] {
+        margin-top: 25px !important; /* Move checkboxes down */
+    }
+}

@@ -1,0 +1,82 @@
+/* Pulsing animation for current location marker */
+@keyframes pulse-ring {
+    0% {
+        transform: scale(0.33);
+        opacity: 1;
+    }
+    80%,
+    100% {
+        transform: scale(1);
+        opacity: 0;
+    }
+}
+
+@keyframes pulse-dot {
+    0% {
+        transform: scale(0.8);
+    }
+    50% {
+        transform: scale(1);
+    }
+    100% {
+        transform: scale(0.8);
+    }
+}
+
+/* Different approach with pulse ring */
+.location-marker-pulse {
+    background: transparent !important; /* Make sure the div icon background is transparent */
+}
+
+/* Remove default marker styling */
+.location-marker-pulse .leaflet-marker-icon {
+    background: none;
+    border: none;
+}
+
+.location-pulse-ring {
+    animation: pulse-ring 3s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    /* Ensure the rings are centered */
+    transform-origin: center;
+    -webkit-transform-origin: center;
+    /* Fix for Safari */
+    will-change: transform, opacity;
+}
+
+.location-pulse-dot {
+    animation: pulse-dot 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+    /* Center the dot */
+    transform-origin: center;
+    -webkit-transform-origin: center;
+    will-change: transform;
+}
+
+/* Style for the location selector overlay */
+.location-selector {
+    position: relative;
+}
+
+.location-selector-overlay {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    padding: 4px 8px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 4px;
+    font-size: 12px;
+    color: #333;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+/* Dark mode support */
+.dark .location-selector-overlay {
+    background-color: rgba(31, 41, 55, 0.8);
+    color: #e5e7eb;
+}
+
+/* Style for the current location button when loading */
+.location-button-loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
