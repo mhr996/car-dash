@@ -198,7 +198,7 @@ export const logActivity = async ({ type, deal, car, bill }: LogActivityParams) 
         }
 
         // For deal-related activities, collect comprehensive data
-        if (deal) {
+        if (deal && type === 'deal_created') {
             let enrichedDeal = { ...deal };
 
             // Get customer details if customer_id exists
@@ -215,6 +215,70 @@ export const logActivity = async ({ type, deal, car, bill }: LogActivityParams) 
                 if (carData) {
                     enrichedDeal.car = carData;
                     // Also store car data in separate column for easier querying
+                    logData.car = carData;
+                }
+            }
+
+            // Check if there's an existing car log for this car
+            // Include both 'car_added' and 'car_received_from_client' types
+            if (deal.car_id) {
+                console.log('🔍 Checking for existing car log for car_id:', deal.car_id);
+
+                const { data: existingLogs, error: findError } = await supabase
+                    .from('logs')
+                    .select('*')
+                    .in('type', ['car_added', 'car_received_from_client'])
+                    .order('created_at', { ascending: false });
+
+                if (!findError && existingLogs && existingLogs.length > 0) {
+                    // Find the log that contains the car with matching ID
+                    const existingCarLog = existingLogs.find((log) => log.car && String(log.car.id) === String(deal.car_id));
+
+                    if (existingCarLog) {
+                        console.log('✅ Found existing car log (type: %s), updating with deal information', existingCarLog.type);
+
+                        // Only update if there's no existing deal data to avoid overwriting
+                        if (existingCarLog.deal) {
+                            console.log('⚠️ Car log already has deal data, skipping update to preserve existing deal');
+                            // Still skip creating a new log
+                            return;
+                        }
+
+                        // Update the existing car log with deal information
+                        const { error: updateError } = await supabase
+                            .from('logs')
+                            .update({
+                                deal: enrichedDeal,
+                                // Keep the original type (car_added or car_received_from_client)
+                            })
+                            .eq('id', existingCarLog.id);
+
+                        if (updateError) {
+                            console.error('❌ Error updating car log with deal:', updateError);
+                        } else {
+                            console.log('✅ Successfully updated car log with deal information');
+                            return; // Don't create a new log
+                        }
+                    }
+                }
+            }
+
+            logData.deal = enrichedDeal;
+        } else if (deal) {
+            // For deal updates/deletes, still log normally
+            let enrichedDeal = { ...deal };
+
+            if (deal.customer_id) {
+                const customer = await getCustomerDetails(deal.customer_id);
+                if (customer) {
+                    enrichedDeal.customer = customer;
+                }
+            }
+
+            if (deal.car_id) {
+                const carData = await getCarDetails(deal.car_id);
+                if (carData) {
+                    enrichedDeal.car = carData;
                     logData.car = carData;
                 }
             }

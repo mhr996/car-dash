@@ -268,6 +268,126 @@ const AddBill = () => {
         return true;
     };
 
+    /**
+     * Create invoice/receipt document in Tranzila
+     */
+    const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[]) => {
+        try {
+            // Map bill type to Tranzila document type
+            // Using the codes from Tranzila documentation
+            const documentTypeMap: Record<string, string> = {
+                general: 'IR', // Invoice+Receipt (default)
+                tax_invoice: 'IR', // Invoice+Receipt
+                receipt_only: 'IR', // Invoice+Receipt (using IR for all for now)
+                tax_invoice_receipt: 'IR', // Invoice+Receipt
+            };
+
+            // Map payment type to Tranzila payment method
+            const paymentMethodMap: Record<string, number> = {
+                visa: 1, // Credit Card
+                cash: 2, // Cash
+                check: 3, // Check
+                bank_transfer: 4, // Bank Transfer
+            };
+
+            const documentType = documentTypeMap[billData.bill_type] || 'IR';
+
+            // TESTING MODE: Always use amount 1 to avoid actual billing
+            const TEST_AMOUNT = 1;
+
+            // Prepare items array from bill data - always include at least one item
+            const items = [];
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: billData.car_details || billData.bill_description || billData.customer_name || 'Bill Item - TEST MODE',
+                price_type: 'G', // Gross (includes VAT)
+                unit_price: TEST_AMOUNT, // Always 1 for testing
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+
+            // Prepare payments array
+            const tranzilaPayments =
+                payments.length > 0
+                    ? payments.map((payment) => ({
+                          payment_method: paymentMethodMap[payment.payment_type] || 1,
+                          payment_date: billData.date || new Date().toISOString().split('T')[0],
+                          amount: TEST_AMOUNT, // Always 1 for testing
+                          currency_code: 'ILS',
+                          to_doc_currency_exchange_rate: 1,
+                          // Add credit card details if available
+                          ...(payment.payment_type === 'visa' && {
+                              cc_last_4_digits: payment.visa_last_four || null,
+                              cc_installments_number: payment.visa_installments || null,
+                          }),
+                      }))
+                    : [
+                          {
+                              payment_method: 1, // Default to credit card
+                              payment_date: billData.date || new Date().toISOString().split('T')[0],
+                              amount: TEST_AMOUNT, // Always 1 for testing
+                              currency_code: 'ILS',
+                              to_doc_currency_exchange_rate: 1,
+                          },
+                      ];
+
+            // Call Tranzila API
+            const response = await fetch('/api/tranzila', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'create_document',
+                    data: {
+                        document_type: documentType,
+                        document_date: billData.date || new Date().toISOString().split('T')[0],
+                        document_currency_code: 'ILS',
+                        vat_percent: 17,
+                        client_company: billData.customer_name || 'Customer',
+                        client_name: billData.customer_name || 'Customer',
+                        client_id: '999999999', // Default ID if not available
+                        client_email: 'customer@example.com', // We'll need to get this from customer table later
+                        items,
+                        payments: tranzilaPayments,
+                        created_by_user: 'car-dash',
+                        created_by_system: 'car-dash',
+                    },
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.ok && result.response?.status_code === 0) {
+                // Document created successfully, update bill record with Tranzila info
+                const { error: updateError } = await supabase
+                    .from('bills')
+                    .update({
+                        tranzila_document_id: result.response.document.id,
+                        tranzila_document_number: result.response.document.number,
+                        tranzila_retrieval_key: result.response.document.retrieval_key,
+                        tranzila_created_at: result.response.document.created_at,
+                    })
+                    .eq('id', billId);
+
+                if (updateError) {
+                    console.error('Error updating bill with Tranzila data:', updateError);
+                } else {
+                    console.log('Tranzila document created successfully:', result.response.document.number);
+                }
+            } else {
+                console.error('Tranzila API error:', result.response);
+            }
+        } catch (error) {
+            console.error('Error calling Tranzila API:', error);
+            throw error;
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -447,6 +567,15 @@ const AddBill = () => {
                 type: 'bill_created',
                 bill: billLogData,
             });
+
+            // Create document in Tranzila after successful bill creation
+            try {
+                await createTranzilaDocument(billResult.id, billData, payments);
+            } catch (tranzilaError) {
+                console.error('Tranzila document creation failed:', tranzilaError);
+                // Don't fail the bill creation, just log the error
+                // The bill was created successfully, Tranzila is supplementary
+            }
 
             // Update customer balance for all bill types
             let customerId = null;

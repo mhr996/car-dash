@@ -402,14 +402,24 @@ const Bills = () => {
     const handleDownloadPDF = async (bill: Bill) => {
         setDownloadingPDF(bill.id);
         try {
-            const cookies = new Cookies();
-            const currentLang = cookies.get('i18nextLng') || 'he';
-            const language = currentLang === 'ae' ? 'ar' : currentLang === 'he' ? 'he' : 'en';
+            // Check if bill has Tranzila retrieval key
+            const tranzilaRetrievalKey = (bill as any).tranzila_retrieval_key;
 
-            await generateBillPDF(convertBillToBillData(bill), {
-                filename: `bill-${bill.id}-${bill.customer_name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
-                language,
-            });
+            if (tranzilaRetrievalKey) {
+                // Open Tranzila PDF in new tab via our proxy API
+                const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
+                window.open(proxyUrl, '_blank');
+            } else {
+                // Fallback to local PDF generation
+                const cookies = new Cookies();
+                const currentLang = cookies.get('i18nextLng') || 'he';
+                const language = currentLang === 'ae' ? 'ar' : currentLang === 'he' ? 'he' : 'en';
+
+                await generateBillPDF(convertBillToBillData(bill), {
+                    filename: `bill-${bill.id}-${bill.customer_name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
+                    language,
+                });
+            }
         } catch (error) {
             console.error('Error generating PDF:', error);
             setAlertState({ message: t('error_downloading_pdf'), type: 'danger' });
@@ -436,9 +446,9 @@ const Bills = () => {
             accessor: 'bill_number',
             title: t('bill_number'),
             sortable: true,
-            render: ({ id }) => (
+            render: (bill: Bill) => (
                 <div className="text-sm font-mono">
-                    <span className="font-medium">{String(id).padStart(6, '0')}</span>
+                    <span className="font-medium">{(bill as any).tranzila_document_number || String(bill.id).padStart(6, '0')}</span>
                 </div>
             ),
         },
