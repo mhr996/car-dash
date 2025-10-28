@@ -274,19 +274,25 @@ const AddBill = () => {
     const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[]) => {
         try {
             // Map bill type to Tranzila document type
-            // Using the codes from Tranzila documentation
+            // Document types from Tranzila API:
+            // - IR = Tax invoice / receipt (combined)
+            // - IN = Tax invoice (only)
+            // - RE = Receipt (only)
+            // - DI = Deal Invoice
             const documentTypeMap: Record<string, string> = {
                 general: 'IR', // Invoice+Receipt (default)
-                tax_invoice: 'IR', // Invoice+Receipt
-                receipt_only: 'IR', // Invoice+Receipt (using IR for all for now)
+                tax_invoice: 'IN', // Tax Invoice only
+                receipt_only: 'RE', // Receipt only
                 tax_invoice_receipt: 'IR', // Invoice+Receipt
             };
 
             // Map payment type to Tranzila payment method
+            // Payment methods from Tranzila API:
+            // 1 = Credit Card, 3 = Cheque, 4 = Bank Transfer, 5 = Cash, 6 = PayPal, 10 = Other
             const paymentMethodMap: Record<string, number> = {
                 visa: 1, // Credit Card
-                cash: 2, // Cash
-                check: 3, // Check
+                cash: 5, // Cash
+                check: 3, // Cheque
                 bank_transfer: 4, // Bank Transfer
             };
 
@@ -310,21 +316,50 @@ const AddBill = () => {
                 to_doc_currency_exchange_rate: 1,
             });
 
-            // Prepare payments array
+            // Prepare payments array with all payment details
             const tranzilaPayments =
                 payments.length > 0
-                    ? payments.map((payment) => ({
-                          payment_method: paymentMethodMap[payment.payment_type] || 1,
-                          payment_date: billData.date || new Date().toISOString().split('T')[0],
-                          amount: TEST_AMOUNT, // Always 1 for testing
-                          currency_code: 'ILS',
-                          to_doc_currency_exchange_rate: 1,
-                          // Add credit card details if available
-                          ...(payment.payment_type === 'visa' && {
-                              cc_last_4_digits: payment.visa_last_four || null,
-                              cc_installments_number: payment.visa_installments || null,
-                          }),
-                      }))
+                    ? payments.map((payment) => {
+                          const basePayment = {
+                              payment_method: paymentMethodMap[payment.payment_type] || 1,
+                              payment_date: billData.date || new Date().toISOString().split('T')[0],
+                              amount: TEST_AMOUNT, // Always 1 for testing (override actual amount)
+                              currency_code: 'ILS',
+                              to_doc_currency_exchange_rate: 1,
+                          };
+
+                          // Add payment-type-specific fields
+                          if (payment.payment_type === 'visa') {
+                              return {
+                                  ...basePayment,
+                                  cc_last_4_digits: payment.visa_last_four || null,
+                                  cc_installments_number: payment.visa_installments || 1,
+                                  cc_type: payment.visa_card_type || null,
+                                  approval_number: payment.approval_number || null,
+                              };
+                          } else if (payment.payment_type === 'check') {
+                              return {
+                                  ...basePayment,
+                                  check_number: payment.check_number || null,
+                                  check_bank_name: payment.check_bank_name || null,
+                                  check_branch: payment.check_branch || null,
+                                  check_account_number: payment.check_account_number || null,
+                                  check_holder_name: payment.check_holder_name || null,
+                              };
+                          } else if (payment.payment_type === 'bank_transfer') {
+                              return {
+                                  ...basePayment,
+                                  transfer_number: payment.transfer_number || null,
+                                  transfer_bank_name: payment.transfer_bank_name || null,
+                                  transfer_branch: payment.transfer_branch || null,
+                                  transfer_account_number: payment.transfer_account_number || null,
+                                  transfer_holder_name: payment.transfer_holder_name || null,
+                              };
+                          }
+
+                          // Cash or other payment types
+                          return basePayment;
+                      })
                     : [
                           {
                               payment_method: 1, // Default to credit card
