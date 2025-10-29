@@ -487,7 +487,7 @@ const AddBill = () => {
                         document_type: documentType,
                         document_date: billData.date || new Date().toISOString().split('T')[0],
                         document_currency_code: 'ILS',
-                        vat_percent: 17,
+                        vat_percent: 18,
                         client_company: billData.customer_name || 'Customer',
                         client_name: billData.customer_name || 'Customer',
                         client_id: customerId,
