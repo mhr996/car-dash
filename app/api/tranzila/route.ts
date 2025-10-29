@@ -128,6 +128,7 @@ async function createDocument(data: any = {}) {
             client_name: data.client_name || data.contact_person || 'Test Contact',
             client_id: data.client_id || data.customer_id || '123456789',
             client_email: data.client_email || data.email || 'test@example.com',
+            client_phone: data.client_phone || null,
             client_address_line_1: data.client_address_line_1 || null,
             client_address_line_2: data.client_address_line_2 || null,
             client_city: data.client_city || null,

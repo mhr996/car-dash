@@ -36,6 +36,7 @@ interface Deal {
         phone: string;
         email?: string;
         age?: number;
+        id_number?: number;
     };
     seller?: {
         id: number;
@@ -43,6 +44,7 @@ interface Deal {
         phone: string;
         email?: string;
         age?: number;
+        id_number?: number;
     };
     buyer?: {
         id: number;
@@ -50,6 +52,7 @@ interface Deal {
         phone: string;
         email?: string;
         age?: number;
+        id_number?: number;
     };
     car?: {
         id: number;
@@ -271,7 +274,7 @@ const AddBill = () => {
     /**
      * Create invoice/receipt document in Tranzila
      */
-    const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[]) => {
+    const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null) => {
         try {
             // Map bill type to Tranzila document type
             // Document types from Tranzila API:
@@ -301,20 +304,97 @@ const AddBill = () => {
             // TESTING MODE: Always use amount 1 to avoid actual billing
             const TEST_AMOUNT = 1;
 
-            // Prepare items array from bill data - always include at least one item
+            // Prepare items array from deal data
             const items = [];
 
-            items.push({
-                type: 'I',
-                code: null,
-                name: billData.car_details || billData.bill_description || billData.customer_name || 'Bill Item - TEST MODE',
-                price_type: 'G', // Gross (includes VAT)
-                unit_price: TEST_AMOUNT, // Always 1 for testing
-                units_number: 1,
-                unit_type: 1,
-                currency_code: 'ILS',
-                to_doc_currency_exchange_rate: 1,
-            });
+            // If we have deal data with car, create detailed line items
+            if (deal && deal.car) {
+                // Row 1: Car Details
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}` || billData.car_details || 'פרטי רכב',
+                    price_type: 'G', // Gross (includes VAT)
+                    unit_price: 0, // No price for this row
+                    units_number: 1,
+                    unit_type: 1, // Unit
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+
+                // Row 2: Buy Price
+                if (deal.car.buy_price) {
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'מחיר קנייה',
+                        price_type: 'G',
+                        unit_price: TEST_AMOUNT, // In production: deal.car.buy_price
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                }
+
+                // Row 3: Selling Price
+                if (deal.selling_price) {
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'מחיר מכירה',
+                        price_type: 'G',
+                        unit_price: TEST_AMOUNT, // In production: deal.selling_price
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                }
+
+                // Row 4: Loss Amount (if applicable)
+                if (deal.loss_amount && deal.loss_amount > 0) {
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'סכום הפסד',
+                        price_type: 'G',
+                        unit_price: TEST_AMOUNT, // In production: -deal.loss_amount (negative)
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                }
+
+                // Row 5: Profit Commission
+                if (deal.amount) {
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'עמלת רווח',
+                        price_type: 'G',
+                        unit_price: TEST_AMOUNT, // In production: deal.amount
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                }
+            } else {
+                // Fallback: Single item if no deal data
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית - מצב בדיקה',
+                    price_type: 'G', // Gross (includes VAT)
+                    unit_price: TEST_AMOUNT, // Always 1 for testing
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
 
             // Prepare payments array with all payment details
             const tranzilaPayments =
@@ -370,6 +450,31 @@ const AddBill = () => {
                           },
                       ];
 
+            // Get customer information from deal
+            let customerId = ''; // Default fallback for missing ID
+            let customerEmail = ''; // Default fallback
+            let customerPhone = '';
+
+            if (deal) {
+                // Get customer based on deal type
+                if (deal.deal_type === 'intermediary') {
+                    // For intermediary deals, prefer seller, then buyer
+                    const customer = deal.seller || deal.buyer || deal.customer;
+                    if (customer) {
+                        customerId = customer.id_number?.toString() || customerId;
+                        customerEmail = customer.email || customerEmail;
+                        customerPhone = customer.phone || '';
+                    }
+                } else {
+                    // For regular deals, use customer
+                    if (deal.customer) {
+                        customerId = deal.customer.id_number?.toString() || customerId;
+                        customerEmail = deal.customer.email || customerEmail;
+                        customerPhone = deal.customer.phone || '';
+                    }
+                }
+            }
+
             // Call Tranzila API
             const response = await fetch('/api/tranzila', {
                 method: 'POST',
@@ -385,8 +490,9 @@ const AddBill = () => {
                         vat_percent: 17,
                         client_company: billData.customer_name || 'Customer',
                         client_name: billData.customer_name || 'Customer',
-                        client_id: '999999999', // Default ID if not available
-                        client_email: 'customer@example.com', // We'll need to get this from customer table later
+                        client_id: customerId,
+                        client_email: customerEmail,
+                        client_phone: customerPhone || undefined,
                         items,
                         payments: tranzilaPayments,
                         created_by_user: 'car-dash',
@@ -605,7 +711,7 @@ const AddBill = () => {
 
             // Create document in Tranzila after successful bill creation
             try {
-                await createTranzilaDocument(billResult.id, billData, payments);
+                await createTranzilaDocument(billResult.id, billData, payments, selectedDeal);
             } catch (tranzilaError) {
                 console.error('Tranzila document creation failed:', tranzilaError);
                 // Don't fail the bill creation, just log the error
