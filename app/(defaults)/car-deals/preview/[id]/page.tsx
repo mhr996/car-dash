@@ -3,15 +3,12 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import IconArrowLeft from '@/components/icon/icon-arrow-left';
 import IconCalendar from '@/components/icon/icon-calendar';
-import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconUser from '@/components/icon/icon-user';
 import IconBox from '@/components/icon/icon-box';
 import IconDocument from '@/components/icon/icon-document';
 import IconPhone from '@/components/icon/icon-phone';
 import IconMapPin from '@/components/icon/icon-map-pin';
 import IconCreditCard from '@/components/icon/icon-credit-card';
-import IconTrendingUp from '@/components/icon/icon-trending-up';
-import IconTrendingDown from '@/components/icon/icon-trending-down';
 import supabase from '@/lib/supabase';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -310,7 +307,6 @@ const CarDealPreview = () => {
 
                             <div className="space-y-4">
                                 <div className="flex items-center gap-3">
-                                    <IconDollarSign className="w-5 h-5 text-primary" />
                                     <div>
                                         <p className="text-sm text-gray-500">{t('buy_price')}</p>
                                         <p className="font-semibold text-lg">₪{car.buy_price.toLocaleString()}</p>
@@ -319,7 +315,6 @@ const CarDealPreview = () => {
 
                                 {car.market_price > 0 && (
                                     <div className="flex items-center gap-3">
-                                        <IconDollarSign className="w-5 h-5 text-info" />
                                         <div>
                                             <p className="text-sm text-gray-500">{t('market_price')}</p>
                                             <p className="font-semibold text-lg">₪{car.market_price.toLocaleString()}</p>
