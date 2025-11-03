@@ -725,3 +725,13 @@ input[type='number']::-webkit-inner-spin-button {
 input[type='number'] {
     -moz-appearance: textfield;
 }
+
+/* Date input calendar icon in dark mode */
+.dark input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
+.dark input[type='date']::-webkit-calendar-picker-indicator:hover {
+    filter: invert(1) brightness(1.2);
+}

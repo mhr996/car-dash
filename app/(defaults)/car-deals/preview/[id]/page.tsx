@@ -354,8 +354,8 @@ const CarDealPreview = () => {
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-sm text-gray-500">{t('status')}:</span>
-                                            <span className={`text-sm font-medium badge badge-outline-${car.status === 'sold' ? 'success' : car.status === 'reserved' ? 'warning' : 'primary'}`}>
-                                                {t(`car_status_${car.status}`)}
+                                            <span className={`text-sm font-medium badge badge-outline-${car.status === 'new' ? 'success' : car.status === 'used' ? 'info' : 'primary'}`}>
+                                                {t(car.status)}
                                             </span>
                                         </div>
                                     </div>

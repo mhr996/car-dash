@@ -118,9 +118,8 @@ const CarDealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters 
 
     const statusOptions = [
         { value: '', label: t('all') },
-        { value: 'available', label: t('car_status_available') },
-        { value: 'sold', label: t('car_status_sold') },
-        { value: 'reserved', label: t('car_status_reserved') },
+        { value: 'new', label: t('new') },
+        { value: 'used', label: t('used') },
     ];
 
     const brandOptions = [
@@ -135,6 +134,13 @@ const CarDealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters 
         { value: 'Suzuki', label: 'Suzuki' },
         { value: 'Subaru', label: 'Subaru' },
     ];
+
+    // Generate year options from 2000 to current year + 1
+    const currentYear = new Date().getFullYear();
+    const yearOptions = [{ value: '', label: t('all') }];
+    for (let year = currentYear + 1; year >= 2000; year--) {
+        yearOptions.push({ value: year.toString(), label: year.toString() });
+    }
 
     // Trigger filter changes only when filters change to avoid loops from changing handler identity
     useEffect(() => {
@@ -219,13 +225,13 @@ const CarDealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters 
                         {/* Year From Filter */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('year_from')}</label>
-                            <input type="number" className="form-input" placeholder="2020" value={filters.yearFrom} onChange={(e) => handleInputChange('yearFrom', e.target.value)} />
+                            <CustomSelect options={yearOptions} value={filters.yearFrom} onChange={(value) => handleInputChange('yearFrom', value)} placeholder={t('all')} className="form-select" />
                         </div>
 
                         {/* Year To Filter */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('year_to')}</label>
-                            <input type="number" className="form-input" placeholder="2024" value={filters.yearTo} onChange={(e) => handleInputChange('yearTo', e.target.value)} />
+                            <CustomSelect options={yearOptions} value={filters.yearTo} onChange={(value) => handleInputChange('yearTo', value)} placeholder={t('all')} className="form-select" />
                         </div>
 
                         {/* Buy Price From Filter */}

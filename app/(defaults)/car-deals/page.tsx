@@ -297,9 +297,9 @@ const CarDealsPage = () => {
             sortable: true,
             render: ({ status }) => {
                 let color = 'primary';
-                if (status === 'sold') color = 'success';
-                if (status === 'reserved') color = 'warning';
-                return <span className={`badge badge-outline-${color}`}>{t(`car_status_${status}`)}</span>;
+                if (status === 'new') color = 'success';
+                if (status === 'used') color = 'info';
+                return <span className={`badge badge-outline-${color}`}>{t(status)}</span>;
             },
         },
         {
