@@ -142,11 +142,16 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             @page { size: A4; margin: 8mm; }
-            body { font-family: Arial, sans-serif; font-size: 13px; line-height: 1.3; }
+            body { font-family: Arial, sans-serif; font-size: 11px; line-height: 1.2; }
             .avoid-break-inside { page-break-inside: avoid; }
-            .compact-section { margin-bottom: 12px; }
-            .compact-header { padding: 16px 24px; }
-            .compact-content { padding: 20px; }
+            .compact-section { margin-bottom: 8px; }
+            .compact-header { padding: 12px 16px; }
+            .compact-content { padding: 12px; }
+            h1 { font-size: 18px; }
+            h2 { font-size: 14px; }
+            h3 { font-size: 12px; }
+            .text-sm { font-size: 10px; }
+            .text-xs { font-size: 9px; }
         </style>
     </head>
     <body>
@@ -160,7 +165,7 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                 <div class="relative compact-header w-full">
                     <div class="flex items-center justify-between w-full">
                         <!-- Company Logo and Info -->
-                        <div class="flex items-center gap-4 text-white">
+                        <div class="flex items-center gap-3 text-white">
                             ${
                                 companyInfo?.logo_url
                                     ? `
@@ -171,7 +176,7 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                                     : ''
                             }
                             <div class="text-left">
-                                <h1 class="text-xl font-bold mb-1">${companyInfo?.name || 'Car Dealership'}</h1>
+                                <h1 class="text-xl font-bold mb-0.5">${companyInfo?.name || 'Car Dealership'}</h1>
                                 <div class="space-y-0.5 text-xs opacity-90">
                                     ${
                                         companyInfo?.address
@@ -216,8 +221,8 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
 
                         <!-- Contract Title and Date -->
                         <div class="text-white text-right">
-                            <h2 class="text-lg font-bold mb-1">Vehicle Purchase Agreement</h2>
-                            <p class="text-sm font-medium text-white/80 mb-2">${getDealTypeLabel(contract.dealType)}</p>
+                            <h2 class="text-base font-bold mb-0.5">Vehicle Purchase Agreement</h2>
+                            <p class="text-xs font-medium text-white/80 mb-1">${getDealTypeLabel(contract.dealType)}</p>
                             <div class="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/20">
                                 <p class="text-xs font-medium">Contract Date</p>
                                 <p class="text-sm font-bold">${formatDate(contract.dealDate)}</p>
@@ -228,22 +233,22 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
             </div>
 
             <!-- Contract Content -->
-            <div class="compact-content space-y-3 w-full">
+            <div class="compact-content space-y-2 w-full">
                 <!-- Parties Information -->
                 ${
                     contract.isIntermediaryDeal
                         ? `
                     <!-- Intermediary Deal - Three Parties -->
-                    <div class="space-y-3 w-full compact-section">
+                    <div class="space-y-2 w-full compact-section">
                         <!-- Company/Intermediary -->
-                        <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-4 border border-indigo-200">
-                            <h2 class="font-bold mb-2 text-lg text-indigo-700 flex items-center gap-2">
+                        <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-3 border border-indigo-200">
+                            <h2 class="font-bold mb-1.5 text-sm text-indigo-700 flex items-center gap-1.5">
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                                 Intermediary/Company
                             </h2>
-                            <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
                                 <p><span class="font-semibold text-indigo-700">Company:</span> ${contract.companyName}</p>
                                 <p><span class="font-semibold text-indigo-700">Tax Number:</span> ${contract.companyTaxNumber}</p>
                                 <p><span class="font-semibold text-indigo-700">Address:</span> ${contract.companyAddress}</p>
@@ -252,16 +257,16 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                         </div>
                         
                         <!-- Seller and Buyer -->
-                        <div class="grid grid-cols-2 gap-4 w-full">
+                        <div class="grid grid-cols-2 gap-3 w-full">
                             <!-- Seller -->
-                            <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
-                                <h2 class="font-bold mb-2 text-lg text-green-700 flex items-center gap-2">
+                            <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                                <h2 class="font-bold mb-1.5 text-sm text-green-700 flex items-center gap-1.5">
                                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
                                     </svg>
                                     Seller
                                 </h2>
-                                <div class="space-y-1 text-xs">
+                                <div class="space-y-0.5 text-xs">
                                     <p><span class="font-semibold text-green-700">Name:</span> ${contract.actualSeller?.name || contract.sellerName}</p>
                                     <p><span class="font-semibold text-green-700">ID:</span> ${contract.actualSeller?.id || 'N/A'}</p>
                                     <p><span class="font-semibold text-green-700">Address:</span> ${contract.actualSeller?.address || 'N/A'}</p>
@@ -270,14 +275,14 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                             </div>
 
                             <!-- Buyer -->
-                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
-                                <h2 class="font-bold mb-2 text-lg text-blue-700 flex items-center gap-2">
+                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200">
+                                <h2 class="font-bold mb-1.5 text-sm text-blue-700 flex items-center gap-1.5">
                                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                         <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
                                     </svg>
                                     Buyer
                                 </h2>
-                                <div class="space-y-1 text-xs">
+                                <div class="space-y-0.5 text-xs">
                                     <p><span class="font-semibold text-blue-700">Name:</span> ${contract.actualBuyer?.name || contract.buyerName}</p>
                                     <p><span class="font-semibold text-blue-700">ID:</span> ${contract.actualBuyer?.id || contract.buyerId}</p>
                                     <p><span class="font-semibold text-blue-700">Address:</span> ${contract.actualBuyer?.address || contract.buyerAddress}</p>
@@ -289,10 +294,10 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                 `
                         : `
                     <!-- Regular Deal - Two Parties -->
-                    <div class="grid grid-cols-2 gap-4 w-full compact-section">
+                    <div class="grid grid-cols-2 gap-3 w-full compact-section">
                         <!-- Seller -->
-                        <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
-                            <h2 class="font-bold mb-2 text-lg text-green-700 flex items-center gap-2">
+                        <div class="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                            <h2 class="font-bold mb-1.5 text-sm text-green-700 flex items-center gap-1.5">
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
                                 </svg>
@@ -307,14 +312,14 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                         </div>
 
                         <!-- Buyer -->
-                        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
-                            <h2 class="font-bold mb-2 text-lg text-blue-700 flex items-center gap-2">
+                        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200">
+                            <h2 class="font-bold mb-1.5 text-sm text-blue-700 flex items-center gap-1.5">
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
                                 </svg>
                                 Buyer
                             </h2>
-                            <div class="space-y-1 text-xs">
+                            <div class="space-y-0.5 text-xs">
                                 <p><span class="font-semibold text-blue-700">Name:</span> ${contract.buyerName}</p>
                                 <p><span class="font-semibold text-blue-700">ID:</span> ${contract.buyerId}</p>
                                 <p><span class="font-semibold text-blue-700">Address:</span> ${contract.buyerAddress}</p>
@@ -330,16 +335,16 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                     contract.dealType === 'trade-in'
                         ? `
                     <!-- Exchange Deal - Two Vehicles Side by Side -->
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-3">
                         <!-- Car Being Sold (Primary Vehicle) -->
-                        <div class="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-4 border border-purple-200 compact-section">
-                            <h2 class="font-bold mb-2 text-lg text-purple-700 flex items-center gap-2">
+                        <div class="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-3 border border-purple-200 compact-section">
+                            <h2 class="font-bold mb-1.5 text-sm text-purple-700 flex items-center gap-1.5">
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 100-4 2 2 0 000 4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
                                 </svg>
                                 Vehicle Being Sold
                             </h2>
-                            <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                            <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs">
                                 <p><span class="font-semibold text-purple-700">Make:</span> ${contract.carMake}</p>
                                 <p><span class="font-semibold text-purple-700">Model:</span> ${contract.carModel}</p>
                                 <p><span class="font-semibold text-purple-700">Year:</span> ${contract.carYear}</p>
@@ -462,34 +467,34 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                 </div>
 
                 <!-- Terms and Conditions -->
-                <div class="bg-gradient-to-br from-red-50 to-pink-50 rounded-lg p-4 border border-red-200 compact-section">
-                    <h2 class="font-bold mb-2 text-lg text-red-700 flex items-center gap-2">
+                <div class="bg-gradient-to-br from-red-50 to-pink-50 rounded-lg p-3 border border-red-200 compact-section">
+                    <h2 class="font-bold mb-1.5 text-sm text-red-700 flex items-center gap-1.5">
                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 100 2h.01a1 1 0 100-2H10zm-4 1a1 1 0 011-1h.01a1 1 0 110 2H7a1 1 0 01-1-1z" clip-rule="evenodd" />
                         </svg>
                         Terms and Conditions
                     </h2>
-                    <div class="grid grid-cols-2 gap-4 text-xs">
-                        <div class="space-y-1">
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="space-y-0.5">
                             <!-- Original Terms -->
-                            <div class="bg-white rounded p-2 border border-red-200">• Vehicle sold "as is" with no warranties</div>
-                            <div class="bg-white rounded p-2 border border-red-200">• Ownership transfer within ${contract.ownershipTransferDays} days</div>
-                            <div class="bg-white rounded p-2 border border-red-200">• Agreement binding upon both parties once signed</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Vehicle sold "as is" with no warranties</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Ownership transfer within ${contract.ownershipTransferDays} days</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Agreement binding upon both parties once signed</div>
                             <!-- New Terms -->
-                            <div class="bg-white rounded p-2 border border-red-200">• Vehicle possession transfers to buyer on (${formatDate(contract.dealDate)}) and parties agree that from transfer date, vehicle belongs to buyer exclusively, even if formal ownership transfer hasn't been completed at DMV</div>
-                            <div class="bg-white rounded p-2 border border-red-200">• Seller commits to bear all parking, traffic fines or other payments related to vehicle use until delivery date</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Vehicle possession transfers to buyer on (${formatDate(contract.dealDate)}) and parties agree that from transfer date, vehicle belongs to buyer exclusively, even if formal ownership transfer hasn't been completed at DMV</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Seller commits to bear all parking, traffic fines or other payments related to vehicle use until delivery date</div>
                         </div>
-                        <div class="space-y-1">
-                            <div class="bg-white rounded p-2 border border-red-200">• Parties agree that ownership transfer expenses will be borne by the buyer</div>
-                            <div class="bg-white rounded p-2 border border-red-200">• Party breaching this contract materially shall pay other party 2000 NIS as predetermined compensation without proof of damage</div>
-                            <div class="bg-white rounded p-2 border border-red-200">• Parties agree that Auto Market purchases vehicles from both organized suppliers and private clients and has no knowledge of depreciation or insurance history, buyer must verify this information</div>
-                            <div class="bg-white rounded p-2 border border-red-200">• Buyer declares having inspected the vehicle's external, internal and mechanical condition and found it in good working order to their satisfaction</div>
+                        <div class="space-y-0.5">
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Parties agree that ownership transfer expenses will be borne by the buyer</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Party breaching this contract materially shall pay other party 2000 NIS as predetermined compensation without proof of damage</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Parties agree that Auto Market purchases vehicles from both organized suppliers and private clients and has no knowledge of depreciation or insurance history, buyer must verify this information</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Buyer declares having inspected the vehicle's external, internal and mechanical condition and found it in good working order to their satisfaction</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Signatures -->
-                <div class="${contract.isIntermediaryDeal ? 'grid grid-cols-3 gap-3 pt-2' : 'grid grid-cols-2 gap-4 pt-4'} w-full">
+                <div class="${contract.isIntermediaryDeal ? 'grid grid-cols-3 gap-2 pt-2' : 'grid grid-cols-2 gap-3 pt-2'} w-full">
                     ${
                         contract.isIntermediaryDeal
                             ? `
