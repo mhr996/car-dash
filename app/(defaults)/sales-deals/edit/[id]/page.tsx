@@ -915,7 +915,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
             // Redirect to deals list after a short delay
             setTimeout(() => {
-                router.push('/deals');
+                router.push('/sales-deals');
             }, 1500);
         } catch (error) {
             console.error(error);
@@ -1339,7 +1339,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 <div className="text-center">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('deal_not_found')}</h2>
                     <p className="text-gray-600 dark:text-gray-400 mt-2">{t('deal_not_found_description')}</p>
-                    <Link href="/deals" className="btn btn-primary mt-4">
+                    <Link href="/sales-deals" className="btn btn-primary mt-4">
                         {t('back_to_deals')}
                     </Link>
                 </div>
@@ -1349,7 +1349,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     return (
         <div className="container mx-auto p-6">
             <div className="flex items-center gap-5 mb-6">
-                <div onClick={() => router.push('/deals')}>
+                <div onClick={() => router.push('/sales-deals')}>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
@@ -1362,7 +1362,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                         </Link>
                     </li>
                     <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-                        <Link href="/deals" className="text-primary hover:underline">
+                        <Link href="/sales-deals" className="text-primary hover:underline">
                             {t('deals')}
                         </Link>
                     </li>
@@ -2773,7 +2773,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     />
                     {/* Submit Button */}
                     <div className="flex justify-end gap-4 mt-8">
-                        <button type="button" onClick={() => router.push('/deals')} className="btn btn-outline-secondary">
+                        <button type="button" onClick={() => router.push('/sales-deals')} className="btn btn-outline-secondary">
                             {t('cancel')}
                         </button>
                         {form.status !== 'completed' && form.status !== 'cancelled' && (

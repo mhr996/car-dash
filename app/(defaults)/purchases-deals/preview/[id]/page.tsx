@@ -140,8 +140,8 @@ const CarDealPreview = () => {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen">
                 <p className="text-lg text-gray-600 mb-4">{t('car_not_found')}</p>
-                <Link href="/car-deals" className="btn btn-primary">
-                    {t('back_to_car_deals')}
+                <Link href="/purchases-deals" className="btn btn-primary">
+                    {t('back_to_purchases_deals')}
                 </Link>
             </div>
         );

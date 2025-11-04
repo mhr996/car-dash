@@ -807,7 +807,7 @@ const AddDeal = () => {
 
             // Redirect to the newly created deal's edit page after a short delay
             setTimeout(() => {
-                router.push(`/deals/edit/${dealId}`);
+                router.push(`/sales-deals/edit/${dealId}`);
             }, 1500);
         } catch (error) {
             console.error(error);
@@ -2380,7 +2380,7 @@ const AddDeal = () => {
                         </Link>
                     </li>
                     <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-                        <Link href="/deals" className="text-primary hover:underline">
+                        <Link href="/sales-deals" className="text-primary hover:underline">
                             {t('deals')}
                         </Link>
                     </li>

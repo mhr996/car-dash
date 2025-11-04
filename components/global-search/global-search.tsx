@@ -137,7 +137,7 @@ const GlobalSearch = () => {
                         title: deal.title || `${deal.deal_type} Deal`,
                         subtitle: customerName,
                         metadata: `${deal.deal_type || ''} • ${deal.status || ''} • ₪${deal.amount?.toLocaleString() || '0'}`,
-                        link: `/deals/preview/${deal.id}`,
+                        link: `/sales-deals/preview/${deal.id}`,
                     });
                 });
             }

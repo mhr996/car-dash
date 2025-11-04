@@ -196,19 +196,19 @@ const Sidebar = () => {
                             </h2>
 
                             <li className="nav-item">
-                                <Link href="/deals" className="group">
+                                <Link href="/sales-deals" className="group">
                                     <div className="flex items-center">
                                         <IconMenuInvoice className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('deals')}</span>
+                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('sales_deals')}</span>
                                     </div>
                                 </Link>
                             </li>
 
                             <li className="nav-item">
-                                <Link href="/car-deals" className="group">
+                                <Link href="/purchases-deals" className="group">
                                     <div className="flex items-center">
                                         <IconCar className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('car_deals')}</span>
+                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('purchases_deals')}</span>
                                     </div>
                                 </Link>
                             </li>

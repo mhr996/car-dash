@@ -412,7 +412,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                 <div className="text-center">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{t('deal_not_found')}</h2>
                     <p className="text-gray-600 dark:text-gray-400 mt-2">{t('deal_not_found_description')}</p>
-                    <Link href="/deals" className="btn btn-primary mt-4">
+                    <Link href="/sales-deals" className="btn btn-primary mt-4">
                         {t('back_to_deals')}
                     </Link>
                 </div>
@@ -436,7 +436,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                         </Link>
                     </li>
                     <li className="before:content-['/'] ltr:before:mr-2 rtl:before:ml-2">
-                        <Link href="/deals" className="text-primary hover:underline">
+                        <Link href="/sales-deals" className="text-primary hover:underline">
                             {t('deals')}
                         </Link>
                     </li>
@@ -462,7 +462,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     <h1 className="text-2xl font-bold">{deal.title}</h1>
                     <p className="text-gray-500">#{deal.id}</p>
                 </div>
-                <Link href={`/deals/edit/${deal.id}`} className="btn btn-primary gap-2">
+                <Link href={`/sales-deals/edit/${deal.id}`} className="btn btn-primary gap-2">
                     <IconEdit className="w-4 h-4" />
                     {t('edit_deal')}
                 </Link>
@@ -895,7 +895,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
 
                     <div className="flex flex-wrap gap-4">
                         {deal.status !== 'cancelled' && deal.status !== 'completed' && (
-                            <Link href={`/deals/edit/${deal.id}`} className="btn btn-primary gap-2">
+                            <Link href={`/sales-deals/edit/${deal.id}`} className="btn btn-primary gap-2">
                                 <IconEdit className="w-4 h-4" />
                                 {t('edit_deal')}
                             </Link>
@@ -952,7 +952,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                             )}
                             {generatingContract ? t('generating_contract') : t('generate_contract')}
                         </button>
-                        <Link href="/deals" className="btn btn-outline-secondary">
+                        <Link href="/sales-deals" className="btn btn-outline-secondary">
                             {t('back_to_deals')}
                         </Link>
                     </div>

@@ -392,7 +392,7 @@ const DealsList = () => {
                             <IconTrashLines />
                             {t('delete')}
                         </button>
-                        <Link href="/deals/add" className="btn btn-primary gap-2">
+                        <Link href="/sales-deals/add" className="btn btn-primary gap-2">
                             <IconPlus />
                             {t('add_new')}
                         </Link>
@@ -432,8 +432,8 @@ const DealsList = () => {
                                 render: ({ id }) => (
                                     <div className="flex items-center gap-2">
                                         <strong className="text-info">#{id}</strong>
-                                        <Link href={`/deals/preview/${id}`} className="flex hover:text-info" title={t('view')}>
-                                            <IconEye className="h-4 w-4" />
+                                        <Link href={`/sales-deals/preview/${id}`} className="flex hover:text-info" title={t('view')}>
+                                            <IconEye className="h-4.5 w-4.5" />
                                         </Link>
                                     </div>
                                 ),
@@ -505,16 +505,8 @@ const DealsList = () => {
                                                     {deal.cars.brand} {deal.cars.title}
                                                 </div>
                                                 <div className="text-xs text-gray-500 mt-1">
-                                                    {deal.cars.car_number && (
-                                                        <span className="text-blue-600">
-                                                            {deal.cars.car_number}
-                                                        </span>
-                                                    )}
-                                                    {deal.cars.year && (
-                                                        <span className="ml-2">
-                                                           {deal.cars.year}
-                                                        </span>
-                                                    )}
+                                                    {deal.cars.car_number && <span className="text-blue-600">{deal.cars.car_number}</span>}
+                                                    {deal.cars.year && <span className="ml-2">{deal.cars.year}</span>}
                                                 </div>
                                             </div>
                                         ) : (
@@ -568,7 +560,7 @@ const DealsList = () => {
                                 render: ({ id, status }) => (
                                     <div className="mx-auto flex w-max items-center gap-4">
                                         <Link
-                                            href={`/deals/edit/${id}`}
+                                            href={`/sales-deals/edit/${id}`}
                                             className={`flex hover:text-info ${status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
                                             title={status === 'cancelled' ? t('deal_cancelled_no_edit') : t('edit')}
                                         >

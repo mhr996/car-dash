@@ -403,7 +403,7 @@ const LogsPage = () => {
 
     const getRelatedItemLink = (log: Log) => {
         if (log.car) return `/cars`;
-        if (log.deal) return `/deals`;
+        if (log.deal) return `/sales-deals`;
         return null;
     };
 
@@ -506,7 +506,7 @@ const LogsPage = () => {
                                         <div className="text-sm">{formatDate(log.car.created_at) || t('not_available')}</div>
                                         {log.deal && log.deal.id && (
                                             <Link
-                                                href={`/deals/preview/${log.deal.id}`}
+                                                href={`/sales-deals/preview/${log.deal.id}`}
                                                 className="inline-flex items-center justify-center w-6 h-6 hover:text-info rounded transition-all duration-200"
                                                 title={t('view_related_item')}
                                             >
@@ -525,6 +525,28 @@ const LogsPage = () => {
                                 accessor: 'purchase_info',
                                 title: t('purchase_date') + ' / ' + t('provider_name') + ' / ' + t('purchase_price'),
                                 render: (log) => getPurchaseInfo(log),
+                            },
+                            {
+                                accessor: 'provider_details',
+                                title: t('provider_details'),
+                                render: (log) => {
+                                    if (!log.car) return <span className="text-gray-400">{t('not_available')}</span>;
+
+                                    const car = log.car;
+                                    const provider = car.providers || car.provider_details;
+
+                                    if (!provider && !car.provider) {
+                                        return <span className="text-gray-400">{t('not_available')}</span>;
+                                    }
+
+                                    return (
+                                        <div className="text-sm">
+                                            <div className="font-medium">{provider?.name || car.provider || t('not_available')}</div>
+                                            {provider?.phone && <div className="text-gray-500 dark:text-gray-400">{provider.phone}</div>}
+                                            {provider?.address && <div className="text-gray-500 dark:text-gray-400 text-xs">{provider.address}</div>}
+                                        </div>
+                                    );
+                                },
                             },
                             {
                                 accessor: 'sale_info',

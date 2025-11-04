@@ -6,8 +6,12 @@ import supabase from '@/lib/supabase';
 import Link from 'next/link';
 import IconEye from '@/components/icon/icon-eye';
 import IconCar from '@/components/icon/icon-car';
+import IconFile from '@/components/icon/icon-file';
 import { getTranslation } from '@/i18n';
 import CarDealFilters, { CarDealFilters as CarDealFiltersType } from '@/components/car-deal-filters/car-deal-filters';
+import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
+import { CarContract } from '@/types/contract';
+import { getCompanyInfo } from '@/lib/company-info';
 
 interface Provider {
     id: number;
@@ -52,6 +56,49 @@ const CarDealsPage = () => {
         direction: 'desc',
     });
     const [loading, setLoading] = useState(true);
+    const [generatingPdf, setGeneratingPdf] = useState<number | null>(null);
+
+    const handleGeneratePDF = async (car: CarDeal) => {
+        try {
+            setGeneratingPdf(car.id);
+            const companyInfo = await getCompanyInfo();
+
+            const contract: CarContract = {
+                dealType: 'normal',
+                dealDate: new Date(car.created_at).toLocaleDateString('he-IL'),
+                companyName: companyInfo.name,
+                companyTaxNumber: companyInfo.tax_number || '',
+                companyAddress: companyInfo.address || '',
+                companyPhone: companyInfo.phone || '',
+                sellerName: car.source_type === 'provider' ? car.provider?.name || '' : car.source_customer?.name || '',
+                sellerTaxNumber: '',
+                sellerPhone: car.source_type === 'provider' ? car.provider?.phone || '' : car.source_customer?.phone || '',
+                sellerAddress: car.source_type === 'provider' ? car.provider?.address || '' : '',
+                buyerName: companyInfo.name,
+                buyerId: companyInfo.tax_number || '',
+                buyerAddress: companyInfo.address || '',
+                buyerPhone: companyInfo.phone || '',
+                carType: '',
+                carMake: car.brand,
+                carModel: car.title,
+                carYear: car.year,
+                carPlateNumber: car.car_number || '',
+                carVin: '',
+                carEngineNumber: '',
+                carKilometers: car.kilometers,
+                carBuyPrice: car.buy_price,
+                dealAmount: car.buy_price,
+                ownershipTransferDays: 30,
+            };
+
+            await CarPurchaseContractPDFGenerator.generateFromContract(contract);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert(t('error_generating_pdf'));
+        } finally {
+            setGeneratingPdf(null);
+        }
+    };
 
     useEffect(() => {
         fetchCarDeals();
@@ -231,7 +278,7 @@ const CarDealsPage = () => {
             render: ({ id }) => (
                 <div className="flex items-center gap-2">
                     <strong className="text-info">#{id}</strong>
-                    <Link href={`/car-deals/preview/${id}`} className="flex hover:text-info" title={t('view')}>
+                    <Link href={`/purchases-deals/preview/${id}`} className="flex hover:text-info" title={t('view')}>
                         <IconEye className="h-4 w-4" />
                     </Link>
                 </div>
@@ -264,14 +311,15 @@ const CarDealsPage = () => {
         },
         {
             accessor: 'source_type',
-            title: t('source'),
+            title: t('source_type'),
             sortable: true,
-            render: (car) => (
-                <div className="flex flex-col">
-                    <span className={`badge ${car.source_type === 'provider' ? 'badge-outline-primary' : 'badge-outline-success'}`}>{t(`source_type_${car.source_type}`)}</span>
-                    <span className="text-xs text-gray-500 mt-1">{car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}</span>
-                </div>
-            ),
+            render: (car) => <span className={`badge ${car.source_type === 'provider' ? 'badge-outline-primary' : 'badge-outline-success'}`}>{t(`source_type_${car.source_type}`)}</span>,
+        },
+        {
+            accessor: 'source_name',
+            title: t('source_name'),
+            sortable: true,
+            render: (car) => <span className="text-sm">{car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}</span>,
         },
         {
             accessor: 'buy_price',
@@ -308,12 +356,27 @@ const CarDealsPage = () => {
             sortable: true,
             render: ({ created_at }) => new Date(created_at).toLocaleDateString('he-IL'),
         },
+        {
+            accessor: 'actions',
+            title: t('actions'),
+            render: (car) => (
+                <div className="flex items-center gap-2">
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => handleGeneratePDF(car)} disabled={generatingPdf === car.id} title={t('generate_purchase_contract')}>
+                        {generatingPdf === car.id ? (
+                            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
+                        ) : (
+                            <IconFile className="h-4 w-4" />
+                        )}
+                    </button>
+                </div>
+            ),
+        },
     ];
 
     return (
         <div>
             <div className="mb-6 flex items-center justify-between">
-                <h1 className="text-2xl font-bold">{t('car_deals')}</h1>
+                <h1 className="text-2xl font-bold">{t('purchases_deals')}</h1>
             </div>
 
             <div className="panel">

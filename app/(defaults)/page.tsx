@@ -863,7 +863,7 @@ const HomePage = () => {
                             </Link>
 
                             {/* Add New Deal */}
-                            <Link href="/deals/add" className="group">
+                            <Link href="/sales-deals/add" className="group">
                                 <div className="flex flex-col items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-warning hover:bg-warning/5 dark:border-[#191e3a] dark:hover:border-warning">
                                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-warning/10 text-warning mb-3">
                                         <IconPlus className="h-6 w-6" />
@@ -916,7 +916,7 @@ const HomePage = () => {
                                 </div>
                             </Link>
 
-                            <Link href="/deals" className="group">
+                            <Link href="/sales-deals" className="group">
                                 <div className="flex items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-warning hover:bg-warning/5 dark:border-[#191e3a] dark:hover:border-warning">
                                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-warning/10 text-warning">
                                         <IconMenuInvoice className="h-6 w-6" />
