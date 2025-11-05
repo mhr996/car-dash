@@ -287,7 +287,7 @@ const BillPreview = () => {
                     <div className="panel">
                         <div className="mb-5 flex items-center gap-3">
                             <IconDollarSign className="w-5 h-5 text-primary" />
-                            <h5 className="text-lg font-semibold dark:text-white-light">تفاصيل الفاتورة الضريبية</h5>
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('tax_invoice_details')}</h5>
                         </div>
                         <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                             {/* Table Header */}
