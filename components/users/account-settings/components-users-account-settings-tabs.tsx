@@ -14,8 +14,10 @@ import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ImageUpload from '@/components/image-upload/image-upload';
 import ConfirmModal from '@/components/modals/confirm-modal';
+import { getTranslation } from '@/i18n';
 
 const ComponentsUsersAccountSettingsTabs = () => {
+    const { t } = getTranslation();
     const [loading, setLoading] = useState(false);
     const [profileData, setProfileData] = useState({
         full_name: '',
@@ -99,14 +101,14 @@ const ComponentsUsersAccountSettingsTabs = () => {
             // Show success message
             setAlertMessage({
                 type: 'success',
-                message: 'Profile updated successfully!',
+                message: t('profile_updated_successfully'),
             });
         } catch (error) {
             console.error('Error updating profile:', error);
             // Show error message
             setAlertMessage({
                 type: 'danger',
-                message: error instanceof Error ? error.message : 'Error updating profile!',
+                message: error instanceof Error ? error.message : t('error_updating_profile'),
             });
         } finally {
             setLoading(false);
@@ -142,13 +144,13 @@ const ComponentsUsersAccountSettingsTabs = () => {
 
             setAlertMessage({
                 type: 'success',
-                message: 'Profile image updated successfully!',
+                message: t('profile_image_updated_successfully'),
             });
         } catch (error) {
             console.error('Error updating avatar:', error);
             setAlertMessage({
                 type: 'danger',
-                message: 'Error updating profile image',
+                message: t('error_updating_profile_image'),
             });
         }
     };
@@ -165,13 +167,13 @@ const ComponentsUsersAccountSettingsTabs = () => {
 
             setAlertMessage({
                 type: 'success',
-                message: 'Cache cleared successfully!',
+                message: t('cache_cleared_successfully'),
             });
         } catch (error) {
             console.error('Error purging cache:', error);
             setAlertMessage({
                 type: 'danger',
-                message: 'Error clearing cache',
+                message: t('error_clearing_cache'),
             });
         } finally {
             setLoading(false);
@@ -207,7 +209,7 @@ const ComponentsUsersAccountSettingsTabs = () => {
             console.error('Error deleting account:', error);
             setAlertMessage({
                 type: 'danger',
-                message: error instanceof Error ? error.message : 'Error deleting account',
+                message: error instanceof Error ? error.message : t('error_deleting_account'),
             });
         } finally {
             setLoading(false);
@@ -235,7 +237,7 @@ const ComponentsUsersAccountSettingsTabs = () => {
     return (
         <div className="pt-5">
             <div className="mb-5 flex items-center justify-between">
-                <h5 className="text-lg font-semibold dark:text-white-light">Settings</h5>
+                <h5 className="text-lg font-semibold dark:text-white-light">{t('settings')}</h5>
             </div>
             <div>
                 <ul className="mb-5 overflow-y-auto whitespace-nowrap border-b border-[#ebedf2] font-semibold dark:border-[#191e3a] sm:flex">
@@ -245,7 +247,7 @@ const ComponentsUsersAccountSettingsTabs = () => {
                             className={`flex gap-2 border-b border-transparent p-4 hover:border-primary hover:text-primary ${tabs === 'home' ? '!border-primary text-primary' : ''}`}
                         >
                             <IconUser />
-                            Profile
+                            {t('profile')}
                         </button>
                     </li>
 
@@ -255,7 +257,7 @@ const ComponentsUsersAccountSettingsTabs = () => {
                             className={`flex gap-2 border-b border-transparent p-4 hover:border-primary hover:text-primary ${tabs === 'danger-zone' ? '!border-primary text-primary' : ''}`}
                         >
                             <IconInfoCircle />
-                            Danger Zone
+                            {t('danger_zone')}
                         </button>
                     </li>
                 </ul>
@@ -268,7 +270,7 @@ const ComponentsUsersAccountSettingsTabs = () => {
                         </div>
                     )}
                     <form onSubmit={handleSubmit} className="mb-5 rounded-md border border-[#ebedf2] bg-white p-4 dark:border-[#191e3a] dark:bg-black">
-                        <h6 className="mb-5 text-lg font-bold">General Information</h6>
+                        <h6 className="mb-5 text-lg font-bold">{t('general_information')}</h6>
                         <div className="flex flex-col sm:flex-row">
                             <div className="mb-5 w-full sm:w-2/12 ltr:sm:mr-4 rtl:sm:ml-4">
                                 <ImageUpload
@@ -287,15 +289,15 @@ const ComponentsUsersAccountSettingsTabs = () => {
                             </div>
                             <div className="grid flex-1 grid-cols-1 gap-5 sm:grid-cols-2">
                                 <div>
-                                    <label htmlFor="name">Full Name</label>
+                                    <label htmlFor="name">{t('full_name')}</label>
                                     <input id="name" name="full_name" type="text" value={profileData.full_name} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 <div>
-                                    <label htmlFor="profession">Profession</label>
+                                    <label htmlFor="profession">{t('profession')}</label>
                                     <input id="profession" name="profession" type="text" value={profileData.profession} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 <div>
-                                    <label htmlFor="country">Country</label>
+                                    <label htmlFor="country">{t('country')}</label>
 
                                     <CountrySelect
                                         id="country"
@@ -311,19 +313,19 @@ const ComponentsUsersAccountSettingsTabs = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label htmlFor="address">Address</label>
+                                    <label htmlFor="address">{t('address')}</label>
                                     <input id="address" name="address" type="text" value={profileData.address} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 <div>
-                                    <label htmlFor="location">Location</label>
+                                    <label htmlFor="location">{t('location')}</label>
                                     <input id="location" name="location" type="text" value={profileData.location} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 <div>
-                                    <label htmlFor="phone">Phone</label>
+                                    <label htmlFor="phone">{t('phone')}</label>
                                     <input id="phone" name="phone" type="text" value={profileData.phone} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 <div>
-                                    <label htmlFor="email">Email</label>
+                                    <label htmlFor="email">{t('email')}</label>
                                     <div className="relative">
                                         <input
                                             id="email"
@@ -338,28 +340,28 @@ const ComponentsUsersAccountSettingsTabs = () => {
                                         />
                                         {profileData.email && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">{/* You can add an icon or verification status here */}</span>}
                                     </div>
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Changing your email will require verification</p>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('email_change_verification_notice')}</p>
                                 </div>
                                 <div>
-                                    <label htmlFor="web">Website</label>
+                                    <label htmlFor="web">{t('website')}</label>
                                     <input id="web" name="website" type="text" value={profileData.website} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 <div>
                                     <label className="inline-flex cursor-pointer">
                                         <input type="checkbox" name="is_default_address" checked={profileData.is_default_address} onChange={handleInputChange} className="form-checkbox" />
-                                        <span className="relative text-white-dark checked:bg-none">Make this my default address</span>
+                                        <span className="relative text-white-dark checked:bg-none">{t('make_default_address')}</span>
                                     </label>
                                 </div>
                                 <div className="mt-3 sm:col-span-2">
                                     <button type="submit" className="btn btn-primary" disabled={loading}>
-                                        {loading ? 'Saving...' : 'Save'}
+                                        {loading ? t('saving') : t('save')}
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </form>
                     <form className="rounded-md border border-[#ebedf2] bg-white p-4 dark:border-[#191e3a] dark:bg-black">
-                        <h6 className="mb-5 text-lg font-bold">Social</h6>
+                        <h6 className="mb-5 text-lg font-bold">{t('social')}</h6>
                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                             <div className="flex">
                                 <div className="flex items-center justify-center rounded bg-[#eee] px-3 font-semibold ltr:mr-2 rtl:ml-2 dark:bg-[#1b2e4b]">
@@ -396,19 +398,19 @@ const ComponentsUsersAccountSettingsTabs = () => {
                 <div className="switch">
                     <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                         <div className="panel space-y-5">
-                            <h5 className="mb-4 text-lg font-semibold">Purge Cache</h5>
-                            <p>Remove the active resource from the cache without waiting for the predetermined cache expiry time.</p>
-                            <p>Warning! This will log you out of your account</p>
+                            <h5 className="mb-4 text-lg font-semibold">{t('purge_cache')}</h5>
+                            <p>{t('purge_cache_description')}</p>
+                            <p>{t('purge_cache_warning')}</p>
                             <button className="btn btn-secondary" onClick={handlePurgeCache} disabled={loading}>
-                                {loading ? 'Clearing...' : 'Clear'}
+                                {loading ? t('clearing') : t('clear')}
                             </button>
                         </div>
 
                         <div className="panel space-y-5">
-                            <h5 className="mb-4 text-lg font-semibold">Delete Account</h5>
-                            <p>Once you delete the account, there is no going back. Please be certain.</p>
+                            <h5 className="mb-4 text-lg font-semibold">{t('delete_account')}</h5>
+                            <p>{t('delete_account_warning')}</p>
                             <button className="btn btn-danger btn-delete-account" onClick={() => setConfirmDeleteOpen(true)} disabled={loading}>
-                                {loading ? 'Deleting...' : 'Delete my account'}
+                                {loading ? t('deleting') : t('delete_my_account')}
                             </button>
                         </div>
                     </div>
@@ -424,13 +426,13 @@ const ComponentsUsersAccountSettingsTabs = () => {
             {/* Confirm deletion modal */}
             <ConfirmModal
                 isOpen={confirmDeleteOpen}
-                title="Delete Account"
-                message="Are you sure you want to delete your account? This action cannot be undone."
+                title={t('delete_account')}
+                message={t('delete_account_confirmation')}
                 onCancel={() => setConfirmDeleteOpen(false)}
                 onConfirm={handleDeleteAccount}
                 size="sm"
-                confirmLabel="Delete"
-                cancelLabel="Cancel"
+                confirmLabel={t('delete')}
+                cancelLabel={t('cancel')}
             />
         </div>
     );
