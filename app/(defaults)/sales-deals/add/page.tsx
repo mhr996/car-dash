@@ -508,8 +508,7 @@ const AddDeal = () => {
         }
         return true;
     };
-    
-    
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -607,7 +606,8 @@ const AddDeal = () => {
                     brand: exchangeForm.old_car_manufacturer,
                     status: 'received_from_client',
                     type: 'used',
-                    provider: '1', // Default provider ID for cars received from clients
+                    source_type: 'customer', // Set source as customer for exchange deals
+                    source_customer_id: selectedCustomer?.id || null, // Link to the customer
                     kilometers: exchangeForm.old_car_kilometers ? parseInt(exchangeForm.old_car_kilometers) : 0,
                     market_price: exchangeForm.old_car_market_price ? parseFloat(exchangeForm.old_car_market_price) : 0,
                     buy_price: parseFloat(exchangeForm.old_car_purchase_price),
@@ -819,9 +819,6 @@ const AddDeal = () => {
             setSaving(false);
         }
     };
-
-
-
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-US', {

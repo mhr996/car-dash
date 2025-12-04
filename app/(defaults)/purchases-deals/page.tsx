@@ -58,6 +58,13 @@ const CarDealsPage = () => {
     const [loading, setLoading] = useState(true);
     const [generatingPdf, setGeneratingPdf] = useState<number | null>(null);
 
+    const getCookie = (name: string) => {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
+        return null;
+    };
+
     const handleGeneratePDF = async (car: CarDeal) => {
         try {
             setGeneratingPdf(car.id);
@@ -91,7 +98,20 @@ const CarDealsPage = () => {
                 ownershipTransferDays: 30,
             };
 
-            await CarPurchaseContractPDFGenerator.generateFromContract(contract);
+            const lang = getCookie('i18nextLng') || 'he';
+            const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
+
+       
+
+            const carIdentifier = car.car_number || `CAR-${car.id}`;
+            const filename = `car-purchase-contract-${carIdentifier}-${new Date().toISOString().split('T')[0]}.pdf`;
+
+            await CarPurchaseContractPDFGenerator.generateFromContract(contract, {
+                filename,
+                language: normalizedLang,
+                format: 'A4',
+                orientation: 'portrait',
+            });
         } catch (error) {
             console.error('Error generating PDF:', error);
             alert(t('error_generating_pdf'));
