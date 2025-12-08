@@ -129,7 +129,7 @@ interface BillPayment {
 /**
  * Create invoice/receipt document in Tranzila
  */
-const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null) => {
+const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null, selectedCar?: Car | null) => {
     try {
         // Map bill type to Tranzila document type
         // Document types from Tranzila API:
@@ -163,12 +163,12 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         const items = [];
 
         // If we have deal data with car, create detailed line items
-        if (deal && deal.car) {
+        if (deal && selectedCar) {
             // Row 1: Car Details
             items.push({
                 type: 'I',
                 code: null,
-                name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}` || billData.car_details || 'פרטי רכב',
+                name: `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` || billData.car_details || 'פרטי רכב',
                 price_type: 'G', // Gross (includes VAT)
                 unit_price: 0, // No price for this row
                 units_number: 1,
@@ -178,7 +178,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             });
 
             // Row 2: Buy Price
-            if (deal.car.buy_price) {
+            if (selectedCar.buy_price) {
                 items.push({
                     type: 'I',
                     code: null,
@@ -314,18 +314,18 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             // Get customer based on deal type
             if (deal.deal_type === 'intermediary') {
                 // For intermediary deals, prefer seller, then buyer
-                const customer = deal.seller || deal.buyer || deal.customer;
+                const customer = deal.seller || deal.buyer || deal.customers;
                 if (customer) {
                     customerId = customer.id_number?.toString() || customerId;
-                    customerEmail = customer.email || customerEmail;
-                    customerPhone = customer.phone || '';
+                    customerEmail = (customer as any).email || customerEmail;
+                    customerPhone = (customer as any).phone || '';
                 }
             } else {
                 // For regular deals, use customer
-                if (deal.customer) {
-                    customerId = deal.customer.id_number?.toString() || customerId;
-                    customerEmail = deal.customer.email || customerEmail;
-                    customerPhone = deal.customer.phone || '';
+                if (deal.customers) {
+                    customerId = deal.customers.id_number?.toString() || customerId;
+                    customerEmail = (deal.customers as any).email || customerEmail;
+                    customerPhone = (deal.customers as any).phone || '';
                 }
             }
         }
@@ -855,26 +855,6 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
         setSelectedBill(null);
     };
 
-    // Handle PDF download
-    const handleDownloadPDF = async (bill: any) => {
-        setDownloadingPDF(bill.id);
-
-        try {
-            const cookies = new Cookies();
-            const currentLang = cookies.get('i18nextLng') || 'he';
-            const language = currentLang === 'ae' ? 'ar' : currentLang === 'he' ? 'he' : 'en';
-
-            await generateBillPDF(convertBillToBillData(bill), {
-                filename: `bill-${bill.id}-${bill.customer_name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
-                language,
-            });
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            setAlert({ message: t('error_downloading_pdf'), type: 'danger' });
-        } finally {
-            setDownloadingPDF(null);
-        }
-    };
     const handleDealTypeChange = (type: string) => {
         setDealType(type);
     };
@@ -1462,7 +1442,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
             // Create document in Tranzila after successful bill creation
             try {
-                await createTranzilaDocument(billResult.id, billData, payments, deal);
+                await createTranzilaDocument(billResult.id, billData, payments, deal, selectedCar);
             } catch (tranzilaError) {
                 console.error('Error creating Tranzila document:', tranzilaError);
                 // Don't fail the entire bill creation, but log the error
