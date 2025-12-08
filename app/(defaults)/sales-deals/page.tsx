@@ -16,6 +16,7 @@ import { Deal } from '@/types';
 import { logActivity } from '@/utils/activity-logger';
 import DealFilters from '@/components/deal-filters/deal-filters';
 import { handleDealDeleted, getCustomerIdFromDeal } from '@/utils/balance-manager';
+import ViewToggle from '@/components/view-toggle/view-toggle';
 
 type DealType = 'new_used_sale' | 'new_sale' | 'used_sale' | 'new_used_sale_tax_inclusive' | 'exchange' | 'intermediary' | 'financing_assistance_intermediary' | 'company_commission' | '';
 
@@ -35,6 +36,7 @@ const DealsList = () => {
     const { t } = getTranslation();
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
     const [page, setPage] = useState(1);
     const PAGE_SIZES = [10, 20, 30, 50, 100];
@@ -57,6 +59,20 @@ const DealsList = () => {
         sellerId: '',
         buyerId: '',
     }); // Modal and alert states
+
+    // Load view preference from localStorage
+    useEffect(() => {
+        const savedView = localStorage.getItem('salesDealsViewMode');
+        if (savedView === 'grid' || savedView === 'list') {
+            setViewMode(savedView);
+        }
+    }, []);
+
+    // Save view preference when changed
+    const handleViewChange = (view: 'list' | 'grid') => {
+        setViewMode(view);
+        localStorage.setItem('salesDealsViewMode', view);
+    };
 
     // Always default sort by ID in descending order
     useEffect(() => {
@@ -387,6 +403,9 @@ const DealsList = () => {
             )}
             <div className="invoice-table">
                 <div className="mb-4.5 flex flex-wrap items-start justify-between gap-4 px-5">
+                    <div className="flex items-center gap-2">
+                        <ViewToggle view={viewMode} onViewChange={handleViewChange} />
+                    </div>
                     <div className="flex items-center gap-2 ml-auto">
                         <button type="button" className="btn btn-danger gap-2" onClick={handleBulkDelete} disabled={selectedRecords.length === 0}>
                             <IconTrashLines />
@@ -420,181 +439,330 @@ const DealsList = () => {
                     </div>
                 </div>
 
-                <div className="datatables pagination-padding relative">
-                    <DataTable
-                        className={`${loading ? 'filter blur-sm pointer-events-none' : 'table-hover whitespace-nowrap'} rtl-table-headers`}
-                        records={records}
-                        columns={[
-                            {
-                                accessor: 'id',
-                                title: t('id'),
-                                sortable: true,
-                                render: ({ id }) => (
-                                    <div className="flex items-center gap-2">
-                                        <strong className="text-info">#{id}</strong>
-                                        <Link href={`/sales-deals/preview/${id}`} className="flex hover:text-info" title={t('view')}>
-                                            <IconEye className="h-4.5 w-4.5" />
-                                        </Link>
-                                    </div>
-                                ),
-                            },
-                            {
-                                accessor: 'created_at',
-                                title: t('deal_created_date'),
-                                sortable: true,
-                                render: ({ created_at }) => (
-                                    <span>
-                                        {new Date(created_at).toLocaleDateString('en-GB', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                        })}
-                                    </span>
-                                ),
-                            },
-                            {
-                                accessor: 'customer_name',
-                                title: t('customer'),
-                                sortable: true,
-                                render: ({ customers, seller, buyer, deal_type, title }) => (
-                                    <div>
-                                        {deal_type === 'intermediary' ? (
-                                            <div>
-                                                <div className="font-semibold text-sm">
-                                                    <span className="text-blue-600">{t('seller')}: </span>
-                                                    {seller?.name || t('no_seller')}
+                {viewMode === 'list' ? (
+                    <div className="datatables pagination-padding relative">
+                        <DataTable
+                            className={`${loading ? 'filter blur-sm pointer-events-none' : 'table-hover whitespace-nowrap'} rtl-table-headers`}
+                            records={records}
+                            columns={[
+                                {
+                                    accessor: 'id',
+                                    title: t('id'),
+                                    sortable: true,
+                                    render: ({ id }) => (
+                                        <div className="flex items-center gap-2">
+                                            <strong className="text-info">#{id}</strong>
+                                            <Link href={`/sales-deals/preview/${id}`} className="flex hover:text-info" title={t('view')}>
+                                                <IconEye className="h-4.5 w-4.5" />
+                                            </Link>
+                                        </div>
+                                    ),
+                                },
+                                {
+                                    accessor: 'created_at',
+                                    title: t('deal_created_date'),
+                                    sortable: true,
+                                    render: ({ created_at }) => (
+                                        <span>
+                                            {new Date(created_at).toLocaleDateString('en-GB', {
+                                                year: 'numeric',
+                                                month: '2-digit',
+                                                day: '2-digit',
+                                            })}
+                                        </span>
+                                    ),
+                                },
+                                {
+                                    accessor: 'customer_name',
+                                    title: t('customer'),
+                                    sortable: true,
+                                    render: ({ customers, seller, buyer, deal_type, title }) => (
+                                        <div>
+                                            {deal_type === 'intermediary' ? (
+                                                <div>
+                                                    <div className="font-semibold text-sm">
+                                                        <span className="text-blue-600">{t('seller')}: </span>
+                                                        {seller?.name || t('no_seller')}
+                                                    </div>
+                                                    <div className="font-semibold text-sm mt-1">
+                                                        <span className="text-green-600">{t('buyer')}: </span>
+                                                        {buyer?.name || t('no_buyer')}
+                                                    </div>
                                                 </div>
-                                                <div className="font-semibold text-sm mt-1">
-                                                    <span className="text-green-600">{t('buyer')}: </span>
-                                                    {buyer?.name || t('no_buyer')}
+                                            ) : (
+                                                <div className="font-semibold">{customers?.name || t('no_customer')}</div>
+                                            )}
+                                            <div className="text-xs text-gray-500 mt-1">{title}</div>
+                                        </div>
+                                    ),
+                                },
+                                {
+                                    accessor: 'customer_identity',
+                                    title: t('id_number'),
+                                    sortable: true,
+                                    render: ({ customers, seller, buyer, deal_type }) => (
+                                        <div className="text-sm">
+                                            {deal_type === 'intermediary' ? (
+                                                <div>
+                                                    <div className="text-blue-600">{seller?.id_number || '-'}</div>
+                                                    <div className="text-green-600 mt-1">{buyer?.id_number || '-'}</div>
                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <div className="font-semibold">{customers?.name || t('no_customer')}</div>
-                                        )}
-                                        <div className="text-xs text-gray-500 mt-1">{title}</div>
-                                    </div>
-                                ),
-                            },
-                            {
-                                accessor: 'customer_identity',
-                                title: t('id_number'),
-                                sortable: true,
-                                render: ({ customers, seller, buyer, deal_type }) => (
-                                    <div className="text-sm">
-                                        {deal_type === 'intermediary' ? (
-                                            <div>
-                                                <div className="text-blue-600">{seller?.id_number || '-'}</div>
-                                                <div className="text-green-600 mt-1">{buyer?.id_number || '-'}</div>
-                                            </div>
-                                        ) : (
-                                            customers?.id_number || '-'
-                                        )}
-                                    </div>
-                                ),
-                            },
-                            {
-                                accessor: 'car_info',
-                                title: t('car_info'),
-                                sortable: true,
-                                render: (deal: any) => (
-                                    <div className="text-sm">
-                                        {deal.cars ? (
-                                            <div>
-                                                <div className="font-semibold">
-                                                    {deal.cars.brand} {deal.cars.title}
+                                            ) : (
+                                                customers?.id_number || '-'
+                                            )}
+                                        </div>
+                                    ),
+                                },
+                                {
+                                    accessor: 'car_info',
+                                    title: t('car_info'),
+                                    sortable: true,
+                                    render: (deal: any) => (
+                                        <div className="text-sm">
+                                            {deal.cars ? (
+                                                <div>
+                                                    <div className="font-semibold">
+                                                        {deal.cars.brand} {deal.cars.title}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 mt-1">
+                                                        {deal.cars.car_number && <span className="text-blue-600">{deal.cars.car_number}</span>}
+                                                        {deal.cars.year && <span className="ml-2">{deal.cars.year}</span>}
+                                                    </div>
                                                 </div>
-                                                <div className="text-xs text-gray-500 mt-1">
-                                                    {deal.cars.car_number && <span className="text-blue-600">{deal.cars.car_number}</span>}
-                                                    {deal.cars.year && <span className="ml-2">{deal.cars.year}</span>}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <span className="text-gray-400">{t('no_car_assigned')}</span>
-                                        )}
-                                    </div>
-                                ),
-                            },
-                            {
-                                accessor: 'deal_type',
-                                title: t('deal_type'),
-                                sortable: true,
-                                render: ({ deal_type }) => <span className={`badge max-w-20 ${getDealTypeBadgeClass(deal_type)}`}>{t(`deal_type_${deal_type}`)}</span>,
-                            },
-                            {
-                                accessor: 'amount',
-                                title: t('amount'),
-                                sortable: true,
-                                render: ({ selling_price }) => <span className="text-success">{formatCurrency(selling_price)}</span>,
-                            },
-                            {
-                                accessor: 'deal_balance',
-                                title: t('deal_balance'),
-                                sortable: true,
-                                render: (deal) => {
+                                            ) : (
+                                                <span className="text-gray-400">{t('no_car_assigned')}</span>
+                                            )}
+                                        </div>
+                                    ),
+                                },
+                                {
+                                    accessor: 'deal_type',
+                                    title: t('deal_type'),
+                                    sortable: true,
+                                    render: ({ deal_type }) => <span className={`badge max-w-20 ${getDealTypeBadgeClass(deal_type)}`}>{t(`deal_type_${deal_type}`)}</span>,
+                                },
+                                {
+                                    accessor: 'amount',
+                                    title: t('amount'),
+                                    sortable: true,
+                                    render: ({ selling_price }) => <span className="text-success">{formatCurrency(selling_price)}</span>,
+                                },
+                                {
+                                    accessor: 'deal_balance',
+                                    title: t('deal_balance'),
+                                    sortable: true,
+                                    render: (deal) => {
+                                        const balance = calculateDealBalance(deal, deal.bills || []);
+                                        return <span className={balance >= 0 ? 'text-info' : 'text-danger'}>{formatCurrency(balance)}</span>;
+                                    },
+                                },
+                                {
+                                    accessor: 'status',
+                                    title: t('status'),
+                                    sortable: true,
+                                    render: ({ status }) => <span className={`badge ${getStatusBadgeClass(status)}`}>{t(`status_${status}`)}</span>,
+                                },
+                                {
+                                    accessor: 'bill_status',
+                                    title: t('bill_status'),
+                                    sortable: true,
+                                    render: ({ bills }) => {
+                                        const hasBills = bills && bills.length > 0;
+                                        return <span className={`badge ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>{hasBills ? t('bill_created') : t('no_bill_created')}</span>;
+                                    },
+                                },
+
+                                {
+                                    accessor: 'action',
+                                    title: t('actions'),
+                                    sortable: false,
+                                    textAlignment: 'center',
+                                    render: ({ id, status }) => (
+                                        <div className="mx-auto flex w-max items-center gap-4">
+                                            <Link
+                                                href={`/sales-deals/edit/${id}`}
+                                                className={`flex hover:text-info ${status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
+                                                title={status === 'cancelled' ? t('deal_cancelled_no_edit') : t('edit')}
+                                            >
+                                                <IconEdit className="h-4.5 w-4.5" />
+                                            </Link>
+                                            <button
+                                                type="button"
+                                                className={`flex hover:text-danger ${status === 'completed' || status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
+                                                onClick={() => status !== 'completed' && status !== 'cancelled' && deleteRow(id)}
+                                                title={status === 'completed' ? t('deal_completed_no_delete') : status === 'cancelled' ? t('deal_cancelled_no_delete') : t('delete')}
+                                            >
+                                                <IconTrashLines />
+                                            </button>
+                                        </div>
+                                    ),
+                                },
+                            ]}
+                            highlightOnHover
+                            totalRecords={initialRecords.length}
+                            recordsPerPage={pageSize}
+                            page={page}
+                            onPageChange={(p) => setPage(p)}
+                            recordsPerPageOptions={PAGE_SIZES}
+                            onRecordsPerPageChange={setPageSize}
+                            sortStatus={sortStatus}
+                            onSortStatusChange={setSortStatus}
+                            selectedRecords={selectedRecords}
+                            onSelectedRecordsChange={setSelectedRecords}
+                            paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
+                            minHeight={300}
+                        />
+
+                        {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
+                    </div>
+                ) : (
+                    <div className="px-5">
+                        {loading ? (
+                            <div className="flex items-center justify-center min-h-[300px]">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                {records.map((deal: any) => {
                                     const balance = calculateDealBalance(deal, deal.bills || []);
-                                    return <span className={balance >= 0 ? 'text-info' : 'text-danger'}>{formatCurrency(balance)}</span>;
-                                },
-                            },
-                            {
-                                accessor: 'status',
-                                title: t('status'),
-                                sortable: true,
-                                render: ({ status }) => <span className={`badge ${getStatusBadgeClass(status)}`}>{t(`status_${status}`)}</span>,
-                            },
-                            {
-                                accessor: 'bill_status',
-                                title: t('bill_status'),
-                                sortable: true,
-                                render: ({ bills }) => {
-                                    const hasBills = bills && bills.length > 0;
-                                    return <span className={`badge ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>{hasBills ? t('bill_created') : t('no_bill_created')}</span>;
-                                },
-                            },
-
-                            {
-                                accessor: 'action',
-                                title: t('actions'),
-                                sortable: false,
-                                textAlignment: 'center',
-                                render: ({ id, status }) => (
-                                    <div className="mx-auto flex w-max items-center gap-4">
-                                        <Link
-                                            href={`/sales-deals/edit/${id}`}
-                                            className={`flex hover:text-info ${status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
-                                            title={status === 'cancelled' ? t('deal_cancelled_no_edit') : t('edit')}
-                                        >
-                                            <IconEdit className="h-4.5 w-4.5" />
-                                        </Link>
+                                    const hasBills = deal.bills && deal.bills.length > 0;
+                                    return (
+                                        <div key={deal.id} className="panel p-0 overflow-hidden hover:shadow-lg transition-shadow border border-gray-200 dark:border-blue-400/30">
+                                            <div className="p-5">
+                                                <div className="mb-3">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <div className="flex-1 min-w-0">
+                                                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{deal.title}</h3>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col items-start justify-center  gap-1">
+                                                        <span className={`badge ${getDealTypeBadgeClass(deal.deal_type)}`}>{t(`deal_type_${deal.deal_type}`)}</span>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">#{deal.id}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-3 mb-4">
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('customer')}</p>
+                                                        {deal.deal_type === 'intermediary' ? (
+                                                            <div>
+                                                                <p className="font-semibold text-sm text-blue-600">
+                                                                    {t('seller')}: {deal.seller?.name || t('no_seller')}
+                                                                </p>
+                                                                <p className="font-semibold text-sm text-green-600">
+                                                                    {t('buyer')}: {deal.buyer?.name || t('no_buyer')}
+                                                                </p>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="font-semibold text-sm">{deal.customers?.name || t('no_customer')}</p>
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('car_info')}</p>
+                                                        {deal.cars ? (
+                                                            <div>
+                                                                <p className="font-semibold text-sm">
+                                                                    {deal.cars.brand} {deal.cars.title}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500">
+                                                                    {deal.cars.car_number} - {deal.cars.year}
+                                                                </p>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-sm text-gray-400">{t('no_car_assigned')}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">
+                                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('amount')}</p>
+                                                            <p className="font-bold text-success text-sm">{formatCurrency(deal.selling_price)}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('deal_balance')}</p>
+                                                            <p className={`font-bold text-sm ${balance >= 0 ? 'text-info' : 'text-danger'}`}>{formatCurrency(balance)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('status')}</p>
+                                                            <span className={`badge ${getStatusBadgeClass(deal.status)}`}>{t(`status_${deal.status}`)}</span>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('bill_status')}</p>
+                                                            <span className={`badge ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>
+                                                                {hasBills ? t('bill_created') : t('no_bill_created')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-2">
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('deal_created_date')}</p>
+                                                        <p className="text-sm">
+                                                            {new Date(deal.created_at).toLocaleDateString('en-GB', {
+                                                                year: 'numeric',
+                                                                month: '2-digit',
+                                                                day: '2-digit',
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Link href={`/sales-deals/preview/${deal.id}`} className="btn btn-primary btn-sm flex-1 justify-center">
+                                                        <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
+                                                        {t('view')}
+                                                    </Link>
+                                                    <Link
+                                                        href={`/sales-deals/edit/${deal.id}`}
+                                                        className={`btn btn-info btn-sm ${deal.status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
+                                                        title={deal.status === 'cancelled' ? t('deal_cancelled_no_edit') : t('edit')}
+                                                    >
+                                                        <IconEdit className="w-4 h-4" />
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        className={`btn btn-danger btn-sm ${deal.status === 'completed' || deal.status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
+                                                        onClick={() => deal.status !== 'completed' && deal.status !== 'cancelled' && deleteRow(deal.id)}
+                                                        title={deal.status === 'completed' ? t('deal_completed_no_delete') : deal.status === 'cancelled' ? t('deal_cancelled_no_delete') : t('delete')}
+                                                    >
+                                                        <IconTrashLines className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {!loading && records.length === 0 && (
+                            <div className="flex items-center justify-center min-h-[300px] text-gray-500 dark:text-gray-400">
+                                <div className="text-center">
+                                    <p className="text-lg font-semibold mb-2">{t('no_results_found')}</p>
+                                    <p className="text-sm">{t('try_adjusting_filters')}</p>
+                                </div>
+                            </div>
+                        )}
+                        {!loading && records.length > 0 && (
+                            <div className="flex justify-between items-center mt-6 flex-wrap gap-4">
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {t('showing')} {(page - 1) * pageSize + 1} {t('to')} {Math.min(page * pageSize, initialRecords.length)} {t('of')} {initialRecords.length} {t('entries')}
+                                </div>
+                                <div className="flex gap-2 flex-wrap">
+                                    {Array.from({ length: Math.ceil(initialRecords.length / pageSize) }, (_, i) => i + 1).map((pageNum) => (
                                         <button
-                                            type="button"
-                                            className={`flex hover:text-danger ${status === 'completed' || status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
-                                            onClick={() => status !== 'completed' && status !== 'cancelled' && deleteRow(id)}
-                                            title={status === 'completed' ? t('deal_completed_no_delete') : status === 'cancelled' ? t('deal_cancelled_no_delete') : t('delete')}
+                                            key={pageNum}
+                                            onClick={() => setPage(pageNum)}
+                                            className={`px-3 py-1 rounded transition-colors ${
+                                                page === pageNum ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                            }`}
                                         >
-                                            <IconTrashLines />
+                                            {pageNum}
                                         </button>
-                                    </div>
-                                ),
-                            },
-                        ]}
-                        highlightOnHover
-                        totalRecords={initialRecords.length}
-                        recordsPerPage={pageSize}
-                        page={page}
-                        onPageChange={(p) => setPage(p)}
-                        recordsPerPageOptions={PAGE_SIZES}
-                        onRecordsPerPageChange={setPageSize}
-                        sortStatus={sortStatus}
-                        onSortStatusChange={setSortStatus}
-                        selectedRecords={selectedRecords}
-                        onSelectedRecordsChange={setSelectedRecords}
-                        paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
-                        minHeight={300}
-                    />
-
-                    {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
-                </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>{' '}
             <ConfirmModal
                 isOpen={showConfirmModal}

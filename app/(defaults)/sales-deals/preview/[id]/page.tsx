@@ -68,6 +68,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'info' | 'attachments' | 'payments' | 'bills'>('info');
     const [deal, setDeal] = useState<Deal | null>(null);
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [car, setCar] = useState<Car | null>(null);
@@ -80,6 +81,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [paymentNotes, setPaymentNotes] = useState<string>('');
+    const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
     const dealId = params.id;
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -87,6 +89,28 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
         message: '',
         type: 'success',
     });
+
+    const handleDownloadPDF = async (bill: any) => {
+        setDownloadingPDF(bill.id);
+        try {
+            // Check if bill has Tranzila retrieval key
+            const tranzilaRetrievalKey = bill.tranzila_retrieval_key;
+
+            if (!tranzilaRetrievalKey) {
+                setAlert({ visible: true, message: t('bill_not_created_with_tranzila') || 'This bill was not created through Tranzila and cannot be downloaded.', type: 'danger' });
+                return;
+            }
+
+            // Open Tranzila PDF in new tab via our proxy API
+            const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
+            window.open(proxyUrl, '_blank');
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+            setAlert({ visible: true, message: t('error_downloading_pdf') || 'Error downloading PDF', type: 'danger' });
+        } finally {
+            setDownloadingPDF(null);
+        }
+    };
     useEffect(() => {
         const fetchDeal = async () => {
             try {
@@ -462,503 +486,558 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     <h1 className="text-2xl font-bold">{deal.title}</h1>
                     <p className="text-gray-500">#{deal.id}</p>
                 </div>
-                <Link href={`/sales-deals/edit/${deal.id}`} className="btn btn-primary gap-2">
-                    <IconEdit className="w-4 h-4" />
-                    {t('edit_deal')}
-                </Link>
+                <div className="flex gap-3">
+                    <button
+                        className={`btn btn-outline-success gap-2${generatingContract ? ' opacity-60 pointer-events-none' : ''}`}
+                        disabled={generatingContract}
+                        onClick={async () => {
+                            setGeneratingContract(true);
+                            try {
+                                // Create contract - include bill if available, otherwise create without payment info
+                                const contractData = createContractData(bills.length > 0 ? bills[0] : undefined);
+
+                                // Get language from i18nextLng cookie
+                                const getCookie = (name: string) => {
+                                    const value = `; ${document.cookie}`;
+                                    const parts = value.split(`; ${name}=`);
+                                    if (parts.length === 2) {
+                                        const part = parts.pop();
+                                        if (part) {
+                                            return part.split(';').shift();
+                                        }
+                                    }
+                                    return null;
+                                };
+
+                                const lang = getCookie('i18nextLng') || 'he';
+                                const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
+
+                                const filename = `car-contract-${contractData.carPlateNumber}-${new Date().toISOString().split('T')[0]}.pdf`;
+
+                                // Use the new optimized PDF generator
+                                await ContractPDFGenerator.generateFromContract(contractData, {
+                                    filename,
+                                    language: normalizedLang,
+                                    format: 'A4',
+                                    orientation: 'portrait',
+                                });
+                            } catch (error) {
+                                console.error('Error generating contract:', error);
+                                setAlert({ visible: true, message: t('error_generating_pdf') || 'Error generating PDF', type: 'danger' });
+                            } finally {
+                                setGeneratingContract(false);
+                            }
+                        }}
+                    >
+                        {generatingContract ? (
+                            <svg className="animate-spin h-4 w-4 text-success" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                        ) : (
+                            <IconDocument className="w-4 h-4" />
+                        )}
+                        {generatingContract ? t('generating_contract') : t('generate_contract')}
+                    </button>
+                    <Link href={`/sales-deals/edit/${deal.id}`} className="btn btn-primary gap-2">
+                        <IconEdit className="w-4 h-4" />
+                        {t('edit_deal')}
+                    </Link>
+                </div>
+            </div>
+
+            {/* Tabs Navigation */}
+            <div className="mb-5">
+                <div className="border-b border-[#ebedf2] dark:border-[#191e3a]">
+                    <ul className="flex flex-wrap">
+                        <li className="mx-2">
+                            <button
+                                type="button"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'info' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('info')}
+                            >
+                                <IconDocument className="w-4 h-4" />
+                                {t('deal_information')}
+                            </button>
+                        </li>
+                        <li className="mx-2">
+                            <button
+                                type="button"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'attachments' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('attachments')}
+                            >
+                                <IconPaperclip className="w-4 h-4" />
+                                {t('attachments')}
+                            </button>
+                        </li>
+                        <li className="mx-2">
+                            <button
+                                type="button"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'payments' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('payments')}
+                            >
+                                <IconCreditCard className="w-4 h-4" />
+                                {t('payment_methods')}
+                            </button>
+                        </li>
+                        <li className="mx-2">
+                            <button
+                                type="button"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'bills' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('bills')}
+                            >
+                                <IconReceipt className="w-4 h-4" />
+                                {t('connected_bills')}
+                            </button>
+                        </li>
+                    </ul>
+                </div>
             </div>
 
             <div className="space-y-6">
-                {/* Deal Information */}
-                <div className="panel">
-                    <div className="mb-5">
-                        <h5 className="text-xl font-bold text-gray-900 dark:text-white-light">{t('deal_information')}</h5>
-                    </div>
+                {/* Deal Information Tab */}
+                {activeTab === 'info' && (
+                    <>
+                        <div className="panel">
+                            <div className="mb-5">
+                                <h5 className="text-xl font-bold text-gray-900 dark:text-white-light">{t('deal_information')}</h5>
+                            </div>
 
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="flex justify-center items-center flex-col gap-2">
-                                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('deal_type')}</label>
-                                <span className={`badge ${getDealTypeBadgeClass(deal.deal_type)} mt-2 text-base px-3 py-2`}>{t(`deal_type_${deal.deal_type}`)}</span>
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="flex justify-center items-center flex-col gap-2">
+                                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('deal_type')}</label>
+                                        <span className={`badge ${getDealTypeBadgeClass(deal.deal_type)} mt-2 text-base px-3 py-2`}>{t(`deal_type_${deal.deal_type}`)}</span>
+                                    </div>
+                                    <div className="flex justify-center items-center flex-col gap-2">
+                                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('status')}</label>
+                                        <span className={`badge ${getStatusBadgeClass(deal.status)} text-base px-3 py-2`}>{t(`status_${deal.status}`)}</span>
+                                    </div>
+                                    <div className="flex justify-center items-center flex-col gap-2">
+                                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('amount')}</label>
+                                        <div className="flex items-center gap-2">
+                                            <IconDollarSign className="w-5 h-5 text-success" />
+                                            <span className="text-xl font-bold text-success">{formatCurrency(deal.selling_price || 0)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-center items-center flex-col gap-2">
+                                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('created_date')}</label>
+                                        <div className="flex items-center gap-2">
+                                            <IconCalendar className="w-5 h-5 text-primary" />
+                                            <span className="font-medium">
+                                                {new Date(deal.created_at).toLocaleDateString('en-GB', {
+                                                    year: 'numeric',
+                                                    month: '2-digit',
+                                                    day: '2-digit',
+                                                })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">{t('deal_title')}</label>
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{deal.title}</h2>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">{t('description')}</label>
+                                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border">
+                                        <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{deal.description}</p>
+                                    </div>{' '}
+                                </div>
+
+                                {/* Cancellation Reason - Only show if deal is cancelled and reason exists */}
+                                {deal.status === 'cancelled' && deal.cancellation_reason && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-red-600 dark:text-red-400 mb-3">{t('cancellation_reason')}</label>
+                                        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
+                                            <div className="flex items-start gap-3">
+                                                <div className="flex-shrink-0">
+                                                    <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path
+                                                            fillRule="evenodd"
+                                                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                                            clipRule="evenodd"
+                                                        />
+                                                    </svg>
+                                                </div>
+                                                <div>
+                                                    <p className="text-red-700 dark:text-red-300 leading-relaxed whitespace-pre-wrap">{deal.cancellation_reason}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex justify-center items-center flex-col gap-2">
-                                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('status')}</label>
-                                <span className={`badge ${getStatusBadgeClass(deal.status)} text-base px-3 py-2`}>{t(`status_${deal.status}`)}</span>
-                            </div>
-                            <div className="flex justify-center items-center flex-col gap-2">
-                                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('amount')}</label>
-                                <div className="flex items-center gap-2">
-                                    <IconDollarSign className="w-5 h-5 text-success" />
-                                    <span className="text-xl font-bold text-success">{formatCurrency(deal.selling_price || 0)}</span>
+                        </div>
+                        {/* Deal Summary Table */}
+                        {car && (
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h5 className="text-xl font-bold text-gray-900 dark:text-white-light">{t('deal_summary')}</h5>
+                                </div>
+                                <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                    {/* Table Header */}
+                                    <div className="grid grid-cols-3 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                        <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('deal_item')}</div>
+                                        <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('deal_price')}</div>
+                                    </div>
+
+                                    {/* Row 1: Car */}
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                            <div className="font-medium">{t('car')}</div>
+                                            <div className="text-xs mt-1 text-gray-500">
+                                                {car.brand} {car.title} - {car.year}
+                                            </div>
+                                        </div>
+                                        <div className="text-center">-</div>
+                                    </div>
+
+                                    {/* Row 2: Buy Price */}
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price')}</div>
+                                        <div className="text-center">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{car.buy_price?.toFixed(0) || '0.00'}</span>
+                                        </div>
+                                    </div>
+                                    {/* Row 3: Sale Price */}
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('sale_price')}</div>
+                                        <div className="text-center">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{car.sale_price?.toFixed(0) || '0.00'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Row 4: Deal Amount */}
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount')}</div>
+                                        <div className="text-center">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{deal.amount?.toFixed(0) || '0.00'}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Row 5: Profit/Loss */}
+                                    {deal.deal_type !== 'intermediary' && deal.deal_type !== 'financing_assistance_intermediary' && (
+                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-2">
+                                            <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('profit_loss')}</div>
+                                            <div className="text-center">
+                                                <span className={`text-sm font-bold ${(car.sale_price || 0) - (car.buy_price || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    ₪{((car.sale_price || 0) - (car.buy_price || 0)).toFixed(0)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                            <div className="flex justify-center items-center flex-col gap-2">
-                                <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{t('created_date')}</label>
-                                <div className="flex items-center gap-2">
-                                    <IconCalendar className="w-5 h-5 text-primary" />
-                                    <span className="font-medium">
-                                        {new Date(deal.created_at).toLocaleDateString('en-GB', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                        })}
-                                    </span>
+                        )}
+                        {/* Customer Information */}
+                        {customer && (
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
+                                        <IconUser className="w-6 h-6 text-primary" />
+                                        {t('customer_information')}
+                                    </h5>
                                 </div>
-                            </div>
-                        </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">{t('deal_title')}</label>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{deal.title}</h2>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-3">{t('description')}</label>
-                            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border">
-                                <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{deal.description}</p>
-                            </div>{' '}
-                        </div>
-
-                        {/* Cancellation Reason - Only show if deal is cancelled and reason exists */}
-                        {deal.status === 'cancelled' && deal.cancellation_reason && (
-                            <div>
-                                <label className="block text-sm font-medium text-red-600 dark:text-red-400 mb-3">{t('cancellation_reason')}</label>
-                                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-shrink-0">
-                                            <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                                <path
-                                                    fillRule="evenodd"
-                                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                                                    clipRule="evenodd"
-                                                />
-                                            </svg>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                                        <div className="p-3 bg-primary/10 rounded-full">
+                                            <IconUser className="w-6 h-6 text-primary" />
                                         </div>
                                         <div>
-                                            <p className="text-red-700 dark:text-red-300 leading-relaxed whitespace-pre-wrap">{deal.cancellation_reason}</p>
+                                            <p className="font-bold text-gray-900 dark:text-white text-lg">{customer.name}</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('customer_name')}</p>
+                                        </div>
+                                    </div>
+
+                                    {customer.phone && (
+                                        <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                                            <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-full">
+                                                <IconPhone className="w-6 h-6 text-green-600 dark:text-green-400" />
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900 dark:text-white text-lg">{customer.phone}</p>
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">{t('phone_number')}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                                        <div className="p-3 bg-amber-100 dark:bg-amber-900/20 rounded-full">
+                                            <IconUser className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-gray-900 dark:text-white text-lg">{customer.age}</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('age')}</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
-                    </div>
-                </div>
-                {/* Deal Summary Table */}
-                {car && (
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h5 className="text-xl font-bold text-gray-900 dark:text-white-light">{t('deal_summary')}</h5>
-                        </div>
-                        <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                            {/* Table Header */}
-                            <div className="grid grid-cols-3 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
-                                <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('deal_item')}</div>
-                                <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('deal_price')}</div>
-                            </div>
+                        {/* Car Information */}
+                        {car && (
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
+                                        <IconCar className="w-6 h-6 text-primary" />
+                                        {t('car_information')}
+                                    </h5>
+                                </div>
 
-                            {/* Row 1: Car */}
-                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                    <div className="font-medium">{t('car')}</div>
-                                    <div className="text-xs mt-1 text-gray-500">
-                                        {car.brand} {car.title} - {car.year}
-                                    </div>
-                                </div>
-                                <div className="text-center">-</div>
-                            </div>
-
-                            {/* Row 2: Buy Price */}
-                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price')}</div>
-                                <div className="text-center">
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{car.buy_price?.toFixed(0) || '0.00'}</span>
-                                </div>
-                            </div>
-                            {/* Row 3: Sale Price */}
-                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('sale_price')}</div>
-                                <div className="text-center">
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{car.sale_price?.toFixed(0) || '0.00'}</span>
-                                </div>
-                            </div>
-
-                            {/* Row 4: Deal Amount */}
-                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount')}</div>
-                                <div className="text-center">
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{deal.amount?.toFixed(0) || '0.00'}</span>
-                                </div>
-                            </div>
-
-                            {/* Row 5: Profit/Loss */}
-                            {deal.deal_type !== 'intermediary' && deal.deal_type !== 'financing_assistance_intermediary' && (
-                                <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-2">
-                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('profit_loss')}</div>
-                                    <div className="text-center">
-                                        <span className={`text-sm font-bold ${(car.sale_price || 0) - (car.buy_price || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                            ₪{((car.sale_price || 0) - (car.buy_price || 0)).toFixed(0)}
-                                        </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-                {/* Customer Information */}
-                {customer && (
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
-                                <IconUser className="w-6 h-6 text-primary" />
-                                {t('customer_information')}
-                            </h5>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-                                <div className="p-3 bg-primary/10 rounded-full">
-                                    <IconUser className="w-6 h-6 text-primary" />
-                                </div>
-                                <div>
-                                    <p className="font-bold text-gray-900 dark:text-white text-lg">{customer.name}</p>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">{t('customer_name')}</p>
-                                </div>
-                            </div>
-
-                            {customer.phone && (
-                                <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-                                    <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-full">
-                                        <IconPhone className="w-6 h-6 text-green-600 dark:text-green-400" />
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-gray-900 dark:text-white text-lg">{customer.phone}</p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400">{t('phone_number')}</p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-                                <div className="p-3 bg-amber-100 dark:bg-amber-900/20 rounded-full">
-                                    <IconUser className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-                                </div>
-                                <div>
-                                    <p className="font-bold text-gray-900 dark:text-white text-lg">{customer.age}</p>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">{t('age')}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                {/* Car Information */}
-                {car && (
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
-                                <IconCar className="w-6 h-6 text-primary" />
-                                {t('car_information')}
-                            </h5>
-                        </div>
-
-                        <div className="space-y-6">
-                            {/* Car Image and Basic Info */}
-                            <div className="flex flex-col md:flex-row gap-6 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border">
-                                <div className="flex-shrink-0">
-                                    {carImageUrl ? (
-                                        <img src={carImageUrl} alt={car.title} className="w-full md:w-[200px] h-[150px] rounded-lg object-cover" />
-                                    ) : (
-                                        <div className="w-full md:w-[200px] h-[150px] bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                                            <IconCar className="w-12 h-12 text-gray-400" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="font-bold text-2xl text-gray-900 dark:text-white mb-2">{car.title}</h3>
-                                    <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">
-                                        {car.brand} • {car.year}
-                                    </p>
-                                    <div className="flex flex-wrap items-center gap-4">
-                                        <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                            {car.kilometers.toLocaleString()} {t('km')}
-                                        </span>
-                                        <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                            {t('provider')}: {car.provider}
-                                        </span>
-                                        {car.type && (
-                                            <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                                {t('car_type')}: {car.type}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            {/* Car Pricing */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                    <p className="text-blue-600 dark:text-blue-400 font-medium mb-2">{t('market_price')}</p>
-                                    <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(car.market_price)}</p>
-                                </div>
-                                <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                    <p className="text-emerald-600 dark:text-emerald-400 font-medium mb-2">{t('buy_price')}</p>
-                                    <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(car.buy_price)}</p>
-                                </div>
-                                <div className="p-6 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                                    <p className="text-amber-600 dark:text-amber-400 font-medium mb-2">{t('sale_price')}</p>
-                                    <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{formatCurrency(car.sale_price)}</p>
-                                </div>
-                            </div>{' '}
-                        </div>
-                    </div>
-                )}{' '}
-                {/* Car Taken From Client (Exchange Deals) */}
-                {carTakenFromClient && deal.deal_type === 'exchange' && (
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
-                                <IconCar className="w-6 h-6 text-orange-500" />
-                                {t('car_taken_from_client')}
-                            </h5>
-                        </div>
-
-                        <div className="space-y-6">
-                            {/* Car Image and Basic Info */}
-                            <div className="flex flex-col md:flex-row gap-6 p-6 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                <div className="flex-shrink-0">
-                                    {carTakenImageUrl ? (
-                                        <img src={carTakenImageUrl} alt={carTakenFromClient.title} className="w-full md:w-[200px] h-[150px] rounded-lg object-cover" />
-                                    ) : (
-                                        <div className="w-full md:w-[200px] h-[150px] bg-orange-200 dark:bg-orange-700 rounded-lg flex items-center justify-center">
-                                            <IconCar className="w-12 h-12 text-orange-400" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="font-bold text-2xl text-gray-900 dark:text-white mb-2">{carTakenFromClient.title}</h3>
-                                    <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">
-                                        {carTakenFromClient.brand} • {carTakenFromClient.year}
-                                    </p>
-                                    <div className="flex flex-wrap items-center gap-4">
-                                        <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                            {carTakenFromClient.kilometers.toLocaleString()} {t('km')}
-                                        </span>
-                                        <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                            {t('provider')}: {carTakenFromClient.provider}
-                                        </span>
-                                        {carTakenFromClient.car_number && (
-                                            <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                                {t('car_number')}: {carTakenFromClient.car_number}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Car Pricing */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('market_price')}</p>
-                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.market_price)}</p>
-                                </div>
-                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('buy_price')}</p>
-                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                </div>
-                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('received_value')}</p>
-                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                {/* Attachments Section */}
-                <div className="panel">
-                    <div className="mb-5">
-                        <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
-                            <IconPaperclip className="w-6 h-6 text-primary" />
-                            {t('attachments')}
-                        </h5>
-                    </div>
-                    {deal.attachments && deal.attachments.length > 0 ? (
-                        <AttachmentsDisplay attachments={deal.attachments} compact={false} />
-                    ) : (
-                        <div className="text-center py-8">
-                            <div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                                <IconPaperclip className="w-8 h-8 text-gray-400" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{t('no_attachments_found')}</h3>
-                            <p className="text-gray-600 dark:text-gray-400">{t('no_attachments_added_yet')}</p>
-                        </div>
-                    )}
-                </div>
-                {/* Payment Methods Section */}
-                {(paymentMethods.length > 0 || paymentNotes) && (
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
-                                <IconDollarSign className="w-6 h-6 text-primary" />
-                                {t('payment_methods') || 'آلية الدفع'}
-                            </h5>
-                        </div>
-
-                        {/* Payment Methods Display */}
-                        {paymentMethods.length > 0 && (
-                            <div className="mb-6">
-                                <h6 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-6">{t('selected_payment_methods') || 'طرق الدفع المختارة'}</h6>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {paymentMethods
-                                        .filter((method) => method.selected)
-                                        .map((method) => {
-                                            const methodConfig = {
-                                                cash: {
-                                                    label: t('cash') || 'نقداً',
-                                                    icon: <IconCashBanknotes className="w-6 h-6" />,
-                                                    bgColor: 'bg-green-50 dark:bg-green-900/20',
-                                                    borderColor: 'border-green-200 dark:border-green-800',
-                                                    iconColor: 'text-green-600 dark:text-green-400',
-                                                    textColor: 'text-green-700 dark:text-green-300',
-                                                },
-                                                visa: {
-                                                    label: t('visa_card') || 'فيزا',
-                                                    icon: <IconCreditCard className="w-6 h-6" />,
-                                                    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-                                                    borderColor: 'border-blue-200 dark:border-blue-800',
-                                                    iconColor: 'text-blue-600 dark:text-blue-400',
-                                                    textColor: 'text-blue-700 dark:text-blue-300',
-                                                },
-                                                bank_transfer: {
-                                                    label: t('bank_transfer') || 'تحويل بنكي',
-                                                    icon: <IconBank className="w-6 h-6" />,
-                                                    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
-                                                    borderColor: 'border-purple-200 dark:border-purple-800',
-                                                    iconColor: 'text-purple-600 dark:text-purple-400',
-                                                    textColor: 'text-purple-700 dark:text-purple-300',
-                                                },
-                                                check: {
-                                                    label: t('check') || 'شيك',
-                                                    icon: <IconCheck className="w-6 h-6" />,
-                                                    bgColor: 'bg-orange-50 dark:bg-orange-900/20',
-                                                    borderColor: 'border-orange-200 dark:border-orange-800',
-                                                    iconColor: 'text-orange-600 dark:text-orange-400',
-                                                    textColor: 'text-orange-700 dark:text-orange-300',
-                                                },
-                                            };
-
-                                            const config = methodConfig[method.type] || methodConfig.cash;
-
-                                            return (
-                                                <div
-                                                    key={method.type}
-                                                    className={`relative p-6 rounded-xl border-2 ${config.bgColor} ${config.borderColor} transition-all duration-200 hover:shadow-lg`}
-                                                >
-                                                    <div className="flex flex-col items-center text-center space-y-3">
-                                                        <div className={`p-3 rounded-full ${config.iconColor} bg-white dark:bg-gray-800 shadow-sm`}>{config.icon}</div>
-                                                        <div>
-                                                            <h3 className={`font-bold ${config.textColor} mb-1`}>{config.label}</h3>
-                                                        </div>
-                                                        <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${config.iconColor.replace('text-', 'bg-')}`}></div>
-                                                    </div>
+                                <div className="space-y-6">
+                                    {/* Car Image and Basic Info */}
+                                    <div className="flex flex-col md:flex-row gap-6 p-6 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                                        <div className="flex-shrink-0">
+                                            {carImageUrl ? (
+                                                <img src={carImageUrl} alt={car.title} className="w-full md:w-[200px] h-[150px] rounded-lg object-cover" />
+                                            ) : (
+                                                <div className="w-full md:w-[200px] h-[150px] bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                                                    <IconCar className="w-12 h-12 text-gray-400" />
                                                 </div>
-                                            );
-                                        })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Payment Notes Display */}
-                        {paymentNotes && (
-                            <div>
-                                <h6 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
-                                    <div className="w-1 h-6 bg-primary rounded-full"></div>
-                                    {t('payment_notes') || 'ملاحظات الدفع'}
-                                </h6>
-                                <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex-shrink-0 p-2 bg-blue-100 dark:bg-blue-800 rounded-lg">
-                                            <IconDocument className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                            )}
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap font-medium">{paymentNotes}</p>
+                                            <h3 className="font-bold text-2xl text-gray-900 dark:text-white mb-2">{car.title}</h3>
+                                            <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">
+                                                {car.brand} • {car.year}
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-4">
+                                                <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                    {car.kilometers.toLocaleString()} {t('km')}
+                                                </span>
+                                                <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                    {t('provider')}: {car.provider}
+                                                </span>
+                                                {car.type && (
+                                                    <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                        {t('car_type')}: {car.type}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Car Pricing */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <p className="text-blue-600 dark:text-blue-400 font-medium mb-2">{t('market_price')}</p>
+                                            <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(car.market_price)}</p>
+                                        </div>
+                                        <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                            <p className="text-emerald-600 dark:text-emerald-400 font-medium mb-2">{t('buy_price')}</p>
+                                            <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(car.buy_price)}</p>
+                                        </div>
+                                        <div className="p-6 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                                            <p className="text-amber-600 dark:text-amber-400 font-medium mb-2">{t('sale_price')}</p>
+                                            <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{formatCurrency(car.sale_price)}</p>
+                                        </div>
+                                    </div>{' '}
+                                </div>
+                            </div>
+                        )}{' '}
+                        {/* Car Taken From Client (Exchange Deals) */}
+                        {carTakenFromClient && deal.deal_type === 'exchange' && (
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
+                                        <IconCar className="w-6 h-6 text-orange-500" />
+                                        {t('car_taken_from_client')}
+                                    </h5>
+                                </div>
+
+                                <div className="space-y-6">
+                                    {/* Car Image and Basic Info */}
+                                    <div className="flex flex-col md:flex-row gap-6 p-6 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                                        <div className="flex-shrink-0">
+                                            {carTakenImageUrl ? (
+                                                <img src={carTakenImageUrl} alt={carTakenFromClient.title} className="w-full md:w-[200px] h-[150px] rounded-lg object-cover" />
+                                            ) : (
+                                                <div className="w-full md:w-[200px] h-[150px] bg-orange-200 dark:bg-orange-700 rounded-lg flex items-center justify-center">
+                                                    <IconCar className="w-12 h-12 text-orange-400" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="font-bold text-2xl text-gray-900 dark:text-white mb-2">{carTakenFromClient.title}</h3>
+                                            <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">
+                                                {carTakenFromClient.brand} • {carTakenFromClient.year}
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-4">
+                                                <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                    {carTakenFromClient.kilometers.toLocaleString()} {t('km')}
+                                                </span>
+                                                <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                    {t('provider')}: {carTakenFromClient.provider}
+                                                </span>
+                                                {carTakenFromClient.car_number && (
+                                                    <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                        {t('car_number')}: {carTakenFromClient.car_number}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Car Pricing */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('market_price')}</p>
+                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.market_price)}</p>
+                                        </div>
+                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('buy_price')}</p>
+                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
+                                        </div>
+                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('received_value')}</p>
+                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
+                    </>
+                )}
+
+                {/* Attachments Tab */}
+                {activeTab === 'attachments' && (
+                    <div className="panel">
+                        <div className="mb-5">
+                            <h5 className="text-xl font-bold text-gray-900 dark:text-white-light">{t('attachments')}</h5>
+                        </div>
+                        <div className="text-center py-12">
+                            <IconPaperclip className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500 dark:text-gray-400">{t('no_attachments_available')}</p>
+                        </div>
                     </div>
                 )}
-                {/* Bills Section */}
-                <BillsTable bills={bills} loading={false} readOnly={true} deal={deal} car={car} carTakenFromClient={carTakenFromClient} selectedCustomer={customer} />
-                {/* Actions */}
-                <div className="panel">
-                    <div className="mb-5">
-                        <h5 className="text-xl font-bold text-gray-900 dark:text-white-light">{t('actions')}</h5>
-                    </div>
 
-                    <div className="flex flex-wrap gap-4">
-                        {deal.status !== 'cancelled' && deal.status !== 'completed' && (
-                            <Link href={`/sales-deals/edit/${deal.id}`} className="btn btn-primary gap-2">
-                                <IconEdit className="w-4 h-4" />
-                                {t('edit_deal')}
-                            </Link>
+                {/* Payment Methods Tab */}
+                {activeTab === 'payments' && (
+                    <>
+                        {/* Payment Methods Section */}
+                        {(paymentMethods.length > 0 || paymentNotes) && (
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
+                                        <IconDollarSign className="w-6 h-6 text-primary" />
+                                        {t('payment_methods') || 'آلية الدفع'}
+                                    </h5>
+                                </div>
+
+                                {/* Payment Methods Display */}
+                                {paymentMethods.length > 0 && (
+                                    <div className="mb-6">
+                                        <h6 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-6">{t('selected_payment_methods') || 'طرق الدفع المختارة'}</h6>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            {paymentMethods
+                                                .filter((method) => method.selected)
+                                                .map((method) => {
+                                                    const methodConfig = {
+                                                        cash: {
+                                                            label: t('cash') || 'نقداً',
+                                                            icon: <IconCashBanknotes className="w-6 h-6" />,
+                                                            bgColor: 'bg-green-50 dark:bg-green-900/20',
+                                                            borderColor: 'border-green-200 dark:border-green-800',
+                                                            iconColor: 'text-green-600 dark:text-green-400',
+                                                            textColor: 'text-green-700 dark:text-green-300',
+                                                        },
+                                                        visa: {
+                                                            label: t('visa_card') || 'فيزا',
+                                                            icon: <IconCreditCard className="w-6 h-6" />,
+                                                            bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+                                                            borderColor: 'border-blue-200 dark:border-blue-800',
+                                                            iconColor: 'text-blue-600 dark:text-blue-400',
+                                                            textColor: 'text-blue-700 dark:text-blue-300',
+                                                        },
+                                                        bank_transfer: {
+                                                            label: t('bank_transfer') || 'تحويل بنكي',
+                                                            icon: <IconBank className="w-6 h-6" />,
+                                                            bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+                                                            borderColor: 'border-purple-200 dark:border-purple-800',
+                                                            iconColor: 'text-purple-600 dark:text-purple-400',
+                                                            textColor: 'text-purple-700 dark:text-purple-300',
+                                                        },
+                                                        check: {
+                                                            label: t('check') || 'شيك',
+                                                            icon: <IconCheck className="w-6 h-6" />,
+                                                            bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+                                                            borderColor: 'border-orange-200 dark:border-orange-800',
+                                                            iconColor: 'text-orange-600 dark:text-orange-400',
+                                                            textColor: 'text-orange-700 dark:text-orange-300',
+                                                        },
+                                                    };
+
+                                                    const config = methodConfig[method.type] || methodConfig.cash;
+
+                                                    return (
+                                                        <div
+                                                            key={method.type}
+                                                            className={`relative p-6 rounded-xl border-2 ${config.bgColor} ${config.borderColor} transition-all duration-200 hover:shadow-lg`}
+                                                        >
+                                                            <div className="flex flex-col items-center text-center space-y-3">
+                                                                <div className={`p-3 rounded-full ${config.iconColor} bg-white dark:bg-gray-800 shadow-sm`}>{config.icon}</div>
+                                                                <div>
+                                                                    <h3 className={`font-bold ${config.textColor} mb-1`}>{config.label}</h3>
+                                                                </div>
+                                                                <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${config.iconColor.replace('text-', 'bg-')}`}></div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payment Notes Display */}
+                                {paymentNotes && (
+                                    <div>
+                                        <h6 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+                                            <div className="w-1 h-6 bg-primary rounded-full"></div>
+                                            {t('payment_notes') || 'ملاحظات الدفع'}
+                                        </h6>
+                                        <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex-shrink-0 p-2 bg-blue-100 dark:bg-blue-800 rounded-lg">
+                                                    <IconDocument className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap font-medium">{paymentNotes}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
-                        <button
-                            className={`btn btn-outline-success gap-2${generatingContract ? ' opacity-60 pointer-events-none' : ''}`}
-                            disabled={generatingContract}
-                            onClick={async () => {
-                                setGeneratingContract(true);
-                                try {
-                                    // Create contract - include bill if available, otherwise create without payment info
-                                    const contractData = createContractData(bills.length > 0 ? bills[0] : undefined);
+                    </>
+                )}
 
-                                    // Get language from i18nextLng cookie
-                                    const getCookie = (name: string) => {
-                                        const value = `; ${document.cookie}`;
-                                        const parts = value.split(`; ${name}=`);
-                                        if (parts.length === 2) {
-                                            const part = parts.pop();
-                                            if (part) {
-                                                return part.split(';').shift();
-                                            }
-                                        }
-                                        return null;
-                                    };
-
-                                    const lang = getCookie('i18nextLng') || 'he';
-                                    const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
-
-                                    const filename = `car-contract-${contractData.carPlateNumber}-${new Date().toISOString().split('T')[0]}.pdf`;
-
-                                    // Use the new optimized PDF generator
-                                    await ContractPDFGenerator.generateFromContract(contractData, {
-                                        filename,
-                                        language: normalizedLang,
-                                        format: 'A4',
-                                        orientation: 'portrait',
-                                    });
-                                } catch (error) {
-                                    console.error('Error generating contract:', error);
-                                    setAlert({ visible: true, message: t('error_generating_pdf') || 'Error generating PDF', type: 'danger' });
-                                } finally {
-                                    setGeneratingContract(false);
-                                }
-                            }}
-                        >
-                            {generatingContract ? (
-                                <svg className="animate-spin h-4 w-4 text-success" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-                                </svg>
-                            ) : (
-                                <IconDocument className="w-4 h-4" />
-                            )}
-                            {generatingContract ? t('generating_contract') : t('generate_contract')}
-                        </button>
-                        <Link href="/sales-deals" className="btn btn-outline-secondary">
-                            {t('back_to_deals')}
-                        </Link>
-                    </div>
-                </div>
+                {/* Bills Tab */}
+                {activeTab === 'bills' && (
+                    <BillsTable
+                        bills={bills}
+                        loading={false}
+                        readOnly={true}
+                        deal={deal}
+                        car={car}
+                        carTakenFromClient={carTakenFromClient}
+                        selectedCustomer={customer}
+                        onDownloadPDF={handleDownloadPDF}
+                        downloadingPDF={downloadingPDF}
+                    />
+                )}
             </div>
-            {/* Contract Generator Modal removed: now opens in new tab */}
         </div>
     );
 };

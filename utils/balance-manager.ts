@@ -67,7 +67,7 @@ export const handleDealCreated = async (dealId: string, customerId: string, deal
         amount: -dealSellingPrice, // Negative because deal selling price is what customer owes
         type: 'deal_created',
         referenceId: dealId,
-        description: `Deal created: ${dealTitle} (₪${dealSellingPrice})`,
+        description: `Deal: ${dealTitle}`,
     });
 };
 
@@ -81,7 +81,7 @@ export const handleDealDeleted = async (dealId: string, customerId: string, deal
         amount: dealSellingPrice, // Positive because we're reversing the deduction
         type: 'deal_deleted',
         referenceId: dealId,
-        description: `Deal deleted: ${dealTitle} (₪${dealSellingPrice})`,
+        description: `Reversed: ${dealTitle}`,
     });
 };
 
@@ -164,7 +164,7 @@ export const handleReceiptCreated = async (billId: string, customerId: string, b
 
     // For negative bills (expenses/deductions)
     if (bill.bill_direction === 'negative') {
-        description = `Expense/Deduction for ${customerName}: ${getPaymentDescription(bill, payments)}`;
+        description = `Expense: ${getPaymentDescription(bill, payments)}`;
         balanceChangeAmount = -Math.abs(paymentAmount); // Negative impact on balance
     } else {
         // For positive bills (payments)
@@ -181,18 +181,18 @@ export const handleReceiptCreated = async (billId: string, customerId: string, b
             // Payment towards a deal with an effective selling price
             if (paymentAmount <= effectiveDealAmount) {
                 // Payment doesn't exceed effective deal amount - normal case
-                description = `Payment received from ${customerName}: ${getPaymentDescription(bill, payments)} (towards deal)`;
+                description = `Payment: ${getPaymentDescription(bill, payments)}`;
                 balanceChangeAmount = paymentAmount; // Positive impact on balance
             } else {
                 // Payment exceeds effective deal amount - add excess to customer balance
                 const excessAmount = paymentAmount - effectiveDealAmount;
-                description = `Payment received from ${customerName}: ${getPaymentDescription(bill, payments)} (₪${effectiveDealAmount} for deal + ₪${excessAmount} excess)`;
+                description = `Payment: ${getPaymentDescription(bill, payments)} (+₪${excessAmount} excess)`;
                 balanceChangeAmount = paymentAmount; // Full payment amount goes to balance
             }
         } else {
             // General payment not related to a deal selling price, or exchange deal fully covered by car value
-            const dealNote = deal?.deal_type === 'exchange' ? ' (exchange deal - car value credited)' : '';
-            description = `Payment received from ${customerName}: ${getPaymentDescription(bill, payments)}${dealNote}`;
+            const dealNote = deal?.deal_type === 'exchange' ? ' (exchange)' : '';
+            description = `Payment: ${getPaymentDescription(bill, payments)}${dealNote}`;
             balanceChangeAmount = paymentAmount; // Full payment amount goes to balance as credit
         }
     }
@@ -227,20 +227,20 @@ export const handleReceiptDeleted = async (billId: string, customerId: string, b
 
     // For negative bills (expenses/deductions) - reverse the deduction
     if (bill.bill_direction === 'negative') {
-        description = `Reversed expense/deduction for ${customerName}: ${getPaymentDescription(bill, payments)}`;
+        description = `Reversed expense: ${getPaymentDescription(bill, payments)}`;
         balanceChangeAmount = Math.abs(paymentAmount); // Positive impact (reversing a deduction)
     } else {
         // For positive bills (payments) - reverse the payment
         if (dealSellingPrice && dealSellingPrice > 0) {
             // Reversing payment towards a deal with a selling price
             if (paymentAmount <= dealSellingPrice) {
-                description = `Reversed payment from ${customerName}: ${getPaymentDescription(bill, payments)} (was towards deal)`;
+                description = `Reversed: ${getPaymentDescription(bill, payments)}`;
             } else {
                 const excessAmount = paymentAmount - dealSellingPrice;
-                description = `Reversed payment from ${customerName}: ${getPaymentDescription(bill, payments)} (was ₪${dealSellingPrice} for deal + ₪${excessAmount} excess)`;
+                description = `Reversed: ${getPaymentDescription(bill, payments)}`;
             }
         } else {
-            description = `Reversed payment from ${customerName}: ${getPaymentDescription(bill, payments)}`;
+            description = `Reversed: ${getPaymentDescription(bill, payments)}`;
         }
         balanceChangeAmount = -paymentAmount; // Negative impact (reversing a payment)
     }
@@ -346,6 +346,6 @@ export const handleExchangeDealCustomerCarCredit = async (dealId: string, custom
         amount: carEvaluationAmount, // Positive because it's a credit to customer for their car
         type: 'deal_created',
         referenceId: dealId,
-        description: `Credit for customer car in exchange deal: ${customerName} (₪${carEvaluationAmount})`,
+        description: `Car credit: ₪${carEvaluationAmount}`,
     });
 };

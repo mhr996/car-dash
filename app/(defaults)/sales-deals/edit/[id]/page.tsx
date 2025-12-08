@@ -125,6 +125,265 @@ interface BillPayment {
     check_number?: string;
     check_holder_name?: string;
 }
+
+/**
+ * Create invoice/receipt document in Tranzila
+ */
+const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null) => {
+    try {
+        // Map bill type to Tranzila document type
+        // Document types from Tranzila API:
+        // - IR = Tax invoice / receipt (combined)
+        // - IN = Tax invoice (only)
+        // - RE = Receipt (only)
+        // - DI = Deal Invoice
+        const documentTypeMap: Record<string, string> = {
+            general: 'IR', // Invoice+Receipt (default)
+            tax_invoice: 'IN', // Tax Invoice only
+            receipt_only: 'RE', // Receipt only
+            tax_invoice_receipt: 'IR', // Invoice+Receipt
+        };
+
+        // Map payment type to Tranzila payment method
+        // Payment methods from Tranzila API:
+        // 1 = Credit Card, 3 = Cheque, 4 = Bank Transfer, 5 = Cash, 6 = PayPal, 10 = Other
+        const paymentMethodMap: Record<string, number> = {
+            visa: 1, // Credit Card
+            cash: 5, // Cash
+            check: 3, // Cheque
+            bank_transfer: 4, // Bank Transfer
+        };
+
+        const documentType = documentTypeMap[billData.bill_type] || 'IR';
+
+        // TESTING MODE: Always use amount 1 to avoid actual billing
+        const TEST_AMOUNT = 1;
+
+        // Prepare items array from deal data
+        const items = [];
+
+        // If we have deal data with car, create detailed line items
+        if (deal && deal.car) {
+            // Row 1: Car Details
+            items.push({
+                type: 'I',
+                code: null,
+                name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}` || billData.car_details || 'פרטי רכב',
+                price_type: 'G', // Gross (includes VAT)
+                unit_price: 0, // No price for this row
+                units_number: 1,
+                unit_type: 1, // Unit
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+
+            // Row 2: Buy Price
+            if (deal.car.buy_price) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: 'מחיר קנייה',
+                    price_type: 'G',
+                    unit_price: TEST_AMOUNT, // In production: deal.car.buy_price
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
+
+            // Row 3: Selling Price
+            if (deal.selling_price) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: 'מחיר מכירה',
+                    price_type: 'G',
+                    unit_price: TEST_AMOUNT, // In production: deal.selling_price
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
+
+            // Row 4: Loss Amount (if applicable)
+            if (deal.loss_amount && deal.loss_amount > 0) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: 'סכום הפסד',
+                    price_type: 'G',
+                    unit_price: TEST_AMOUNT, // In production: -deal.loss_amount (negative)
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
+
+            // Row 5: Profit Commission
+            if (deal.amount) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: 'עמלת רווח',
+                    price_type: 'G',
+                    unit_price: TEST_AMOUNT, // In production: deal.amount
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
+        } else {
+            // Fallback: Single item if no deal data
+            items.push({
+                type: 'I',
+                code: null,
+                name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית - מצב בדיקה',
+                price_type: 'G', // Gross (includes VAT)
+                unit_price: TEST_AMOUNT, // Always 1 for testing
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+        }
+
+        // Prepare payments array with all payment details
+        const tranzilaPayments =
+            payments.length > 0
+                ? payments.map((payment) => {
+                      const basePayment = {
+                          payment_method: paymentMethodMap[payment.payment_type] || 1,
+                          payment_date: billData.date || new Date().toISOString().split('T')[0],
+                          amount: TEST_AMOUNT, // Always 1 for testing (override actual amount)
+                          currency_code: 'ILS',
+                          to_doc_currency_exchange_rate: 1,
+                      };
+
+                      // Add payment-type-specific fields
+                      if (payment.payment_type === 'visa') {
+                          return {
+                              ...basePayment,
+                              cc_last_4_digits: payment.visa_last_four || null,
+                              cc_installments_number: payment.visa_installments || 1,
+                              cc_type: payment.visa_card_type || null,
+                              approval_number: payment.approval_number || null,
+                          };
+                      } else if (payment.payment_type === 'check') {
+                          return {
+                              ...basePayment,
+                              check_number: payment.check_number || null,
+                              check_bank_name: payment.check_bank_name || null,
+                              check_branch: payment.check_branch || null,
+                              check_account_number: payment.check_account_number || null,
+                              check_holder_name: payment.check_holder_name || null,
+                          };
+                      } else if (payment.payment_type === 'bank_transfer') {
+                          return {
+                              ...basePayment,
+                              transfer_number: payment.transfer_number || null,
+                              transfer_bank_name: payment.transfer_bank_name || null,
+                              transfer_branch: payment.transfer_branch || null,
+                              transfer_account_number: payment.transfer_account_number || null,
+                              transfer_holder_name: payment.transfer_holder_name || null,
+                          };
+                      }
+
+                      // Cash or other payment types
+                      return basePayment;
+                  })
+                : [
+                      {
+                          payment_method: 1, // Default to credit card
+                          payment_date: billData.date || new Date().toISOString().split('T')[0],
+                          amount: TEST_AMOUNT, // Always 1 for testing
+                          currency_code: 'ILS',
+                          to_doc_currency_exchange_rate: 1,
+                      },
+                  ];
+
+        // Get customer information from deal
+        let customerId = ''; // Default fallback for missing ID
+        let customerEmail = ''; // Default fallback
+        let customerPhone = '';
+
+        if (deal) {
+            // Get customer based on deal type
+            if (deal.deal_type === 'intermediary') {
+                // For intermediary deals, prefer seller, then buyer
+                const customer = deal.seller || deal.buyer || deal.customer;
+                if (customer) {
+                    customerId = customer.id_number?.toString() || customerId;
+                    customerEmail = customer.email || customerEmail;
+                    customerPhone = customer.phone || '';
+                }
+            } else {
+                // For regular deals, use customer
+                if (deal.customer) {
+                    customerId = deal.customer.id_number?.toString() || customerId;
+                    customerEmail = deal.customer.email || customerEmail;
+                    customerPhone = deal.customer.phone || '';
+                }
+            }
+        }
+
+        // Call Tranzila API
+        const response = await fetch('/api/tranzila', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'create_document',
+                data: {
+                    document_type: documentType,
+                    document_date: billData.date || new Date().toISOString().split('T')[0],
+                    document_currency_code: 'ILS',
+                    vat_percent: 18,
+                    client_company: billData.customer_name || 'Customer',
+                    client_name: billData.customer_name || 'Customer',
+                    client_id: customerId,
+                    client_email: customerEmail,
+                    client_phone: customerPhone || undefined,
+                    items,
+                    payments: tranzilaPayments,
+                    created_by_user: 'car-dash',
+                    created_by_system: 'car-dash',
+                },
+            }),
+        });
+
+        const result = await response.json();
+
+        if (result.ok && result.response?.status_code === 0) {
+            // Document created successfully, update bill record with Tranzila info
+            const { error: updateError } = await supabase
+                .from('bills')
+                .update({
+                    tranzila_document_id: result.response.document.id,
+                    tranzila_document_number: result.response.document.number,
+                    tranzila_retrieval_key: result.response.document.retrieval_key,
+                    tranzila_created_at: result.response.document.created_at,
+                })
+                .eq('id', billId);
+
+            if (updateError) {
+                console.error('Error updating bill with Tranzila data:', updateError);
+            } else {
+                console.log('Tranzila document created successfully:', result.response.document.number);
+            }
+        } else {
+            console.error('Tranzila API error:', result.response);
+        }
+    } catch (error) {
+        console.error('Error calling Tranzila API:', error);
+        throw error;
+    }
+};
+
 import { uploadMultipleFiles, deleteFile, uploadFile } from '@/utils/file-upload';
 import { formatCurrency } from '@/utils/number-formatter';
 import AttachmentsDisplay from '@/components/attachments/attachments-display';
@@ -141,10 +400,14 @@ import IconReceipt from '@/components/icon/icon-receipt';
 import IconCalendar from '@/components/icon/icon-calendar';
 import IconPdf from '@/components/icon/icon-pdf';
 import BillsTable from '@/components/bills/bills-table';
+import IconDocument from '@/components/icon/icon-document';
+import IconPaperclip from '@/components/icon/icon-paperclip';
+import IconCreditCard from '@/components/icon/icon-credit-card';
 
 const EditDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
     const router = useRouter();
+    const [activeTab, setActiveTab] = useState<'info' | 'attachments' | 'payments' | 'bills'>('info');
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
     const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false);
@@ -712,12 +975,24 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     created_at: new Date().toISOString(),
                 };
 
-                const { error: billError } = await supabase.from('bills').insert([refundBillData]);
+                const { data: refundBillResult, error: billError } = await supabase.from('bills').insert([refundBillData]).select().single();
 
                 if (billError) {
                     console.error('Error creating refund bill:', billError);
                     setAlert({ message: t('deal_cancelled_bill_creation_failed'), type: 'danger' });
-                } else {
+                } else if (refundBillResult) {
+                    // Create Tranzila document for refund bill
+                    try {
+                        const refundPayments: BillPayment[] = [
+                            {
+                                payment_type: 'cash',
+                                amount: parseFloat(deal.amount?.toString() || '0'),
+                            },
+                        ];
+                        await createTranzilaDocument(refundBillResult.id, refundBillData, refundPayments, deal);
+                    } catch (tranzilaError) {
+                        console.error('Error creating Tranzila document for refund:', tranzilaError);
+                    }
                     setAlert({ message: t('deal_cancelled_with_refund_bill'), type: 'success' });
                 }
             } else {
@@ -734,7 +1009,32 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
         } finally {
             setCancellingDeal(false);
         }
-    }; // Handle file upload for new attachments
+    };
+
+    // Handle PDF download for bills
+    const handleDownloadPDF = async (bill: any) => {
+        setDownloadingPDF(bill.id);
+        try {
+            // Check if bill has Tranzila retrieval key
+            const tranzilaRetrievalKey = bill.tranzila_retrieval_key;
+
+            if (!tranzilaRetrievalKey) {
+                setAlert({ message: t('bill_not_created_with_tranzila') || 'This bill was not created through Tranzila and cannot be downloaded.', type: 'danger' });
+                return;
+            }
+
+            // Open Tranzila PDF in new tab via our proxy API
+            const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
+            window.open(proxyUrl, '_blank');
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+            setAlert({ message: t('error_downloading_pdf') || 'Error downloading PDF', type: 'danger' });
+        } finally {
+            setDownloadingPDF(null);
+        }
+    };
+
+    // Handle file upload for new attachments
     const handleFileUpload = (type: string, fileItem: FileItem | null) => {
         if (fileItem) {
             setNewAttachments((prev) => ({ ...prev, [type]: fileItem }));
@@ -1160,6 +1460,14 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             if (error) throw error;
             if (!billResult) throw new Error('Failed to create bill');
 
+            // Create document in Tranzila after successful bill creation
+            try {
+                await createTranzilaDocument(billResult.id, billData, payments, deal);
+            } catch (tranzilaError) {
+                console.error('Error creating Tranzila document:', tranzilaError);
+                // Don't fail the entire bill creation, but log the error
+            }
+
             // Insert multiple payments for receipts
             if ((billForm.bill_type === 'receipt_only' || billForm.bill_type === 'tax_invoice_receipt') && payments.length > 0) {
                 const paymentInserts = payments.map((payment) => ({
@@ -1424,1353 +1732,1452 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 </div>
             )}
 
-            <div className="panel">
-                <div className="mb-5">
-                    <h5 className="text-lg font-semibold dark:text-white-light">{t('deal_information')}</h5>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* Deal Type Selector */}
-                    <div className="bg-gradient-to-r from-primary/10 to-secondary/10 p-6 rounded-lg border-2 border-primary/20">
-                        <label className="block text-lg font-bold text-gray-700 dark:text-white mb-4">
-                            {t('deal_type')} <span className="text-red-500">*</span>
-                        </label>
-                        <DealTypeSelect
-                            defaultValue={dealType}
-                            className="form-input text-lg py-3"
-                            name="deal_type"
-                            onChange={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : handleDealTypeChange}
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Deal Title */}
-                        <div className="md:col-span-2">
-                            <label htmlFor="title" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('deal_title')} <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                id="title"
-                                name="title"
-                                value={form.title}
-                                onChange={handleInputChange}
-                                className="form-input"
-                                placeholder={t('enter_deal_title')}
-                                required
-                                disabled={deal?.status === 'completed'}
-                            />
-                        </div>
-                        {/* Description */}
-                        <div className="md:col-span-2">
-                            <label htmlFor="description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('description')} <span className="text-red-500">*</span>
-                            </label>
-                            <textarea
-                                id="description"
-                                name="description"
-                                value={form.description}
-                                onChange={handleInputChange}
-                                className="form-textarea min-h-[120px]"
-                                placeholder={t('enter_deal_description')}
-                                required
-                                disabled={deal?.status === 'completed'}
-                            />
-                        </div>
-                    </div>
-                    {/* Deal Status Display/Cancel Option */}
-                    <div className="panel">
-                        <div className="mb-5">
-                            <h5 className="text-lg font-bold text-gray-900 dark:text-white-light">{t('deal_status')}</h5>
-                            <p className="text-gray-600 dark:text-gray-400 mt-2">{t('deal_status_automatic_desc')}</p>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div
-                                    className={`px-4 py-2 rounded-lg font-medium ${
-                                        form.status === 'active'
-                                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
-                                            : form.status === 'completed'
-                                              ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                                              : form.status === 'cancelled'
-                                                ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                                    }`}
-                                >
-                                    {form.status === 'active'
-                                        ? t('deal_status_active')
-                                        : form.status === 'completed'
-                                          ? t('deal_status_completed')
-                                          : form.status === 'cancelled'
-                                            ? t('deal_status_cancelled')
-                                            : form.status}
-                                </div>
-                                {form.status === 'completed' && <span className="text-sm text-gray-600 dark:text-gray-400">{t('deal_completed_automatically')}</span>}
-                            </div>
-                        </div>
-                    </div>
-                    {/* Deal Date Selector */}
-                    <div className="panel">
-                        <div className="mb-5 flex items-center gap-3">
-                            <IconCalendar className="w-5 h-5 text-primary" />
-                            <div>
-                                <h5 className="text-lg font-bold text-gray-900 dark:text-white-light">{t('deal_date')}</h5>
-                                <p className="text-gray-600 dark:text-gray-400 mt-1">{t('select_deal_date_desc')}</p>
-                            </div>
-                        </div>
-                        <div className="relative">
-                            <input
-                                type="date"
-                                value={dealDate}
-                                onChange={(e) => setDealDate(e.target.value)}
-                                className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                style={{ colorScheme: 'light' }}
-                                disabled={deal?.status === 'completed'}
-                            />
-                            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                                <IconCalendar className="w-5 h-5 text-gray-400" />
-                            </div>
-                        </div>
-                    </div>{' '}
-                    {/* Deal Summary Table - Different based on Deal Type */}
-                    {selectedCar && (
-                        <div className="panel">
-                            <div className="mb-5">
-                                <h5 className="text-lg font-bold text-gray-900 dark:text-white-light">{t('deal_summary')}</h5>
-                            </div>
-                            <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                {/* Table Header */}
-                                <div className="grid grid-cols-3 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
-                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('deal_item')}</div>
-                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('deal_price')}</div>
-                                </div>
-
-                                {/* New/Used Sale Deal Table */}
-                                {(dealType === 'new_used_sale' || dealType === 'new_sale' || dealType === 'used_sale' || dealType === 'new_used_sale_tax_inclusive') && (
-                                    <>
-                                        {/* Row 1: Car for Sale */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                <div className="font-medium">{t('car_for_sale')}</div>
-                                                <div className="text-xs mt-1 text-gray-500">
-                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`}
-                                                </div>
-                                            </div>
-                                            <div className="text-center">-</div>
-                                        </div>
-
-                                        {/* Row 2: Buy Price */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
-                                            <div className="text-center">
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">₪{selectedCar.buy_price?.toFixed(0) || '0.00'}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 3: Selling Price (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
-                                                {t('selling_price_manual')}
-                                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="selling_price"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.selling_price || ''}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 4: Loss Amount (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="loss_amount"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.loss_amount || ''}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 5: Profit Commission (Calculated) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                            <div className="text-center">
-                                                {(() => {
-                                                    if (!form.amount || !selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
-
-                                                    const buyPrice = selectedCar.buy_price || 0;
-                                                    const sellPrice = parseFloat(form.selling_price || '0') || 0;
-                                                    const loss = parseFloat(form.loss_amount || '0');
-                                                    const profitCommission = sellPrice - buyPrice - loss;
-
-                                                    return (
-                                                        <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                            {profitCommission >= 0 ? '+' : ''}₪{profitCommission.toFixed(0)}
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Exchange Deal Table */}
-                                {dealType === 'exchange' && (
-                                    <>
-                                        {/* Row 1: Car for Sale */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                <div className="font-medium">{t('car_for_sale')}</div>
-                                                <div className="text-xs mt-1 text-gray-500">
-                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`}
-                                                </div>
-                                            </div>
-                                            <div className="text-center">-</div>
-                                        </div>
-                                        {/* Row 2: Buy Price */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
-                                            <div className="text-center">
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">₪{selectedCar.buy_price?.toFixed(0) || '0.00'}</span>
-                                            </div>
-                                        </div>
-                                        {/* Row 3: Selling Price (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
-                                                {t('selling_price_manual')}
-                                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="selling_price"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.selling_price || ''}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>{' '}
-                                        {/* Row 4: Customer Car Evaluation (Auto-calculated) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                <div className="font-medium">{t('customer_car_evaluation')}</div>
-                                                {carTakenFromClient && (
-                                                    <div className="text-xs mt-1 text-gray-500">
-                                                        {carTakenFromClient.brand} {carTakenFromClient.title} - {carTakenFromClient.year}
-                                                        {carTakenFromClient.car_number && ` - ${carTakenFromClient.car_number}`}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="text-center">
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(form.customer_car_eval_value || '0').toFixed(0)}</span>
-                                            </div>
-                                        </div>
-                                        {/* Row 5: Additional Amount from Customer (Auto-calculated) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
-                                            <div className="text-center">
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(form.additional_customer_amount || '0').toFixed(0)}</span>
-                                            </div>
-                                        </div>
-                                        {/* Row 6: Loss (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="loss_amount"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.loss_amount || ''}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {/* Row 7: Profit Commission (Calculated) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                            <div className="text-center">
-                                                {(() => {
-                                                    if (!selectedCar || !carTakenFromClient) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
-
-                                                    const buyPrice = selectedCar.buy_price || 0;
-                                                    const sellPrice = parseFloat(form.selling_price || '0') || 0;
-                                                    const oldCarPurchasePrice = carTakenFromClient.buy_price || 0;
-                                                    const loss = parseFloat(form.loss_amount || '0');
-
-                                                    // For exchange: Profit = Sale Price - Old Car Purchase Price - Buy Price - Loss
-                                                    // Note: customer_car_eval_value and additional_customer_amount are display-only and don't affect profit
-                                                    const profitCommission = sellPrice - buyPrice - loss;
-
-                                                    return (
-                                                        <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                            {profitCommission >= 0 ? '+' : ''}₪{profitCommission.toFixed(0)}
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Intermediary Deal Table */}
-                                {dealType === 'intermediary' && (
-                                    <>
-                                        {/* Row 1: Car Brokerage Commission */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                <div className="font-medium">{t('intermediary_car_commission')}</div>
-                                                <div className="text-xs mt-1 text-gray-500">
-                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`}
-                                                </div>
-                                            </div>
-                                            <div className="text-center">-</div>
-                                        </div>
-
-                                        {/* Row 2: Selling Price (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
-                                                {t('selling_price_manual')}
-                                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="selling_price"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={selectedCar.sale_price || ''}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 3: Profit Commission (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                            <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="amount"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.amount}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Financing Assistance Deal Table */}
-                                {dealType === 'financing_assistance_intermediary' && (
-                                    <>
-                                        {/* Row 1: Financing Assistance Commission */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                <div className="font-medium">{t('financing_assistance_commission')}</div>
-                                                <div className="text-xs mt-1 text-gray-500">
-                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`}
-                                                </div>
-                                            </div>
-                                            <div className="text-center">-</div>
-                                        </div>
-
-                                        {/* Row 2: Selling Price (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
-                                                {t('selling_price_manual')}
-                                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="selling_price"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={selectedCar.sale_price || ''}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 3: Commission (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                            <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('commission_editable')}</div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="amount"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.amount}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* Company Commission Deal Table */}
-                                {dealType === 'company_commission' && (
-                                    <>
-                                        {/* Row 1: Company Commission */}
-                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                <div className="font-medium">{t('deal_type_company_commission')}</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="amount"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.amount}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Row 2: Selling Price (Editable) */}
-                                        <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                            <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
-                                                {t('selling_price_manual')}
-                                                <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="flex justify-center">
-                                                    <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        type="number"
-                                                        name="selling_price"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={form.selling_price || ''}
-                                                        onChange={handleInputChange}
-                                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                        style={{ direction: 'ltr', textAlign: 'center' }}
-                                                        placeholder="0.00"
-                                                        disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Customer Selectors - Different for Intermediary Deals */}
-                        {dealType === 'intermediary' ? (
-                            <>
-                                {/* Seller Selector for Intermediary Deals */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('seller')}</label>
-                                    <CustomerSelect
-                                        selectedCustomer={selectedSeller}
-                                        onCustomerSelect={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : handleSellerSelect}
-                                        onCreateNew={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : () => handleCreateNewCustomer('seller')}
-                                        className="form-input"
-                                    />
-                                </div>
-                                {/* Buyer Selector for Intermediary Deals */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('buyer')}</label>
-                                    <CustomerSelect
-                                        selectedCustomer={selectedBuyer}
-                                        onCustomerSelect={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : handleBuyerSelect}
-                                        onCreateNew={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : () => handleCreateNewCustomer('buyer')}
-                                        className="form-input"
-                                    />
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                {/* Single Customer Selector for Other Deal Types */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('customer')}</label>
-                                    <CustomerSelect
-                                        selectedCustomer={selectedCustomer}
-                                        onCustomerSelect={deal?.status === 'completed' ? () => {} : handleCustomerSelect}
-                                        onCreateNew={deal?.status === 'completed' ? () => {} : () => handleCreateNewCustomer('customer')}
-                                        className="form-input"
-                                    />
-                                </div>
-                                {/* Car Selector */}
-                                <div>
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('car')}</label>
-                                    <CarSelect
-                                        selectedCar={selectedCar}
-                                        onCarSelect={deal?.status === 'completed' ? () => {} : handleCarSelect}
-                                        className="form-input"
-                                        excludeLinkedCars={true}
-                                        currentDealId={dealId}
-                                    />
-                                </div>
-                            </>
-                        )}
-
-                        {/* Car Selector for Intermediary Deals (separate row) */}
-                        {dealType === 'intermediary' && (
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('car')}</label>
-                                <CarSelect
-                                    selectedCar={selectedCar}
-                                    onCarSelect={deal?.status === 'completed' ? () => {} : handleCarSelect}
-                                    className="form-input"
-                                    excludeLinkedCars={true}
-                                    currentDealId={dealId}
-                                />
-                            </div>
-                        )}
-                    </div>
-                    {/* Car Taken From Client (Exchange Deals) */}
-                    {carTakenFromClient && deal && deal.deal_type === 'exchange' && (
-                        <div className="panel">
-                            <div className="mb-5 flex items-center gap-3">
-                                <IconCar className="w-5 h-5 text-orange-500" />
-                                <h5 className="text-lg font-semibold dark:text-white-light">{t('car_taken_from_client')}</h5>
-                            </div>
-                            <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_name')}</label>
-                                        <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.title}</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('brand')}</label>
-                                        <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.brand}</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('year')}</label>
-                                        <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.year}</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('kilometers')}</label>
-                                        <p className="font-bold text-gray-900 dark:text-white">
-                                            {carTakenFromClient.kilometers.toLocaleString()} {t('km')}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('received_value')}</label>
-                                        <p className="font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                    </div>
-                                    {carTakenFromClient.car_number && (
-                                        <div>
-                                            <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_number')}</label>
-                                            <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.car_number}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    {/* Deal Attachments */}
-                    {existingAttachments && existingAttachments.length > 0 && (
-                        <div className="panel">
-                            <div className="mb-5 flex items-center gap-3">
-                                <IconNotes className="w-5 h-5 text-primary" />
-                                <h5 className="text-lg font-semibold dark:text-white-light">{t('existing_attachments')}</h5>
-                            </div>
-                            <AttachmentsDisplay
-                                attachments={existingAttachments}
-                                compact={false}
-                                showDeleteButton={true}
-                                onDeleteAttachment={handleRemoveExistingAttachment}
-                                isDeleting={deletingAttachment !== null}
-                            />
-                        </div>
-                    )}
-                    {/* Add New Attachments */}
-                    <div className="panel">
-                        <div className="mb-5 flex items-center gap-3">
-                            <IconNotes className="w-5 h-5 text-primary" />
-                            <h5 className="text-lg font-semibold dark:text-white-light">{existingAttachments && existingAttachments.length > 0 ? t('add_more_attachments') : t('deal_attachments')}</h5>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <SingleFileUpload
-                                file={newAttachments.car_license}
-                                onFileChange={(file) => handleFileUpload('car_license', file)}
-                                title={t('car_license')}
-                                description={t('car_license_desc')}
-                                accept="image/*,.pdf"
-                                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-                            />
-                            <SingleFileUpload
-                                file={newAttachments.driver_license}
-                                onFileChange={(file) => handleFileUpload('driver_license', file)}
-                                title={t('driver_license')}
-                                description={t('driver_license_desc')}
-                                accept="image/*,.pdf"
-                                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-                            />
-                            <SingleFileUpload
-                                file={newAttachments.car_transfer_document}
-                                onFileChange={(file) => handleFileUpload('car_transfer_document', file)}
-                                title={t('car_transfer_document')}
-                                description={t('car_transfer_document_desc')}
-                                accept="image/*,.pdf"
-                                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-                            />
-                        </div>
-                    </div>
-                    {/* Payment Methods Section */}
-                    <div className="panel">
-                        <DealPaymentMethods value={paymentMethods} onChange={setPaymentMethods} notes={paymentNotes} onNotesChange={setPaymentNotes} />
-                    </div>
-                    {/* Expandable Bill Creation Section */}
-                    <div className="panel">
-                        <div className="mb-5 border rounded-xl border-gray-200 dark:border-gray-700">
+            {/* Tabs Navigation */}
+            <div className="mb-5">
+                <div className="border-b border-[#ebedf2] dark:border-[#191e3a]">
+                    <ul className="flex flex-wrap">
+                        <li className="mx-2">
                             <button
                                 type="button"
-                                onClick={() => setIsBillSectionExpanded(!isBillSectionExpanded)}
-                                className="flex items-center gap-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 p-3 rounded-lg transition-colors duration-200"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'info' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('info')}
                             >
-                                <div className="flex items-center gap-3 flex-1">
-                                    <IconDollarSign className="w-5 h-5 text-primary" />
-                                    <h5 className="text-lg font-semibold dark:text-white-light">{t('automate_bill_for_deal')}</h5>
-                                </div>{' '}
-                                <IconCaretDown className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isBillSectionExpanded ? 'rotate-180' : ''}`} />
+                                <IconDocument className="w-4 h-4" />
+                                {t('deal_information')}
                             </button>
-                        </div>
+                        </li>
+                        <li className="mx-2">
+                            <button
+                                type="button"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'attachments' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('attachments')}
+                            >
+                                <IconPaperclip className="w-4 h-4" />
+                                {t('attachments')}
+                            </button>
+                        </li>
+                        <li className="mx-2">
+                            <button
+                                type="button"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'payments' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('payments')}
+                            >
+                                <IconCreditCard className="w-4 h-4" />
+                                {t('payment_methods')}
+                            </button>
+                        </li>
+                        <li className="mx-2">
+                            <button
+                                type="button"
+                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                    activeTab === 'bills' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('bills')}
+                            >
+                                <IconReceipt className="w-4 h-4" />
+                                {t('connected_bills')}
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
 
-                        {isBillSectionExpanded && (
-                            <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-6">
-                                {/* Bill Type Selection */}
-                                <div>
-                                    <div className="mb-4 flex items-center gap-3">
-                                        <IconDollarSign className="w-5 h-5 text-primary" />
-                                        <h6 className="text-md font-semibold dark:text-white-light">{t('bill_type')}</h6>
-                                    </div>
-                                    <BillTypeSelect
-                                        defaultValue={billForm.bill_type}
-                                        dealType={deal?.deal_type}
-                                        onChange={(billType) => handleBillFormChange({ target: { name: 'bill_type', value: billType } } as any)}
-                                        className="w-full"
+            <div className="panel">
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    {/* Deal Information Tab */}
+                    {activeTab === 'info' && (
+                        <>
+                            <div className="mb-5">
+                                <h5 className="text-lg font-semibold dark:text-white-light">{t('deal_information')}</h5>
+                            </div>
+                            {/* Deal Type Selector */}
+                            <div className="bg-gradient-to-r from-primary/10 to-secondary/10 p-6 rounded-lg border-2 border-primary/20">
+                                <label className="block text-lg font-bold text-gray-700 dark:text-white mb-4">
+                                    {t('deal_type')} <span className="text-red-500">*</span>
+                                </label>
+                                <DealTypeSelect
+                                    defaultValue={dealType}
+                                    className="form-input text-lg py-3"
+                                    name="deal_type"
+                                    onChange={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : handleDealTypeChange}
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Deal Title */}
+                                <div className="md:col-span-2">
+                                    <label htmlFor="title" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('deal_title')} <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="title"
+                                        name="title"
+                                        value={form.title}
+                                        onChange={handleInputChange}
+                                        className="form-input"
+                                        placeholder={t('enter_deal_title')}
+                                        required
+                                        disabled={deal?.status === 'completed'}
                                     />
                                 </div>
-                                {/* Bill Direction Selector for All Bills except tax_invoice and tax_invoice_receipt */}
-                                {billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && (
-                                    <div>
-                                        <div className="mb-4 flex items-center gap-3">
-                                            <IconDollarSign className="w-5 h-5 text-primary" />
-                                            <div>
-                                                <h6 className="text-md font-semibold dark:text-white-light">{t('bill_direction')}</h6>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_bill_direction_desc')}</p>
-                                            </div>
+                                {/* Description */}
+                                <div className="md:col-span-2">
+                                    <label htmlFor="description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('description')} <span className="text-red-500">*</span>
+                                    </label>
+                                    <textarea
+                                        id="description"
+                                        name="description"
+                                        value={form.description}
+                                        onChange={handleInputChange}
+                                        className="form-textarea min-h-[120px]"
+                                        placeholder={t('enter_deal_description')}
+                                        required
+                                        disabled={deal?.status === 'completed'}
+                                    />
+                                </div>
+                            </div>
+                            {/* Deal Status Display/Cancel Option */}
+                            <div className="panel">
+                                <div className="mb-5">
+                                    <h5 className="text-lg font-bold text-gray-900 dark:text-white-light">{t('deal_status')}</h5>
+                                    <p className="text-gray-600 dark:text-gray-400 mt-2">{t('deal_status_automatic_desc')}</p>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className={`px-4 py-2 rounded-lg font-medium ${
+                                                form.status === 'active'
+                                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+                                                    : form.status === 'completed'
+                                                      ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                                                      : form.status === 'cancelled'
+                                                        ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            {form.status === 'active'
+                                                ? t('deal_status_active')
+                                                : form.status === 'completed'
+                                                  ? t('deal_status_completed')
+                                                  : form.status === 'cancelled'
+                                                    ? t('deal_status_cancelled')
+                                                    : form.status}
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div
-                                                className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                                                    billForm.bill_direction === 'positive'
-                                                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                                        : 'border-gray-300 dark:border-gray-600 hover:border-green-400 dark:hover:border-green-500'
-                                                }`}
-                                                onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'positive' } } as any)}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-full ${billForm.bill_direction === 'positive' ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                                        <IconDollarSign className={`w-4 h-4 ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
-                                                    </div>
-                                                    <div>
-                                                        <h3
-                                                            className={`font-semibold ${billForm.bill_direction === 'positive' ? 'text-green-800 dark:text-green-200' : 'text-gray-700 dark:text-gray-300'}`}
-                                                        >
-                                                            {t('positive_bill')}
-                                                        </h3>
-                                                        <p className={`text-sm ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                                                            {t('positive_bill_desc')}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div
-                                                className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                                                    billForm.bill_direction === 'negative'
-                                                        ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                                        : 'border-gray-300 dark:border-gray-600 hover:border-red-400 dark:hover:border-red-500'
-                                                }`}
-                                                onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'negative' } } as any)}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-full ${billForm.bill_direction === 'negative' ? 'bg-red-100 dark:bg-red-800' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                                                        <IconDollarSign className={`w-4 h-4 ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`} />
-                                                    </div>
-                                                    <div>
-                                                        <h3
-                                                            className={`font-semibold ${billForm.bill_direction === 'negative' ? 'text-red-800 dark:text-red-200' : 'text-gray-700 dark:text-gray-300'}`}
-                                                        >
-                                                            {t('negative_bill')}
-                                                        </h3>
-                                                        <p className={`text-sm ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}>
-                                                            {t('negative_bill_desc')}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        {form.status === 'completed' && <span className="text-sm text-gray-600 dark:text-gray-400">{t('deal_completed_automatically')}</span>}
                                     </div>
-                                )}
-                                {/* General Bill Details */}
-                                {billForm.bill_type === 'general' && (
+                                </div>
+                            </div>
+                            {/* Deal Date Selector */}
+                            <div className="panel">
+                                <div className="mb-5 flex items-center gap-3">
+                                    <IconCalendar className="w-5 h-5 text-primary" />
                                     <div>
-                                        <div className="mb-4 flex items-center gap-3">
-                                            <IconReceipt className="w-5 h-5 text-primary" />
-                                            <h6 className="text-md font-semibold dark:text-white-light">{t('general_bill_details')}</h6>
-                                        </div>
-                                        <div className="space-y-4">
-                                            {/* Bill Description */}
-                                            <div>
-                                                <label htmlFor="bill_description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                    {t('bill_description')} <span className="text-red-500">*</span>
-                                                </label>
-                                                <textarea
-                                                    id="bill_description"
-                                                    name="bill_description"
-                                                    rows={4}
-                                                    value={billForm.bill_description || ''}
-                                                    onChange={handleBillFormChange}
-                                                    className="form-textarea"
-                                                    placeholder={t('enter_bill_description')}
-                                                    required
-                                                />
-                                            </div>
-                                            {/* Bill Amount */}
-                                            <div>
-                                                <label htmlFor="bill_amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                    {t('bill_amount')} <span className="text-red-500">*</span>
-                                                </label>
-                                                <div className="flex">
-                                                    <span className="inline-flex items-center px-3 text-sm text-gray-900 bg-gray-200 border border-r-0 border-gray-300 rounded-l-md dark:bg-gray-600 dark:text-gray-400 dark:border-gray-600">
-                                                        ₪
-                                                    </span>
-                                                    <input
-                                                        id="bill_amount"
-                                                        name="bill_amount"
-                                                        type="number"
-                                                        step="0.01"
-                                                        value={billForm.bill_amount || ''}
-                                                        onChange={handleBillFormChange}
-                                                        className="form-input rounded-l-none"
-                                                        placeholder={t('enter_bill_amount')}
-                                                        required
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <h5 className="text-lg font-bold text-gray-900 dark:text-white-light">{t('deal_date')}</h5>
+                                        <p className="text-gray-600 dark:text-gray-400 mt-1">{t('select_deal_date_desc')}</p>
                                     </div>
-                                )}
-                                {(billForm.bill_type === 'tax_invoice' || billForm.bill_type === 'tax_invoice_receipt') &&
-                                    (selectedCustomer || (dealType === 'intermediary' && (selectedSeller || selectedBuyer))) && (
-                                        <>
-                                            {/* Customer Information Display */}
-                                            <div>
-                                                <div className="mb-4 flex items-center gap-3">
-                                                    <IconUser className="w-5 h-5 text-primary" />
-                                                    <h6 className="text-md font-semibold dark:text-white-light">{t('customer_information')}</h6>
-                                                </div>
-                                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                                                    <h6 className="font-semibold text-blue-800 dark:text-blue-200 mb-3">
-                                                        {dealType === 'intermediary' ? t('deal_participants') : t('customer_details')}
-                                                    </h6>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                                                        {dealType === 'intermediary' ? (
-                                                            <>
-                                                                {selectedSeller && (
-                                                                    <>
-                                                                        <div>
-                                                                            <label className="text-blue-700 dark:text-blue-300 font-medium">{t('seller_name')}</label>
-                                                                            <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedSeller.name}</p>
-                                                                        </div>
-                                                                        <div>
-                                                                            <label className="text-blue-700 dark:text-blue-300 font-medium">{t('seller_phone')}</label>
-                                                                            <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedSeller.phone}</p>
-                                                                        </div>
-                                                                    </>
-                                                                )}
-                                                                {selectedBuyer && (
-                                                                    <>
-                                                                        <div>
-                                                                            <label className="text-blue-700 dark:text-blue-300 font-medium">{t('buyer_name')}</label>
-                                                                            <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedBuyer.name}</p>
-                                                                        </div>
-                                                                        <div>
-                                                                            <label className="text-blue-700 dark:text-blue-300 font-medium">{t('buyer_phone')}</label>
-                                                                            <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedBuyer.phone}</p>
-                                                                        </div>
-                                                                    </>
-                                                                )}
-                                                            </>
-                                                        ) : (
-                                                            selectedCustomer && (
-                                                                <>
-                                                                    <div>
-                                                                        <label className="text-blue-700 dark:text-blue-300 font-medium">{t('customer_name')}</label>
-                                                                        <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedCustomer.name}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <label className="text-blue-700 dark:text-blue-300 font-medium">{t('phone')}</label>
-                                                                        <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedCustomer.phone}</p>
-                                                                    </div>
-                                                                </>
-                                                            )
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Summary Table */}
-                                            {selectedCar && (
-                                                <div>
-                                                    <div className="mb-4 flex items-center gap-3">
-                                                        <IconDollarSign className="w-5 h-5 text-primary" />
-                                                        <h6 className="text-md font-semibold dark:text-white-light">{t('bill_summary')}</h6>
-                                                    </div>{' '}
-                                                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                                        {/* Table Header */}
-                                                        <div className="grid grid-cols-4 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
-                                                            <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('item_description')}</div>
-                                                            <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('unit_price')}</div>
-                                                            <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('quantity')}</div>
-                                                            <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('total_price')}</div>
-                                                        </div>{' '}
-                                                        {(deal?.deal_type === 'new_used_sale' || deal?.deal_type === 'new_sale' || deal?.deal_type === 'used_sale') && (
-                                                            <>
-                                                                {/* Row 1: Car for Sale */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                                        <div className="font-medium">{t('car_for_sale')}</div>
-                                                                        <div className="text-xs text-gray-500">
-                                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                </div>
-                                                                {/* Row 2: Buy Price */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>{' '}
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
-                                                                    </div>
-                                                                </div>{' '}
-                                                                {/* Row 3: Selling Price */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('selling_price_manual')}</div>{' '}
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(parseFloat(form.selling_price || '0'))}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(parseFloat(form.selling_price || '0'))}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {/* Row 4: Loss */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>{' '}
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-red-600 dark:text-red-400">{formatCurrency(parseFloat(String(form.loss_amount || '0')))}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {/* Row 5: Profit Commission */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">
-                                                                        <span
-                                                                            className={`text-sm ${(() => {
-                                                                                const buyPrice = selectedCar.buy_price || 0;
-                                                                                const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                const loss = parseFloat(form.loss_amount || '0');
-                                                                                const profit = sellPrice - buyPrice - loss;
-                                                                                return profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-                                                                            })()}`}
-                                                                        >
-                                                                            ${' '}
-                                                                            {(() => {
-                                                                                const buyPrice = selectedCar.buy_price || 0;
-                                                                                const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                const loss = parseFloat(form.loss_amount || '0');
-                                                                                const profit = sellPrice - buyPrice - loss;
-                                                                                return profit >= 0 ? `+${formatCurrency(profit)}` : formatCurrency(profit);
-                                                                            })()}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {deal?.deal_type === 'new_used_sale_tax_inclusive' && (
-                                                            <>
-                                                                {/* Row 1: Car for Sale */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                                        <div className="font-medium">{t('car_for_sale')}</div>
-                                                                        <div className="text-xs text-gray-500">
-                                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                </div>
-                                                                {/* Row 2: Buy Price */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>{' '}
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
-                                                                    </div>
-                                                                </div>{' '}
-                                                                {/* Row 3: Selling Price */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('selling_price_manual')}</div>{' '}
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(parseFloat(form.selling_price || '0'))}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(parseFloat(form.selling_price || '0'))}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {/* Row 4: Loss */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>{' '}
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-red-600 dark:text-red-400">{formatCurrency(parseFloat(String(form.loss_amount || '0')))}</span>
-                                                                    </div>
-                                                                </div>
-                                                                {/* Row 5: Profit Commission */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">
-                                                                        <span
-                                                                            className={`text-sm ${(() => {
-                                                                                const buyPrice = selectedCar.buy_price || 0;
-                                                                                const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                const loss = parseFloat(form.loss_amount || '0');
-                                                                                const profit = sellPrice - buyPrice - loss;
-                                                                                return profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-                                                                            })()}`}
-                                                                        >
-                                                                            ${' '}
-                                                                            {(() => {
-                                                                                const buyPrice = selectedCar.buy_price || 0;
-                                                                                const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                const loss = parseFloat(form.loss_amount || '0');
-                                                                                const profit = sellPrice - buyPrice - loss;
-                                                                                return profit >= 0 ? `+${formatCurrency(profit)}` : formatCurrency(profit);
-                                                                            })()}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {deal?.deal_type === 'intermediary' && (
-                                                            <>
-                                                                {/* Row 1: Car Brokerage Commission */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                                        <div className="font-medium">{t('intermediary_car_commission')}</div>
-                                                                        <div className="text-xs text-gray-500">
-                                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                </div>
-
-                                                                {/* Row 2: Profit Commission */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {deal?.deal_type === 'financing_assistance_intermediary' && (
-                                                            <>
-                                                                {/* Row 1: Financing Assistance Commission */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                                        <div className="font-medium">{t('financing_assistance_commission')}</div>
-                                                                        <div className="text-xs text-gray-500">
-                                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                </div>
-
-                                                                {/* Row 2: Commission */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('commission_editable')}</div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {deal?.deal_type === 'exchange' && (
-                                                            <>
-                                                                {/* Row 1: Car for Sale */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                                        <div className="font-medium">{t('car_for_sale')}</div>
-                                                                        <div className="text-xs text-gray-500">
-                                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
-                                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                    <div className="text-center">-</div>
-                                                                </div>
-
-                                                                {/* Row 2: Buy Price */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-red-600 dark:text-red-400">-{formatCurrency(selectedCar.buy_price || 0)}</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Row 3: Sale Price */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-3 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('sale_price_auto')}</div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.sale_price || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(selectedCar.sale_price || 0)}</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Row 4: Deal Amount */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount_exchange')}</div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        {' '}
-                                                                        <span className="text-sm text-blue-600 dark:text-blue-400">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {deal?.deal_type === 'company_commission' && (
-                                                            <>
-                                                                {/* Row 1: Company Commission */}
-                                                                <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                                        <div className="font-medium">{t('deal_type_company_commission')}</div>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                    </div>
-                                                                    <div className="text-center">
-                                                                        <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                        {/* Fallback: Show basic deal info if no specific deal type matches */}
-                                                        {![
-                                                            'new_used_sale',
-                                                            'new_sale',
-                                                            'used_sale',
-                                                            'new_used_sale_tax_inclusive',
-                                                            'intermediary',
-                                                            'financing_assistance_intermediary',
-                                                            'exchange',
-                                                            'company_commission',
-                                                        ].includes(deal?.deal_type || '') && (
-                                                            <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                                    <div className="font-medium">{t('deal_item')}</div>
-                                                                    <div className="text-xs text-gray-500">
-                                                                        {deal?.title || 'Deal'} - {deal?.deal_type || 'Unknown type'}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                </div>
-                                                                <div className="text-center">
-                                                                    <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                        {/* Separator */}
-                                                        <div className="border-t border-gray-300 dark:border-gray-600 my-4"></div>
-                                                        {/* Tax Calculations */}
-                                                        {deal.deal_type === 'new_used_sale_tax_inclusive' ? (
-                                                            <div className="space-y-3">
-                                                                {/* Price Before Tax */}
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('price_before_tax')}</span>
-                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                                                        {formatCurrency(deal?.selling_price - deal?.selling_price * 0.18 || 0)}
-                                                                    </span>
-                                                                </div>
-
-                                                                {/* Tax */}
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('deal_tax')} 18%</span>
-                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency((deal?.selling_price || 0) * 0.18)}</span>
-                                                                </div>
-
-                                                                {/* Total Including Tax */}
-                                                                <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
-                                                                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_including_tax')}</span>
-                                                                    <span className="text-lg font-bold text-primary">{formatCurrency(deal?.selling_price || 0)}</span>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="space-y-3">
-                                                                {/* Price Before Tax */}
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('price_before_tax')}</span>
-                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount - deal?.amount * 0.18 || 0)}</span>
-                                                                </div>
-
-                                                                {/* Tax */}
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('deal_tax')} 18%</span>
-                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency((deal?.amount || 0) * 0.18)}</span>
-                                                                </div>
-
-                                                                {/* Total Including Tax */}
-                                                                <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
-                                                                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_including_tax')}</span>
-                                                                    <span className="text-lg font-bold text-primary">{formatCurrency(deal?.amount || 0)}</span>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Bill Notes */}
-                                            <div>
-                                                <label htmlFor="bill_free_text" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                                    {t('bill_notes')}
-                                                </label>
-                                                <textarea
-                                                    id="bill_free_text"
-                                                    name="free_text"
-                                                    rows={3}
-                                                    value={billForm.free_text || ''}
-                                                    onChange={handleBillFormChange}
-                                                    className="form-textarea"
-                                                    placeholder={t('enter_bill_notes')}
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-                                {/* Receipt Section */}
-                                {(billForm.bill_type === 'receipt_only' || billForm.bill_type === 'tax_invoice_receipt') && (
-                                    <div>
-                                        <div className="mb-4 flex items-center gap-3">
-                                            <IconDollarSign className="w-5 h-5 text-primary" />
-                                            <h6 className="text-md font-semibold dark:text-white-light">{t('receipt_details')}</h6>
+                                </div>
+                                <div className="relative">
+                                    <input
+                                        type="date"
+                                        value={dealDate}
+                                        onChange={(e) => setDealDate(e.target.value)}
+                                        className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                                        style={{ colorScheme: 'light' }}
+                                        disabled={deal?.status === 'completed'}
+                                    />
+                                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                        <IconCalendar className="w-5 h-5 text-gray-400" />
+                                    </div>
+                                </div>
+                            </div>{' '}
+                            {/* Deal Summary Table - Different based on Deal Type */}
+                            {selectedCar && (
+                                <div className="panel">
+                                    <div className="mb-5">
+                                        <h5 className="text-lg font-bold text-gray-900 dark:text-white-light">{t('deal_summary')}</h5>
+                                    </div>
+                                    <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                        {/* Table Header */}
+                                        <div className="grid grid-cols-3 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                            <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('deal_item')}</div>
+                                            <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('deal_price')}</div>
                                         </div>
 
-                                        <MultiplePaymentForm
-                                            payments={payments.map((p) => ({
-                                                ...p,
-                                                payment_type: p.payment_type as 'cash' | 'bank_transfer' | 'check' | 'visa',
-                                            }))}
-                                            onPaymentsChange={setPayments}
-                                            totalAmount={parseFloat(billForm.total_with_tax) || 0}
-                                            deal={deal}
-                                            carTakenFromClient={carTakenFromClient}
-                                            bills={bills}
+                                        {/* New/Used Sale Deal Table */}
+                                        {(dealType === 'new_used_sale' || dealType === 'new_sale' || dealType === 'used_sale' || dealType === 'new_used_sale_tax_inclusive') && (
+                                            <>
+                                                {/* Row 1: Car for Sale */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                        <div className="font-medium">{t('car_for_sale')}</div>
+                                                        <div className="text-xs mt-1 text-gray-500">
+                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center">-</div>
+                                                </div>
+
+                                                {/* Row 2: Buy Price */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{selectedCar.buy_price?.toFixed(0) || '0.00'}</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 3: Selling Price (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
+                                                        {t('selling_price_manual')}
+                                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="selling_price"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.selling_price || ''}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 4: Loss Amount (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="loss_amount"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.loss_amount || ''}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 5: Profit Commission (Calculated) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                                    <div className="text-center">
+                                                        {(() => {
+                                                            if (!form.amount || !selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
+
+                                                            const buyPrice = selectedCar.buy_price || 0;
+                                                            const sellPrice = parseFloat(form.selling_price || '0') || 0;
+                                                            const loss = parseFloat(form.loss_amount || '0');
+                                                            const profitCommission = sellPrice - buyPrice - loss;
+
+                                                            return (
+                                                                <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                                    {profitCommission >= 0 ? '+' : ''}₪{profitCommission.toFixed(0)}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Exchange Deal Table */}
+                                        {dealType === 'exchange' && (
+                                            <>
+                                                {/* Row 1: Car for Sale */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                        <div className="font-medium">{t('car_for_sale')}</div>
+                                                        <div className="text-xs mt-1 text-gray-500">
+                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center">-</div>
+                                                </div>
+                                                {/* Row 2: Buy Price */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{selectedCar.buy_price?.toFixed(0) || '0.00'}</span>
+                                                    </div>
+                                                </div>
+                                                {/* Row 3: Selling Price (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
+                                                        {t('selling_price_manual')}
+                                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="selling_price"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.selling_price || ''}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>{' '}
+                                                {/* Row 4: Customer Car Evaluation (Auto-calculated) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                        <div className="font-medium">{t('customer_car_evaluation')}</div>
+                                                        {carTakenFromClient && (
+                                                            <div className="text-xs mt-1 text-gray-500">
+                                                                {carTakenFromClient.brand} {carTakenFromClient.title} - {carTakenFromClient.year}
+                                                                {carTakenFromClient.car_number && ` - ${carTakenFromClient.car_number}`}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(form.customer_car_eval_value || '0').toFixed(0)}</span>
+                                                    </div>
+                                                </div>
+                                                {/* Row 5: Additional Amount from Customer (Auto-calculated) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(form.additional_customer_amount || '0').toFixed(0)}</span>
+                                                    </div>
+                                                </div>
+                                                {/* Row 6: Loss (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="loss_amount"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.loss_amount || ''}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* Row 7: Profit Commission (Calculated) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                                    <div className="text-center">
+                                                        {(() => {
+                                                            if (!selectedCar || !carTakenFromClient) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
+
+                                                            const buyPrice = selectedCar.buy_price || 0;
+                                                            const sellPrice = parseFloat(form.selling_price || '0') || 0;
+                                                            const oldCarPurchasePrice = carTakenFromClient.buy_price || 0;
+                                                            const loss = parseFloat(form.loss_amount || '0');
+
+                                                            // For exchange: Profit = Sale Price - Old Car Purchase Price - Buy Price - Loss
+                                                            // Note: customer_car_eval_value and additional_customer_amount are display-only and don't affect profit
+                                                            const profitCommission = sellPrice - buyPrice - loss;
+
+                                                            return (
+                                                                <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                                    {profitCommission >= 0 ? '+' : ''}₪{profitCommission.toFixed(0)}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Intermediary Deal Table */}
+                                        {dealType === 'intermediary' && (
+                                            <>
+                                                {/* Row 1: Car Brokerage Commission */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                        <div className="font-medium">{t('intermediary_car_commission')}</div>
+                                                        <div className="text-xs mt-1 text-gray-500">
+                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center">-</div>
+                                                </div>
+
+                                                {/* Row 2: Selling Price (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
+                                                        {t('selling_price_manual')}
+                                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="selling_price"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={selectedCar.sale_price || ''}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 3: Profit Commission (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                                    <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="amount"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.amount}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Financing Assistance Deal Table */}
+                                        {dealType === 'financing_assistance_intermediary' && (
+                                            <>
+                                                {/* Row 1: Financing Assistance Commission */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                        <div className="font-medium">{t('financing_assistance_commission')}</div>
+                                                        <div className="text-xs mt-1 text-gray-500">
+                                                            {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                            {selectedCar.car_number && ` - ${selectedCar.car_number}`}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center">-</div>
+                                                </div>
+
+                                                {/* Row 2: Selling Price (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
+                                                        {t('selling_price_manual')}
+                                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="selling_price"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={selectedCar.sale_price || ''}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 3: Commission (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                                    <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('commission_editable')}</div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="amount"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.amount}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {/* Company Commission Deal Table */}
+                                        {dealType === 'company_commission' && (
+                                            <>
+                                                {/* Row 1: Company Commission */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                        <div className="font-medium">{t('deal_type_company_commission')}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="amount"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.amount}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 2: Selling Price (Editable) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                                    <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
+                                                        {t('selling_price_manual')}
+                                                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-normal">{t('updates_car_sale_price')}</div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <div className="flex justify-center">
+                                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                type="number"
+                                                                name="selling_price"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={form.selling_price || ''}
+                                                                onChange={handleInputChange}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                style={{ direction: 'ltr', textAlign: 'center' }}
+                                                                placeholder="0.00"
+                                                                disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {/* Customer Selectors - Different for Intermediary Deals */}
+                                {dealType === 'intermediary' ? (
+                                    <>
+                                        {/* Seller Selector for Intermediary Deals */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('seller')}</label>
+                                            <CustomerSelect
+                                                selectedCustomer={selectedSeller}
+                                                onCustomerSelect={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : handleSellerSelect}
+                                                onCreateNew={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : () => handleCreateNewCustomer('seller')}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                        {/* Buyer Selector for Intermediary Deals */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('buyer')}</label>
+                                            <CustomerSelect
+                                                selectedCustomer={selectedBuyer}
+                                                onCustomerSelect={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : handleBuyerSelect}
+                                                onCreateNew={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : () => handleCreateNewCustomer('buyer')}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Single Customer Selector for Other Deal Types */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('customer')}</label>
+                                            <CustomerSelect
+                                                selectedCustomer={selectedCustomer}
+                                                onCustomerSelect={deal?.status === 'completed' ? () => {} : handleCustomerSelect}
+                                                onCreateNew={deal?.status === 'completed' ? () => {} : () => handleCreateNewCustomer('customer')}
+                                                className="form-input"
+                                            />
+                                        </div>
+                                        {/* Car Selector */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('car')}</label>
+                                            <CarSelect
+                                                selectedCar={selectedCar}
+                                                onCarSelect={deal?.status === 'completed' ? () => {} : handleCarSelect}
+                                                className="form-input"
+                                                excludeLinkedCars={true}
+                                                currentDealId={dealId}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+
+                                {/* Car Selector for Intermediary Deals (separate row) */}
+                                {dealType === 'intermediary' && (
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('car')}</label>
+                                        <CarSelect
+                                            selectedCar={selectedCar}
+                                            onCarSelect={deal?.status === 'completed' ? () => {} : handleCarSelect}
+                                            className="form-input"
+                                            excludeLinkedCars={true}
+                                            currentDealId={dealId}
                                         />
                                     </div>
                                 )}
-                                {/* Create Bill Button */}
-                                {billForm.bill_type && (
-                                    <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                        <button type="button" onClick={() => setIsBillSectionExpanded(false)} className="btn btn-outline-secondary">
-                                            {t('cancel')}
-                                        </button>
-                                        <button type="button" onClick={handleCreateBill} className="btn btn-success px-8" disabled={creatingBill}>
-                                            {creatingBill ? t('creating') : t('create_bill')}
-                                        </button>
-                                    </div>
-                                )}{' '}
                             </div>
-                        )}
-                    </div>
-                    {/* Connected Bills Section */}
-                    <BillsTable
-                        bills={bills}
-                        loading={loadingBills}
-                        onDownloadPDF={handleDownloadPDF}
-                        downloadingPDF={downloadingPDF}
-                        readOnly={false}
-                        deal={deal}
-                        car={selectedCar}
-                        carTakenFromClient={carTakenFromClient}
-                        selectedCustomer={selectedCustomer}
-                    />
+                            {/* Car Taken From Client (Exchange Deals) */}
+                            {carTakenFromClient && deal && deal.deal_type === 'exchange' && (
+                                <div className="panel">
+                                    <div className="mb-5 flex items-center gap-3">
+                                        <IconCar className="w-5 h-5 text-orange-500" />
+                                        <h5 className="text-lg font-semibold dark:text-white-light">{t('car_taken_from_client')}</h5>
+                                    </div>
+                                    <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            <div>
+                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_name')}</label>
+                                                <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.title}</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('brand')}</label>
+                                                <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.brand}</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('year')}</label>
+                                                <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.year}</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('kilometers')}</label>
+                                                <p className="font-bold text-gray-900 dark:text-white">
+                                                    {carTakenFromClient.kilometers.toLocaleString()} {t('km')}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('received_value')}</label>
+                                                <p className="font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
+                                            </div>
+                                            {carTakenFromClient.car_number && (
+                                                <div>
+                                                    <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_number')}</label>
+                                                    <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.car_number}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {/* Deal Attachments */}
+                            {existingAttachments && existingAttachments.length > 0 && (
+                                <div className="panel">
+                                    <div className="mb-5 flex items-center gap-3">
+                                        <IconNotes className="w-5 h-5 text-primary" />
+                                        <h5 className="text-lg font-semibold dark:text-white-light">{t('existing_attachments')}</h5>
+                                    </div>
+                                    <AttachmentsDisplay
+                                        attachments={existingAttachments}
+                                        compact={false}
+                                        showDeleteButton={true}
+                                        onDeleteAttachment={handleRemoveExistingAttachment}
+                                        isDeleting={deletingAttachment !== null}
+                                    />
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Attachments Tab */}
+                    {activeTab === 'attachments' && (
+                        <>
+                            {/* Add New Attachments */}
+                            <div className="panel">
+                                <div className="mb-5 flex items-center gap-3">
+                                    <IconNotes className="w-5 h-5 text-primary" />
+                                    <h5 className="text-lg font-semibold dark:text-white-light">
+                                        {existingAttachments && existingAttachments.length > 0 ? t('add_more_attachments') : t('deal_attachments')}
+                                    </h5>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <SingleFileUpload
+                                        file={newAttachments.car_license}
+                                        onFileChange={(file) => handleFileUpload('car_license', file)}
+                                        title={t('car_license')}
+                                        description={t('car_license_desc')}
+                                        accept="image/*,.pdf"
+                                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                                    />
+                                    <SingleFileUpload
+                                        file={newAttachments.driver_license}
+                                        onFileChange={(file) => handleFileUpload('driver_license', file)}
+                                        title={t('driver_license')}
+                                        description={t('driver_license_desc')}
+                                        accept="image/*,.pdf"
+                                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                                    />
+                                    <SingleFileUpload
+                                        file={newAttachments.car_transfer_document}
+                                        onFileChange={(file) => handleFileUpload('car_transfer_document', file)}
+                                        title={t('car_transfer_document')}
+                                        description={t('car_transfer_document_desc')}
+                                        accept="image/*,.pdf"
+                                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Payment Methods Tab */}
+                    {activeTab === 'payments' && (
+                        <>
+                            {/* Payment Methods Section */}
+                            <div className="panel">
+                                <DealPaymentMethods value={paymentMethods} onChange={setPaymentMethods} notes={paymentNotes} onNotesChange={setPaymentNotes} />
+                            </div>
+                            {/* Expandable Bill Creation Section */}
+                            <div className="panel">
+                                <div className="mb-5 border rounded-xl border-gray-200 dark:border-gray-700">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsBillSectionExpanded(!isBillSectionExpanded)}
+                                        className="flex items-center gap-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 p-3 rounded-lg transition-colors duration-200"
+                                    >
+                                        <div className="flex items-center gap-3 flex-1">
+                                            <IconDollarSign className="w-5 h-5 text-primary" />
+                                            <h5 className="text-lg font-semibold dark:text-white-light">{t('automate_bill_for_deal')}</h5>
+                                        </div>{' '}
+                                        <IconCaretDown className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isBillSectionExpanded ? 'rotate-180' : ''}`} />
+                                    </button>
+                                </div>
+
+                                {isBillSectionExpanded && (
+                                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6 space-y-6">
+                                        {/* Bill Type Selection */}
+                                        <div>
+                                            <div className="mb-4 flex items-center gap-3">
+                                                <IconDollarSign className="w-5 h-5 text-primary" />
+                                                <h6 className="text-md font-semibold dark:text-white-light">{t('bill_type')}</h6>
+                                            </div>
+                                            <BillTypeSelect
+                                                defaultValue={billForm.bill_type}
+                                                dealType={deal?.deal_type}
+                                                onChange={(billType) => handleBillFormChange({ target: { name: 'bill_type', value: billType } } as any)}
+                                                className="w-full"
+                                            />
+                                        </div>
+                                        {/* Bill Direction Selector for All Bills except tax_invoice and tax_invoice_receipt */}
+                                        {billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && (
+                                            <div>
+                                                <div className="mb-4 flex items-center gap-3">
+                                                    <IconDollarSign className="w-5 h-5 text-primary" />
+                                                    <div>
+                                                        <h6 className="text-md font-semibold dark:text-white-light">{t('bill_direction')}</h6>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_bill_direction_desc')}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div
+                                                        className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                                            billForm.bill_direction === 'positive'
+                                                                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                                                : 'border-gray-300 dark:border-gray-600 hover:border-green-400 dark:hover:border-green-500'
+                                                        }`}
+                                                        onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'positive' } } as any)}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                className={`p-2 rounded-full ${billForm.bill_direction === 'positive' ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-700'}`}
+                                                            >
+                                                                <IconDollarSign
+                                                                    className={`w-4 h-4 ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <h3
+                                                                    className={`font-semibold ${billForm.bill_direction === 'positive' ? 'text-green-800 dark:text-green-200' : 'text-gray-700 dark:text-gray-300'}`}
+                                                                >
+                                                                    {t('positive_bill')}
+                                                                </h3>
+                                                                <p className={`text-sm ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                                                                    {t('positive_bill_desc')}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div
+                                                        className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                                            billForm.bill_direction === 'negative'
+                                                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                                                : 'border-gray-300 dark:border-gray-600 hover:border-red-400 dark:hover:border-red-500'
+                                                        }`}
+                                                        onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'negative' } } as any)}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div
+                                                                className={`p-2 rounded-full ${billForm.bill_direction === 'negative' ? 'bg-red-100 dark:bg-red-800' : 'bg-gray-100 dark:bg-gray-700'}`}
+                                                            >
+                                                                <IconDollarSign className={`w-4 h-4 ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`} />
+                                                            </div>
+                                                            <div>
+                                                                <h3
+                                                                    className={`font-semibold ${billForm.bill_direction === 'negative' ? 'text-red-800 dark:text-red-200' : 'text-gray-700 dark:text-gray-300'}`}
+                                                                >
+                                                                    {t('negative_bill')}
+                                                                </h3>
+                                                                <p className={`text-sm ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}>
+                                                                    {t('negative_bill_desc')}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {/* General Bill Details */}
+                                        {billForm.bill_type === 'general' && (
+                                            <div>
+                                                <div className="mb-4 flex items-center gap-3">
+                                                    <IconReceipt className="w-5 h-5 text-primary" />
+                                                    <h6 className="text-md font-semibold dark:text-white-light">{t('general_bill_details')}</h6>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    {/* Bill Description */}
+                                                    <div>
+                                                        <label htmlFor="bill_description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                            {t('bill_description')} <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <textarea
+                                                            id="bill_description"
+                                                            name="bill_description"
+                                                            rows={4}
+                                                            value={billForm.bill_description || ''}
+                                                            onChange={handleBillFormChange}
+                                                            className="form-textarea"
+                                                            placeholder={t('enter_bill_description')}
+                                                            required
+                                                        />
+                                                    </div>
+                                                    {/* Bill Amount */}
+                                                    <div>
+                                                        <label htmlFor="bill_amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                            {t('bill_amount')} <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <div className="flex">
+                                                            <span className="inline-flex items-center px-3 text-sm text-gray-900 bg-gray-200 border border-r-0 border-gray-300 rounded-l-md dark:bg-gray-600 dark:text-gray-400 dark:border-gray-600">
+                                                                ₪
+                                                            </span>
+                                                            <input
+                                                                id="bill_amount"
+                                                                name="bill_amount"
+                                                                type="number"
+                                                                step="0.01"
+                                                                value={billForm.bill_amount || ''}
+                                                                onChange={handleBillFormChange}
+                                                                className="form-input rounded-l-none"
+                                                                placeholder={t('enter_bill_amount')}
+                                                                required
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {(billForm.bill_type === 'tax_invoice' || billForm.bill_type === 'tax_invoice_receipt') &&
+                                            (selectedCustomer || (dealType === 'intermediary' && (selectedSeller || selectedBuyer))) && (
+                                                <>
+                                                    {/* Customer Information Display */}
+                                                    <div>
+                                                        <div className="mb-4 flex items-center gap-3">
+                                                            <IconUser className="w-5 h-5 text-primary" />
+                                                            <h6 className="text-md font-semibold dark:text-white-light">{t('customer_information')}</h6>
+                                                        </div>
+                                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                                                            <h6 className="font-semibold text-blue-800 dark:text-blue-200 mb-3">
+                                                                {dealType === 'intermediary' ? t('deal_participants') : t('customer_details')}
+                                                            </h6>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                                                                {dealType === 'intermediary' ? (
+                                                                    <>
+                                                                        {selectedSeller && (
+                                                                            <>
+                                                                                <div>
+                                                                                    <label className="text-blue-700 dark:text-blue-300 font-medium">{t('seller_name')}</label>
+                                                                                    <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedSeller.name}</p>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-blue-700 dark:text-blue-300 font-medium">{t('seller_phone')}</label>
+                                                                                    <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedSeller.phone}</p>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                        {selectedBuyer && (
+                                                                            <>
+                                                                                <div>
+                                                                                    <label className="text-blue-700 dark:text-blue-300 font-medium">{t('buyer_name')}</label>
+                                                                                    <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedBuyer.name}</p>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-blue-700 dark:text-blue-300 font-medium">{t('buyer_phone')}</label>
+                                                                                    <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedBuyer.phone}</p>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </>
+                                                                ) : (
+                                                                    selectedCustomer && (
+                                                                        <>
+                                                                            <div>
+                                                                                <label className="text-blue-700 dark:text-blue-300 font-medium">{t('customer_name')}</label>
+                                                                                <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedCustomer.name}</p>
+                                                                            </div>
+                                                                            <div>
+                                                                                <label className="text-blue-700 dark:text-blue-300 font-medium">{t('phone')}</label>
+                                                                                <p className="text-blue-900 dark:text-blue-100 font-semibold">{selectedCustomer.phone}</p>
+                                                                            </div>
+                                                                        </>
+                                                                    )
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Summary Table */}
+                                                    {selectedCar && (
+                                                        <div>
+                                                            <div className="mb-4 flex items-center gap-3">
+                                                                <IconDollarSign className="w-5 h-5 text-primary" />
+                                                                <h6 className="text-md font-semibold dark:text-white-light">{t('bill_summary')}</h6>
+                                                            </div>{' '}
+                                                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                                                {/* Table Header */}
+                                                                <div className="grid grid-cols-4 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('item_description')}</div>
+                                                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('unit_price')}</div>
+                                                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('quantity')}</div>
+                                                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('total_price')}</div>
+                                                                </div>{' '}
+                                                                {(deal?.deal_type === 'new_used_sale' || deal?.deal_type === 'new_sale' || deal?.deal_type === 'used_sale') && (
+                                                                    <>
+                                                                        {/* Row 1: Car for Sale */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                                                <div className="font-medium">{t('car_for_sale')}</div>
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                        </div>
+                                                                        {/* Row 2: Buy Price */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>{' '}
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
+                                                                            </div>
+                                                                        </div>{' '}
+                                                                        {/* Row 3: Selling Price */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('selling_price_manual')}</div>{' '}
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                                                    {formatCurrency(parseFloat(form.selling_price || '0'))}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                                                    {formatCurrency(parseFloat(form.selling_price || '0'))}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Row 4: Loss */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>{' '}
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-red-600 dark:text-red-400">
+                                                                                    {formatCurrency(parseFloat(String(form.loss_amount || '0')))}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Row 5: Profit Commission */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">
+                                                                                <span
+                                                                                    className={`text-sm ${(() => {
+                                                                                        const buyPrice = selectedCar.buy_price || 0;
+                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
+                                                                                        const loss = parseFloat(form.loss_amount || '0');
+                                                                                        const profit = sellPrice - buyPrice - loss;
+                                                                                        return profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+                                                                                    })()}`}
+                                                                                >
+                                                                                    ${' '}
+                                                                                    {(() => {
+                                                                                        const buyPrice = selectedCar.buy_price || 0;
+                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
+                                                                                        const loss = parseFloat(form.loss_amount || '0');
+                                                                                        const profit = sellPrice - buyPrice - loss;
+                                                                                        return profit >= 0 ? `+${formatCurrency(profit)}` : formatCurrency(profit);
+                                                                                    })()}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                {deal?.deal_type === 'new_used_sale_tax_inclusive' && (
+                                                                    <>
+                                                                        {/* Row 1: Car for Sale */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                                                <div className="font-medium">{t('car_for_sale')}</div>
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                        </div>
+                                                                        {/* Row 2: Buy Price */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>{' '}
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
+                                                                            </div>
+                                                                        </div>{' '}
+                                                                        {/* Row 3: Selling Price */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('selling_price_manual')}</div>{' '}
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                                                    {formatCurrency(parseFloat(form.selling_price || '0'))}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                                                    {formatCurrency(parseFloat(form.selling_price || '0'))}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Row 4: Loss */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>{' '}
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-red-600 dark:text-red-400">
+                                                                                    {formatCurrency(parseFloat(String(form.loss_amount || '0')))}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                        {/* Row 5: Profit Commission */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">
+                                                                                <span
+                                                                                    className={`text-sm ${(() => {
+                                                                                        const buyPrice = selectedCar.buy_price || 0;
+                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
+                                                                                        const loss = parseFloat(form.loss_amount || '0');
+                                                                                        const profit = sellPrice - buyPrice - loss;
+                                                                                        return profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+                                                                                    })()}`}
+                                                                                >
+                                                                                    ${' '}
+                                                                                    {(() => {
+                                                                                        const buyPrice = selectedCar.buy_price || 0;
+                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
+                                                                                        const loss = parseFloat(form.loss_amount || '0');
+                                                                                        const profit = sellPrice - buyPrice - loss;
+                                                                                        return profit >= 0 ? `+${formatCurrency(profit)}` : formatCurrency(profit);
+                                                                                    })()}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                {deal?.deal_type === 'intermediary' && (
+                                                                    <>
+                                                                        {/* Row 1: Car Brokerage Commission */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                                                <div className="font-medium">{t('intermediary_car_commission')}</div>
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                        </div>
+
+                                                                        {/* Row 2: Profit Commission */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                {deal?.deal_type === 'financing_assistance_intermediary' && (
+                                                                    <>
+                                                                        {/* Row 1: Financing Assistance Commission */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                                                <div className="font-medium">{t('financing_assistance_commission')}</div>
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                        </div>
+
+                                                                        {/* Row 2: Commission */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('commission_editable')}</div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                {deal?.deal_type === 'exchange' && (
+                                                                    <>
+                                                                        {/* Row 1: Car for Sale */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                                                <div className="font-medium">{t('car_for_sale')}</div>
+                                                                                <div className="text-xs text-gray-500">
+                                                                                    {selectedCar.brand} {selectedCar.title} - {selectedCar.year}
+                                                                                    {selectedCar.car_number && ` - ${selectedCar.car_number}`} - #{selectedCar.id}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                            <div className="text-center">-</div>
+                                                                        </div>
+
+                                                                        {/* Row 2: Buy Price */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-red-600 dark:text-red-400">-{formatCurrency(selectedCar.buy_price || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Row 3: Sale Price */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('sale_price_auto')}</div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.sale_price || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(selectedCar.sale_price || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Row 4: Deal Amount */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount_exchange')}</div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                {' '}
+                                                                                <span className="text-sm text-blue-600 dark:text-blue-400">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                {deal?.deal_type === 'company_commission' && (
+                                                                    <>
+                                                                        {/* Row 1: Company Commission */}
+                                                                        <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                                                <div className="font-medium">{t('deal_type_company_commission')}</div>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                                {/* Fallback: Show basic deal info if no specific deal type matches */}
+                                                                {![
+                                                                    'new_used_sale',
+                                                                    'new_sale',
+                                                                    'used_sale',
+                                                                    'new_used_sale_tax_inclusive',
+                                                                    'intermediary',
+                                                                    'financing_assistance_intermediary',
+                                                                    'exchange',
+                                                                    'company_commission',
+                                                                ].includes(deal?.deal_type || '') && (
+                                                                    <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                                            <div className="font-medium">{t('deal_item')}</div>
+                                                                            <div className="text-xs text-gray-500">
+                                                                                {deal?.title || 'Deal'} - {deal?.deal_type || 'Unknown type'}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-center">
+                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
+                                                                        </div>
+                                                                        <div className="text-center">
+                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                        </div>
+                                                                        <div className="text-center">
+                                                                            <span className="text-sm text-green-600 dark:text-green-400">{formatCurrency(deal?.amount || 0)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {/* Separator */}
+                                                                <div className="border-t border-gray-300 dark:border-gray-600 my-4"></div>
+                                                                {/* Tax Calculations */}
+                                                                {deal.deal_type === 'new_used_sale_tax_inclusive' ? (
+                                                                    <div className="space-y-3">
+                                                                        {/* Price Before Tax */}
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('price_before_tax')}</span>
+                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                                                {formatCurrency(deal?.selling_price - deal?.selling_price * 0.18 || 0)}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Tax */}
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('deal_tax')} 18%</span>
+                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency((deal?.selling_price || 0) * 0.18)}</span>
+                                                                        </div>
+
+                                                                        {/* Total Including Tax */}
+                                                                        <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
+                                                                            <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_including_tax')}</span>
+                                                                            <span className="text-lg font-bold text-primary">{formatCurrency(deal?.selling_price || 0)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="space-y-3">
+                                                                        {/* Price Before Tax */}
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('price_before_tax')}</span>
+                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount - deal?.amount * 0.18 || 0)}</span>
+                                                                        </div>
+
+                                                                        {/* Tax */}
+                                                                        <div className="flex justify-between items-center">
+                                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('deal_tax')} 18%</span>
+                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency((deal?.amount || 0) * 0.18)}</span>
+                                                                        </div>
+
+                                                                        {/* Total Including Tax */}
+                                                                        <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
+                                                                            <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_including_tax')}</span>
+                                                                            <span className="text-lg font-bold text-primary">{formatCurrency(deal?.amount || 0)}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Bill Notes */}
+                                                    <div>
+                                                        <label htmlFor="bill_free_text" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                                            {t('bill_notes')}
+                                                        </label>
+                                                        <textarea
+                                                            id="bill_free_text"
+                                                            name="free_text"
+                                                            rows={3}
+                                                            value={billForm.free_text || ''}
+                                                            onChange={handleBillFormChange}
+                                                            className="form-textarea"
+                                                            placeholder={t('enter_bill_notes')}
+                                                        />
+                                                    </div>
+                                                </>
+                                            )}
+                                        {/* Receipt Section */}
+                                        {(billForm.bill_type === 'receipt_only' || billForm.bill_type === 'tax_invoice_receipt') && (
+                                            <div>
+                                                <div className="mb-4 flex items-center gap-3">
+                                                    <IconDollarSign className="w-5 h-5 text-primary" />
+                                                    <h6 className="text-md font-semibold dark:text-white-light">{t('receipt_details')}</h6>
+                                                </div>
+
+                                                <MultiplePaymentForm
+                                                    payments={payments.map((p) => ({
+                                                        ...p,
+                                                        payment_type: p.payment_type as 'cash' | 'bank_transfer' | 'check' | 'visa',
+                                                    }))}
+                                                    onPaymentsChange={setPayments}
+                                                    totalAmount={parseFloat(billForm.total_with_tax) || 0}
+                                                    deal={deal}
+                                                    carTakenFromClient={carTakenFromClient}
+                                                    bills={bills}
+                                                />
+                                            </div>
+                                        )}
+                                        {/* Create Bill Button */}
+                                        {billForm.bill_type && (
+                                            <div className="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                                <button type="button" onClick={() => setIsBillSectionExpanded(false)} className="btn btn-outline-secondary">
+                                                    {t('cancel')}
+                                                </button>
+                                                <button type="button" onClick={handleCreateBill} className="btn btn-success px-8" disabled={creatingBill}>
+                                                    {creatingBill ? t('creating') : t('create_bill')}
+                                                </button>
+                                            </div>
+                                        )}{' '}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+
+                    {/* Bills Tab */}
+                    {activeTab === 'bills' && (
+                        <>
+                            {/* Connected Bills Section */}
+                            <BillsTable
+                                bills={bills}
+                                loading={loadingBills}
+                                onDownloadPDF={handleDownloadPDF}
+                                downloadingPDF={downloadingPDF}
+                                readOnly={false}
+                                deal={deal}
+                                car={selectedCar}
+                                carTakenFromClient={carTakenFromClient}
+                                selectedCustomer={selectedCustomer}
+                            />
+                        </>
+                    )}
+
                     {/* Submit Button */}
                     <div className="flex justify-end gap-4 mt-8">
                         <button type="button" onClick={() => router.push('/sales-deals')} className="btn btn-outline-secondary">

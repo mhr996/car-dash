@@ -405,23 +405,16 @@ const Bills = () => {
             // Check if bill has Tranzila retrieval key
             const tranzilaRetrievalKey = (bill as any).tranzila_retrieval_key;
 
-            if (tranzilaRetrievalKey) {
-                // Open Tranzila PDF in new tab via our proxy API
-                const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
-                window.open(proxyUrl, '_blank');
-            } else {
-                // Fallback to local PDF generation
-                const cookies = new Cookies();
-                const currentLang = cookies.get('i18nextLng') || 'he';
-                const language = currentLang === 'ae' ? 'ar' : currentLang === 'he' ? 'he' : 'en';
-
-                await generateBillPDF(convertBillToBillData(bill), {
-                    filename: `bill-${bill.id}-${bill.customer_name.replace(/\s+/g, '-').toLowerCase()}.pdf`,
-                    language,
-                });
+            if (!tranzilaRetrievalKey) {
+                setAlertState({ message: t('bill_not_created_with_tranzila') || 'This bill was not created through Tranzila and cannot be downloaded.', type: 'danger' });
+                return;
             }
+
+            // Open Tranzila PDF in new tab via our proxy API
+            const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
+            window.open(proxyUrl, '_blank');
         } catch (error) {
-            console.error('Error generating PDF:', error);
+            console.error('Error downloading PDF:', error);
             setAlertState({ message: t('error_downloading_pdf'), type: 'danger' });
         } finally {
             setDownloadingPDF(null);

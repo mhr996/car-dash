@@ -245,7 +245,30 @@ const LogsPage = () => {
 
         const deal = log.deal;
         const customer = deal.customer || deal.customers;
+        const seller = deal.seller || deal.sellers;
+        const buyer = deal.buyer || deal.buyers;
 
+        // For exchange and intermediary deals with buyer and seller
+        if ((deal.deal_type === 'exchange' || deal.deal_type === 'intermediary' || deal.deal_type === 'financing_assistance_intermediary') && (seller || buyer)) {
+            return (
+                <div className="text-sm">
+                    <div className="font-medium">{formatDate(deal.created_at) || t('not_available')}</div>
+                    {seller && (
+                        <div className="text-gray-500 dark:text-gray-400">
+                            {t('seller')}: {seller.name}
+                        </div>
+                    )}
+                    {buyer && (
+                        <div className="text-gray-500 dark:text-gray-400">
+                            {t('buyer')}: {buyer.name}
+                        </div>
+                    )}
+                    <div className="text-gray-500 dark:text-gray-400">₪{deal.selling_price?.toLocaleString() || deal.amount?.toLocaleString() || '0'}</div>
+                </div>
+            );
+        }
+
+        // For regular deals with single customer
         return (
             <div className="text-sm">
                 <div className="font-medium">{formatDate(deal.created_at) || t('not_available')}</div>
@@ -383,16 +406,36 @@ const LogsPage = () => {
         }
 
         if (log.deal) {
+            const deal = log.deal;
+            const seller = deal.seller || deal.sellers;
+            const buyer = deal.buyer || deal.buyers;
+
             return (
                 <div className="text-sm">
-                    <div className="font-medium">{log.deal.title}</div>
+                    <div className="font-medium">{deal.title}</div>
                     <div className="text-gray-500 dark:text-gray-400">
-                        {t('deal_type')}: {log.deal.deal_type ? getLocalizedDealType(log.deal.deal_type) : t('not_available')} | {t('amount')}: {log.deal.selling_price?.toLocaleString()}
+                        {t('deal_type')}: {deal.deal_type ? getLocalizedDealType(deal.deal_type) : t('not_available')} | {t('amount')}: {deal.selling_price?.toLocaleString()}
                     </div>
-                    {log.deal.customer_name && (
-                        <div className="text-gray-500 dark:text-gray-400">
-                            {t('customer')}: {log.deal.customer_name}
-                        </div>
+                    {/* Show seller and buyer for exchange/intermediary deals */}
+                    {(deal.deal_type === 'exchange' || deal.deal_type === 'intermediary' || deal.deal_type === 'financing_assistance_intermediary') && (seller || buyer) ? (
+                        <>
+                            {seller && (
+                                <div className="text-gray-500 dark:text-gray-400">
+                                    {t('seller')}: {seller.name}
+                                </div>
+                            )}
+                            {buyer && (
+                                <div className="text-gray-500 dark:text-gray-400">
+                                    {t('buyer')}: {buyer.name}
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        deal.customer_name && (
+                            <div className="text-gray-500 dark:text-gray-400">
+                                {t('customer')}: {deal.customer_name}
+                            </div>
+                        )
                     )}
                 </div>
             );

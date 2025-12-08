@@ -93,6 +93,22 @@ export const logActivity = async ({ type, deal, car, bill }: LogActivityParams) 
                 }
             }
 
+            // Get seller details if seller_id exists (for intermediary/exchange deals)
+            if (deal.seller_id) {
+                const seller = await getCustomerDetails(deal.seller_id);
+                if (seller) {
+                    enrichedDeal.seller = seller;
+                }
+            }
+
+            // Get buyer details if buyer_id exists (for intermediary/exchange deals)
+            if (deal.buyer_id) {
+                const buyer = await getCustomerDetails(deal.buyer_id);
+                if (buyer) {
+                    enrichedDeal.buyer = buyer;
+                }
+            }
+
             // Get car details if car_id exists
             if (deal.car_id) {
                 const carData = await getCarDetails(deal.car_id);
@@ -156,6 +172,22 @@ export const logActivity = async ({ type, deal, car, bill }: LogActivityParams) 
                 const customer = await getCustomerDetails(deal.customer_id);
                 if (customer) {
                     enrichedDeal.customer = customer;
+                }
+            }
+
+            // Get seller details if seller_id exists (for intermediary/exchange deals)
+            if (deal.seller_id) {
+                const seller = await getCustomerDetails(deal.seller_id);
+                if (seller) {
+                    enrichedDeal.seller = seller;
+                }
+            }
+
+            // Get buyer details if buyer_id exists (for intermediary/exchange deals)
+            if (deal.buyer_id) {
+                const buyer = await getCustomerDetails(deal.buyer_id);
+                if (buyer) {
+                    enrichedDeal.buyer = buyer;
                 }
             }
 

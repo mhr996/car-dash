@@ -12,6 +12,7 @@ import CarDealFilters, { CarDealFilters as CarDealFiltersType } from '@/componen
 import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
 import { CarContract } from '@/types/contract';
 import { getCompanyInfo } from '@/lib/company-info';
+import ViewToggle from '@/components/view-toggle/view-toggle';
 
 interface Provider {
     id: number;
@@ -57,6 +58,21 @@ const CarDealsPage = () => {
     });
     const [loading, setLoading] = useState(true);
     const [generatingPdf, setGeneratingPdf] = useState<number | null>(null);
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+
+    // Load view preference from localStorage
+    useEffect(() => {
+        const savedView = localStorage.getItem('purchasesDealsViewMode');
+        if (savedView === 'grid' || savedView === 'list') {
+            setViewMode(savedView);
+        }
+    }, []);
+
+    // Save view preference when changed
+    const handleViewChange = (view: 'list' | 'grid') => {
+        setViewMode(view);
+        localStorage.setItem('purchasesDealsViewMode', view);
+    };
 
     const getCookie = (name: string) => {
         const value = `; ${document.cookie}`;
@@ -100,8 +116,6 @@ const CarDealsPage = () => {
 
             const lang = getCookie('i18nextLng') || 'he';
             const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
-
-       
 
             const carIdentifier = car.car_number || `CAR-${car.id}`;
             const filename = `car-purchase-contract-${carIdentifier}-${new Date().toISOString().split('T')[0]}.pdf`;
@@ -397,30 +411,152 @@ const CarDealsPage = () => {
         <div>
             <div className="mb-6 flex items-center justify-between">
                 <h1 className="text-2xl font-bold">{t('purchases_deals')}</h1>
+                <ViewToggle view={viewMode} onViewChange={handleViewChange} />
             </div>
 
             <div className="panel">
                 <CarDealFilters onFilterChange={handleFilterChange} onClearFilters={handleClearFilters} />
 
-                <div className="datatables mt-6">
-                    <DataTable
-                        highlightOnHover
-                        className="table-hover whitespace-nowrap"
-                        records={recordsData}
-                        columns={columns}
-                        totalRecords={sortedRecords.length}
-                        recordsPerPage={pageSize}
-                        page={page}
-                        onPageChange={(p) => setPage(p)}
-                        recordsPerPageOptions={PAGE_SIZES}
-                        onRecordsPerPageChange={setPageSize}
-                        sortStatus={sortStatus}
-                        onSortStatusChange={setSortStatus}
-                        minHeight={200}
-                        paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
-                        fetching={loading}
-                    />
-                </div>
+                {viewMode === 'list' ? (
+                    <div className="datatables mt-6">
+                        <DataTable
+                            highlightOnHover
+                            className="table-hover whitespace-nowrap"
+                            records={recordsData}
+                            columns={columns}
+                            totalRecords={sortedRecords.length}
+                            recordsPerPage={pageSize}
+                            page={page}
+                            onPageChange={(p) => setPage(p)}
+                            recordsPerPageOptions={PAGE_SIZES}
+                            onRecordsPerPageChange={setPageSize}
+                            sortStatus={sortStatus}
+                            onSortStatusChange={setSortStatus}
+                            minHeight={200}
+                            paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
+                            fetching={loading}
+                        />
+                    </div>
+                ) : (
+                    <div className="px-5 mt-6">
+                        {loading ? (
+                            <div className="flex items-center justify-center min-h-[300px]">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                {recordsData.map((car) => (
+                                    <div key={car.id} className="panel p-0 overflow-hidden hover:shadow-lg transition-shadow border border-gray-200 dark:border-blue-400/30">
+                                        <div className="p-5">
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">
+                                                        {car.brand} {car.title}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-500 dark:text-gray-400">#{car.id}</p>
+                                                </div>
+                                                <span
+                                                    className={`badge ${car.status === 'new' ? 'badge-outline-success' : car.status === 'used' ? 'badge-outline-info' : 'badge-outline-primary'} flex-shrink-0 ml-2`}
+                                                >
+                                                    {t(car.status)}
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('year')}</p>
+                                                    <p className="font-semibold text-sm">{car.year}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('car_number')}</p>
+                                                    <p className="font-semibold text-sm truncate">{car.car_number || 'N/A'}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('kilometers')}</p>
+                                                    <p className="font-semibold text-sm">
+                                                        {car.kilometers?.toLocaleString() || '0'} {t('km')}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('source_type')}</p>
+                                                    <span className={`badge ${car.source_type === 'provider' ? 'badge-outline-primary' : 'badge-outline-success'} text-xs`}>
+                                                        {t(`source_type_${car.source_type}`)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">
+                                                <div className="mb-2">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('source_name')}</p>
+                                                    <p className="font-semibold text-sm truncate">{car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}</p>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('buy_price')}</p>
+                                                        <p className="font-bold text-warning text-sm">₪{car.buy_price?.toLocaleString() || '0'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('sale_price')}</p>
+                                                        <p className="font-bold text-success text-sm">₪{car.sale_price?.toLocaleString() || '0'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('purchase_date')}</p>
+                                                    <p className="text-sm">{new Date(car.created_at).toLocaleDateString('he-IL')}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Link href={`/purchases-deals/preview/${car.id}`} className="btn btn-primary btn-sm flex-1 justify-center">
+                                                    <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
+                                                    {t('view')}
+                                                </Link>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-primary btn-sm"
+                                                    onClick={() => handleGeneratePDF(car)}
+                                                    disabled={generatingPdf === car.id}
+                                                    title={t('generate_purchase_contract')}
+                                                >
+                                                    {generatingPdf === car.id ? (
+                                                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
+                                                    ) : (
+                                                        <IconFile className="w-4 h-4" />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {!loading && recordsData.length === 0 && (
+                            <div className="flex items-center justify-center min-h-[300px] text-gray-500 dark:text-gray-400">
+                                <div className="text-center">
+                                    <p className="text-lg font-semibold mb-2">{t('no_results_found')}</p>
+                                    <p className="text-sm">{t('try_adjusting_filters')}</p>
+                                </div>
+                            </div>
+                        )}
+                        {!loading && recordsData.length > 0 && (
+                            <div className="flex justify-between items-center mt-6 flex-wrap gap-4">
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {t('showing')} {(page - 1) * pageSize + 1} {t('to')} {Math.min(page * pageSize, sortedRecords.length)} {t('of')} {sortedRecords.length} {t('entries')}
+                                </div>
+                                <div className="flex gap-2 flex-wrap">
+                                    {Array.from({ length: Math.ceil(sortedRecords.length / pageSize) }, (_, i) => i + 1).map((pageNum) => (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => setPage(pageNum)}
+                                            className={`px-3 py-1 rounded transition-colors ${
+                                                page === pageNum ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                            }`}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

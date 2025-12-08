@@ -13,6 +13,7 @@ import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import { logActivity } from '@/utils/activity-logger';
 import CarFilters, { CarFilters as CarFiltersType } from '@/components/car-filters/car-filters';
+import ViewToggle from '@/components/view-toggle/view-toggle';
 
 interface Car {
     id: string;
@@ -61,6 +62,7 @@ const CarsList = () => {
     const [items, setItems] = useState<Car[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('available');
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
     const [page, setPage] = useState(1);
     const PAGE_SIZES = [10, 20, 30, 50, 100];
@@ -94,6 +96,21 @@ const CarsList = () => {
             setSortStatus({ columnAccessor: 'id', direction: 'desc' });
         }
     }, []);
+
+    // Load view preference from localStorage
+    useEffect(() => {
+        const savedView = localStorage.getItem('carsViewMode');
+        if (savedView === 'grid' || savedView === 'list') {
+            setViewMode(savedView);
+        }
+    }, []);
+
+    // Save view preference when changed
+    const handleViewChange = (view: 'list' | 'grid') => {
+        setViewMode(view);
+        localStorage.setItem('carsViewMode', view);
+    };
+
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
     const [carToDelete, setCarToDelete] = useState<Car | null>(null);
@@ -355,6 +372,13 @@ const CarsList = () => {
         setSearch('');
     };
 
+    // Helper function to get image URL
+    const getImageUrl = (imagePath: string) => {
+        if (!imagePath) return `/assets/images/img-placeholder-fallback.webp`;
+        const { data } = supabase.storage.from('cars').getPublicUrl(imagePath);
+        return data.publicUrl;
+    };
+
     return (
         <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
             {alert.visible && (
@@ -412,6 +436,9 @@ const CarsList = () => {
             </div>
             <div className="invoice-table">
                 <div className="mb-4.5 flex flex-wrap items-start justify-between gap-4 px-5">
+                    <div className="flex items-center gap-2">
+                        <ViewToggle view={viewMode} onViewChange={handleViewChange} />
+                    </div>
                     <div className="flex items-center gap-2 ml-auto">
                         <button type="button" className="btn btn-danger gap-2" disabled={selectedRecords.length === 0} onClick={handleBulkDelete}>
                             <IconTrashLines />
@@ -427,188 +454,321 @@ const CarsList = () => {
                     </div>
                 </div>
 
-                <div className="datatables pagination-padding relative">
-                    <DataTable
-                        className={`${loading ? 'filter blur-sm pointer-events-none' : 'table-hover whitespace-nowrap'} rtl-table-headers`}
-                        records={records}
-                        columns={[
-                            {
-                                accessor: 'id',
-                                title: t('id'),
-                                sortable: true,
-                                render: ({ id }) => (
-                                    <div className="flex items-center gap-2">
-                                        <strong className="text-info">#{id}</strong>
-                                        <Link href={`/cars/preview/${id}`} className="flex hover:text-info" title={t('view')}>
-                                            <IconEye className="h-4 w-4" />
-                                        </Link>
-                                    </div>
-                                ),
-                            },
-                            {
-                                accessor: 'title',
-                                title: t('car_title'),
-                                sortable: true,
-                                render: ({ title, images }) => {
-                                    let imageList = [];
-                                    imageList = typeof images === 'string' ? JSON.parse(images || '[]') : images || [];
+                {viewMode === 'list' ? (
+                    <div className="datatables pagination-padding relative">
+                        <DataTable
+                            className={`${loading ? 'filter blur-sm pointer-events-none' : 'table-hover whitespace-nowrap'} rtl-table-headers`}
+                            records={records}
+                            columns={[
+                                {
+                                    accessor: 'id',
+                                    title: t('id'),
+                                    sortable: true,
+                                    render: ({ id }) => (
+                                        <div className="flex items-center gap-2">
+                                            <strong className="text-info">#{id}</strong>
+                                            <Link href={`/cars/preview/${id}`} className="flex hover:text-info" title={t('view')}>
+                                                <IconEye className="h-4 w-4" />
+                                            </Link>
+                                        </div>
+                                    ),
+                                },
+                                {
+                                    accessor: 'title',
+                                    title: t('car_title'),
+                                    sortable: true,
+                                    render: ({ title, images }) => {
+                                        let imageList = [];
+                                        imageList = typeof images === 'string' ? JSON.parse(images || '[]') : images || [];
 
-                                    // Convert relative path to full Supabase URL
-                                    const getImageUrl = (imagePath: string) => {
-                                        if (!imagePath) return `/assets/images/img-placeholder-fallback.webp`;
-                                        const { data } = supabase.storage.from('cars').getPublicUrl(imagePath);
-                                        return data.publicUrl;
-                                    };
+                                        // Convert relative path to full Supabase URL
+                                        const getImageUrl = (imagePath: string) => {
+                                            if (!imagePath) return `/assets/images/img-placeholder-fallback.webp`;
+                                            const { data } = supabase.storage.from('cars').getPublicUrl(imagePath);
+                                            return data.publicUrl;
+                                        };
+
+                                        return (
+                                            <div className="flex items-center font-semibold">
+                                                <div className="w-max rounded-full ltr:mr-2 rtl:ml-2">
+                                                    <img
+                                                        className="h-8 w-8 rounded-md object-cover"
+                                                        src={imageList[0] ? getImageUrl(imageList[0]) : `/assets/images/img-placeholder-fallback.webp`}
+                                                        alt={title}
+                                                    />
+                                                </div>
+                                                <div>{title}</div>
+                                            </div>
+                                        );
+                                    },
+                                },
+                                {
+                                    accessor: 'brand',
+                                    title: t('brand'),
+                                    sortable: true,
+                                },
+                                {
+                                    accessor: 'year',
+                                    title: t('year'),
+                                    sortable: true,
+                                },
+                                {
+                                    accessor: 'status',
+                                    title: t('car_status'),
+                                    sortable: true,
+                                    render: ({ status }) => (
+                                        <span
+                                            className={`badge ${
+                                                status === 'new'
+                                                    ? 'badge-outline-success'
+                                                    : status === 'used'
+                                                      ? 'badge-outline-info'
+                                                      : status === 'received_from_client'
+                                                        ? 'badge-outline-warning'
+                                                        : 'badge-outline-secondary'
+                                            }`}
+                                        >
+                                            {t(status)}
+                                        </span>
+                                    ),
+                                },
+                                {
+                                    accessor: 'provider',
+                                    title: t('provider'),
+                                    sortable: true,
+                                    render: ({ providers, provider }) => <span>{providers?.name || provider || '-'}</span>,
+                                },
+                                {
+                                    accessor: 'sale_price',
+                                    title: t('sale_price'),
+                                    sortable: true,
+                                    render: ({ sale_price }) => <span>{formatCurrency(sale_price)}</span>,
+                                },
+                                // Conditional column for archived cars - Deal information
+                                ...(activeTab === 'archived'
+                                    ? [
+                                          {
+                                              accessor: 'deals',
+                                              title: t('deal_info'),
+                                              sortable: false,
+                                              render: (car: Car) => {
+                                                  if (!car.deals || car.deals.length === 0) return <span className="text-gray-400">-</span>;
+                                                  const deal = car.deals[0]; // Show the first deal
+                                                  return (
+                                                      <div className="text-sm">
+                                                          <div className="font-medium">{deal.title}</div>
+                                                          <div className="text-gray-500">{deal.customer_name}</div>
+                                                          <div className="text-xs text-gray-400">{new Date(deal.created_at).toLocaleDateString()}</div>
+                                                      </div>
+                                                  );
+                                              },
+                                          },
+                                      ]
+                                    : []),
+                                {
+                                    accessor: 'created_at',
+                                    title: t('created_date'),
+                                    sortable: true,
+                                    render: ({ created_at }) => (
+                                        <span>
+                                            {new Date(created_at).toLocaleDateString('en-GB', {
+                                                year: 'numeric',
+                                                month: '2-digit',
+                                                day: '2-digit',
+                                            })}
+                                        </span>
+                                    ),
+                                },
+                                // Only show public toggle for available cars, not archived cars
+                                ...(activeTab === 'available'
+                                    ? [
+                                          {
+                                              accessor: 'public',
+                                              title: t('public'),
+                                              sortable: true,
+                                              textAlignment: 'center' as const,
+                                              render: (car: Car) => (
+                                                  <div className="flex justify-center">
+                                                      <label className="w-12 h-6 relative">
+                                                          <input
+                                                              type="checkbox"
+                                                              className="custom_switch absolute w-full h-full opacity-0 z-10 cursor-pointer peer"
+                                                              checked={car.public || false}
+                                                              onChange={() => togglePublicStatus(car)}
+                                                          />
+                                                          <span className="bg-[#ebedf2] dark:bg-dark block h-full rounded-full before:absolute before:left-1 before:bg-white dark:before:bg-white-dark dark:peer-checked:before:bg-white before:bottom-1 before:w-4 before:h-4 before:rounded-full peer-checked:before:left-7 peer-checked:bg-primary before:transition-all before:duration-300"></span>
+                                                      </label>
+                                                  </div>
+                                              ),
+                                          },
+                                      ]
+                                    : []),
+                                {
+                                    accessor: 'action',
+                                    title: t('actions'),
+                                    sortable: false,
+                                    textAlignment: 'center' as const,
+                                    render: ({ id }) => (
+                                        <div className="mx-auto flex w-max items-center gap-4">
+                                            <Link href={`/cars/edit/${id}`} className="flex hover:text-info">
+                                                <IconEdit className="h-4.5 w-4.5" />
+                                            </Link>
+                                            <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(id)}>
+                                                <IconTrashLines />
+                                            </button>
+                                        </div>
+                                    ),
+                                },
+                            ]}
+                            highlightOnHover
+                            totalRecords={initialRecords.length}
+                            recordsPerPage={pageSize}
+                            page={page}
+                            onPageChange={(p) => setPage(p)}
+                            recordsPerPageOptions={PAGE_SIZES}
+                            onRecordsPerPageChange={setPageSize}
+                            sortStatus={sortStatus}
+                            onSortStatusChange={setSortStatus}
+                            selectedRecords={selectedRecords}
+                            onSelectedRecordsChange={setSelectedRecords}
+                            paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
+                            minHeight={300}
+                        />
+
+                        {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
+                    </div>
+                ) : (
+                    <div className="px-5">
+                        {loading ? (
+                            <div className="flex items-center justify-center min-h-[300px]">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                                {records.map((car) => {
+                                    let imageList = [];
+                                    imageList = typeof car.images === 'string' ? JSON.parse(car.images || '[]') : car.images || [];
 
                                     return (
-                                        <div className="flex items-center font-semibold">
-                                            <div className="w-max rounded-full ltr:mr-2 rtl:ml-2">
+                                        <div key={car.id} className="panel p-0 overflow-hidden hover:shadow-lg transition-shadow border border-gray-200 dark:border-blue-400/30">
+                                            <div className="relative h-48 overflow-hidden">
                                                 <img
-                                                    className="h-8 w-8 rounded-md object-cover"
                                                     src={imageList[0] ? getImageUrl(imageList[0]) : `/assets/images/img-placeholder-fallback.webp`}
-                                                    alt={title}
+                                                    alt={car.title}
+                                                    className="w-full h-full object-cover"
                                                 />
+                                                <div className="absolute top-2 right-2 flex gap-2">
+                                                    <span
+                                                        className={`badge ${
+                                                            car.status === 'new'
+                                                                ? 'badge-outline-success'
+                                                                : car.status === 'used'
+                                                                  ? 'badge-outline-info'
+                                                                  : car.status === 'received_from_client'
+                                                                    ? 'badge-outline-warning'
+                                                                    : 'badge-outline-secondary'
+                                                        } bg-white dark:bg-gray-800`}
+                                                    >
+                                                        {t(`car_status_${car.status}`)}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div>{title}</div>
+                                            <div className="p-5">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">{car.title}</h3>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">#{car.id}</p>
+                                                    </div>
+                                                    {activeTab === 'available' && (
+                                                        <label className="w-12 h-6 relative flex-shrink-0 ml-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="custom_switch absolute w-full h-full opacity-0 z-10 cursor-pointer peer"
+                                                                checked={car.public || false}
+                                                                onChange={() => togglePublicStatus(car)}
+                                                            />
+                                                            <span className="bg-[#ebedf2] dark:bg-dark block h-full rounded-full before:absolute before:left-1 before:bg-white dark:before:bg-white-dark dark:peer-checked:before:bg-white before:bottom-1 before:w-4 before:h-4 before:rounded-full peer-checked:before:left-7 peer-checked:bg-primary before:transition-all before:duration-300"></span>
+                                                        </label>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3 mb-4">
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('brand')}</p>
+                                                        <p className="font-semibold text-sm">{car.brand}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('year')}</p>
+                                                        <p className="font-semibold text-sm">{car.year}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('kilometers')}</p>
+                                                        <p className="font-semibold text-sm">{formatNumber(car.kilometers)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('car_number')}</p>
+                                                        <p className="font-semibold text-sm truncate">{car.car_number || 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('market_price')}</p>
+                                                            <p className="font-bold text-success text-sm">{formatCurrency(car.market_price)}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('buy_price')}</p>
+                                                            <p className="font-bold text-warning text-sm">{formatCurrency(car.buy_price)}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Link href={`/cars/preview/${car.id}`} className="btn btn-primary btn-sm flex-1 justify-center">
+                                                        <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
+                                                        {t('view')}
+                                                    </Link>
+                                                    <Link href={`/cars/edit/${car.id}`} className="btn btn-info btn-sm">
+                                                        <IconEdit className="w-4 h-4" />
+                                                    </Link>
+                                                    <button type="button" className="btn btn-danger btn-sm" onClick={() => deleteRow(car.id)}>
+                                                        <IconTrashLines className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     );
-                                },
-                            },
-                            {
-                                accessor: 'brand',
-                                title: t('brand'),
-                                sortable: true,
-                            },
-                            {
-                                accessor: 'year',
-                                title: t('year'),
-                                sortable: true,
-                            },
-                            {
-                                accessor: 'status',
-                                title: t('car_status'),
-                                sortable: true,
-                                render: ({ status }) => (
-                                    <span
-                                        className={`badge ${
-                                            status === 'new'
-                                                ? 'badge-outline-success'
-                                                : status === 'used'
-                                                  ? 'badge-outline-info'
-                                                  : status === 'received_from_client'
-                                                    ? 'badge-outline-warning'
-                                                    : 'badge-outline-secondary'
-                                        }`}
-                                    >
-                                        {t(status)}
-                                    </span>
-                                ),
-                            },
-                            {
-                                accessor: 'provider',
-                                title: t('provider'),
-                                sortable: true,
-                                render: ({ providers, provider }) => <span>{providers?.name || provider || '-'}</span>,
-                            },
-                            {
-                                accessor: 'sale_price',
-                                title: t('sale_price'),
-                                sortable: true,
-                                render: ({ sale_price }) => <span>{formatCurrency(sale_price)}</span>,
-                            },
-                            // Conditional column for archived cars - Deal information
-                            ...(activeTab === 'archived'
-                                ? [
-                                      {
-                                          accessor: 'deals',
-                                          title: t('deal_info'),
-                                          sortable: false,
-                                          render: (car: Car) => {
-                                              if (!car.deals || car.deals.length === 0) return <span className="text-gray-400">-</span>;
-                                              const deal = car.deals[0]; // Show the first deal
-                                              return (
-                                                  <div className="text-sm">
-                                                      <div className="font-medium">{deal.title}</div>
-                                                      <div className="text-gray-500">{deal.customer_name}</div>
-                                                      <div className="text-xs text-gray-400">{new Date(deal.created_at).toLocaleDateString()}</div>
-                                                  </div>
-                                              );
-                                          },
-                                      },
-                                  ]
-                                : []),
-                            {
-                                accessor: 'created_at',
-                                title: t('created_date'),
-                                sortable: true,
-                                render: ({ created_at }) => (
-                                    <span>
-                                        {new Date(created_at).toLocaleDateString('en-GB', {
-                                            year: 'numeric',
-                                            month: '2-digit',
-                                            day: '2-digit',
-                                        })}
-                                    </span>
-                                ),
-                            },
-                            // Only show public toggle for available cars, not archived cars
-                            ...(activeTab === 'available'
-                                ? [
-                                      {
-                                          accessor: 'public',
-                                          title: t('public'),
-                                          sortable: true,
-                                          textAlignment: 'center' as const,
-                                          render: (car: Car) => (
-                                              <div className="flex justify-center">
-                                                  <label className="w-12 h-6 relative">
-                                                      <input
-                                                          type="checkbox"
-                                                          className="custom_switch absolute w-full h-full opacity-0 z-10 cursor-pointer peer"
-                                                          checked={car.public || false}
-                                                          onChange={() => togglePublicStatus(car)}
-                                                      />
-                                                      <span className="bg-[#ebedf2] dark:bg-dark block h-full rounded-full before:absolute before:left-1 before:bg-white dark:before:bg-white-dark dark:peer-checked:before:bg-white before:bottom-1 before:w-4 before:h-4 before:rounded-full peer-checked:before:left-7 peer-checked:bg-primary before:transition-all before:duration-300"></span>
-                                                  </label>
-                                              </div>
-                                          ),
-                                      },
-                                  ]
-                                : []),
-                            {
-                                accessor: 'action',
-                                title: t('actions'),
-                                sortable: false,
-                                textAlignment: 'center' as const,
-                                render: ({ id }) => (
-                                    <div className="mx-auto flex w-max items-center gap-4">
-                                        <Link href={`/cars/edit/${id}`} className="flex hover:text-info">
-                                            <IconEdit className="h-4.5 w-4.5" />
-                                        </Link>
-                                        <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(id)}>
-                                            <IconTrashLines />
+                                })}
+                            </div>
+                        )}
+                        {!loading && records.length === 0 && (
+                            <div className="flex items-center justify-center min-h-[300px] text-gray-500 dark:text-gray-400">
+                                <div className="text-center">
+                                    <p className="text-lg font-semibold mb-2">{t('no_results_found')}</p>
+                                    <p className="text-sm">{t('try_adjusting_filters')}</p>
+                                </div>
+                            </div>
+                        )}
+                        {!loading && records.length > 0 && (
+                            <div className="flex justify-between items-center mt-6 flex-wrap gap-4">
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {t('showing')} {(page - 1) * pageSize + 1} {t('to')} {Math.min(page * pageSize, initialRecords.length)} {t('of')} {initialRecords.length} {t('entries')}
+                                </div>
+                                <div className="flex gap-2 flex-wrap">
+                                    {Array.from({ length: Math.ceil(initialRecords.length / pageSize) }, (_, i) => i + 1).map((pageNum) => (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => setPage(pageNum)}
+                                            className={`px-3 py-1 rounded transition-colors ${
+                                                page === pageNum ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'
+                                            }`}
+                                        >
+                                            {pageNum}
                                         </button>
-                                    </div>
-                                ),
-                            },
-                        ]}
-                        highlightOnHover
-                        totalRecords={initialRecords.length}
-                        recordsPerPage={pageSize}
-                        page={page}
-                        onPageChange={(p) => setPage(p)}
-                        recordsPerPageOptions={PAGE_SIZES}
-                        onRecordsPerPageChange={setPageSize}
-                        sortStatus={sortStatus}
-                        onSortStatusChange={setSortStatus}
-                        selectedRecords={selectedRecords}
-                        onSelectedRecordsChange={setSelectedRecords}
-                        paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
-                        minHeight={300}
-                    />
-
-                    {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
-                </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <ConfirmModal

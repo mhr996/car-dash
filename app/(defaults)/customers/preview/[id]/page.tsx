@@ -345,6 +345,11 @@ const CustomerPreview = () => {
                                             accessor: 'description',
                                             title: t('description'),
                                             sortable: false,
+                                            render: ({ description }) => (
+                                                <span className="text-sm truncate max-w-[200px] block" title={description}>
+                                                    {description}
+                                                </span>
+                                            ),
                                         },
                                         {
                                             accessor: 'amount',
