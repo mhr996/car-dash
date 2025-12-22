@@ -68,6 +68,10 @@ export interface CarContract {
         estimatedValue: number;
     };
 
+    // Exchange deal specific fields
+    additionalCustomerAmount?: number; // Amount customer pays when company car is more expensive
+    additionalCompanyAmount?: number; // Amount company pays when customer car is more expensive
+
     // Deal Amount (from deal.amount - always available)
     dealAmount: number;
 
@@ -86,6 +90,10 @@ export interface CarContract {
 
     // Additional Terms
     ownershipTransferDays: number;
+
+    // Signatures (optional - added when available)
+    companySignatureUrl?: string;
+    customerSignatureUrl?: string;
 }
 
 export interface ContractTemplateProps {

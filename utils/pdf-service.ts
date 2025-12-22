@@ -97,8 +97,24 @@ export class PDFService {
             // Set viewport for consistent rendering
             await page.setViewport({ width: 1200, height: 800 });
 
-            // Load the HTML content
-            await page.setContent(contractHtml, { waitUntil: 'networkidle0' });
+            // Increase navigation timeout to 60 seconds for slower CDN loads
+            page.setDefaultNavigationTimeout(60000);
+            page.setDefaultTimeout(60000);
+
+            // Load the HTML content - use 'domcontentloaded' instead of 'networkidle0' for faster loading
+            await page.setContent(contractHtml, {
+                waitUntil: 'domcontentloaded',
+                timeout: 60000,
+            });
+
+            // Wait for Tailwind to be ready (if using Tailwind CDN)
+            try {
+                await page.waitForFunction('window.tailwindReady === true', { timeout: 5000 });
+            } catch (e) {
+                // Fallback: just wait 1 second if the tailwindReady flag isn't set
+                console.log('Tailwind ready flag not found, using fallback wait');
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
 
             // Generate PDF
             const pdfBuffer = await page.pdf({
@@ -138,11 +154,18 @@ export class PDFService {
             // Set viewport for consistent rendering
             await page.setViewport({ width: 1200, height: 800 });
 
-            // Load the HTML content and wait for network to be idle (including font loading)
-            await page.setContent(html, { waitUntil: 'networkidle0' });
+            // Increase navigation timeout to 60 seconds
+            page.setDefaultNavigationTimeout(60000);
+            page.setDefaultTimeout(60000);
 
-            // Additional delay to ensure fonts are loaded (especially important for Arabic fonts on production)
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            // Load the HTML content - use 'domcontentloaded' for faster loading
+            await page.setContent(html, {
+                waitUntil: 'domcontentloaded',
+                timeout: 60000,
+            });
+
+            // Wait for fonts and styles to load
+            await new Promise((resolve) => setTimeout(resolve, 1500));
 
             // Generate PDF
             const pdfBuffer = await page.pdf({

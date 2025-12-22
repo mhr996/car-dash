@@ -28,6 +28,7 @@ export interface Deal {
     // Exchange deal specific fields
     customer_car_eval_value?: number;
     additional_customer_amount?: number;
+    additional_company_amount?: number;
     loss_amount?: number;
 
     attachments?: DealAttachment[];

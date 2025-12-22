@@ -65,6 +65,7 @@ const AddDeal = () => {
         // Exchange calculation fields
         customer_car_eval_value: '', // تم تبديل على سيارة وتم تقييمها ب
         additional_customer_amount: '', // المبلغ المضاف من الزبون
+        additional_company_amount: '', // المبلغ المضاف من الشركة
         loss_amount: '', // Manual loss/deductions
     });
     // Form state for company commission deal
@@ -239,7 +240,21 @@ const AddDeal = () => {
                         const difference = salePrice - purchasePrice;
 
                         updated.customer_car_eval_value = purchasePrice.toString();
-                        updated.additional_customer_amount = difference > 0 ? difference.toString() : '0';
+
+                        // Calculate which side pays the additional amount
+                        if (difference > 0) {
+                            // Company's car is more expensive, customer pays the difference
+                            updated.additional_customer_amount = difference.toString();
+                            updated.additional_company_amount = '0';
+                        } else if (difference < 0) {
+                            // Customer's car is more expensive, company pays the difference
+                            updated.additional_company_amount = Math.abs(difference).toString();
+                            updated.additional_customer_amount = '0';
+                        } else {
+                            // Equal value
+                            updated.additional_customer_amount = '0';
+                            updated.additional_company_amount = '0';
+                        }
                     }
 
                     return updated;
@@ -285,8 +300,20 @@ const AddDeal = () => {
                 // Set customer_car_eval_value to the purchase price from customer
                 updated.customer_car_eval_value = purchasePrice.toString();
 
-                // Set additional_customer_amount to the difference (only if positive)
-                updated.additional_customer_amount = difference > 0 ? difference.toString() : '0';
+                // Calculate which side pays the additional amount
+                if (difference > 0) {
+                    // Company's car is more expensive, customer pays the difference
+                    updated.additional_customer_amount = difference.toString();
+                    updated.additional_company_amount = '0';
+                } else if (difference < 0) {
+                    // Customer's car is more expensive, company pays the difference
+                    updated.additional_company_amount = Math.abs(difference).toString();
+                    updated.additional_customer_amount = '0';
+                } else {
+                    // Equal value
+                    updated.additional_customer_amount = '0';
+                    updated.additional_company_amount = '0';
+                }
             }
 
             return updated;
@@ -359,6 +386,7 @@ const AddDeal = () => {
             old_car_purchase_price: '',
             customer_car_eval_value: '',
             additional_customer_amount: '',
+            additional_company_amount: '',
             loss_amount: '',
         });
         setCompanyCommissionForm({
@@ -639,7 +667,12 @@ const AddDeal = () => {
                 const lossAmount = parseFloat(exchangeForm.loss_amount || '0');
                 const exchangeProfit = newCarSalePrice - newCarBuyPrice - lossAmount;
 
-                // Note: customer_car_eval_value and additional_customer_amount are for display only
+                // Calculate the difference to determine which additional amount field to use
+                const difference = newCarSalePrice - oldCarPurchasePrice;
+                const additionalCustomerAmount = difference > 0 ? difference : 0;
+                const additionalCompanyAmount = difference < 0 ? Math.abs(difference) : 0;
+
+                // Note: customer_car_eval_value, additional_customer_amount, and additional_company_amount are for display only
                 // and don't affect the actual deal amount or profit calculation
                 dealData = {
                     ...dealData,
@@ -651,7 +684,8 @@ const AddDeal = () => {
                     loss_amount: lossAmount || null,
                     selling_price: exchangeForm.selling_price ? parseFloat(exchangeForm.selling_price) : null,
                     customer_car_eval_value: oldCarPurchasePrice || null,
-                    additional_customer_amount: Math.max(0, newCarSalePrice - oldCarPurchasePrice) || null,
+                    additional_customer_amount: additionalCustomerAmount || null,
+                    additional_company_amount: additionalCompanyAmount || null,
                     notes: exchangeForm.notes.trim(),
                 };
             }
@@ -1487,10 +1521,17 @@ const AddDeal = () => {
                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                     <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
                                     <div className="text-center">
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(parseFloat(exchangeForm.additional_customer_amount || '0'))}</span>
+                                        <span className="text-sm text-blue-600 dark:text-blue-400">{formatCurrency(parseFloat(exchangeForm.additional_customer_amount || '0'))}</span>
                                     </div>
                                 </div>
-                                {/* Row 6: Loss (Editable) */}
+                                {/* Row 6: Additional Amount from Company (Auto-calculated) */}
+                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
+                                    <div className="text-center">
+                                        <span className="text-sm text-orange-600 dark:text-orange-400">{formatCurrency(parseFloat(exchangeForm.additional_company_amount || '0'))}</span>
+                                    </div>
+                                </div>
+                                {/* Row 7: Loss (Editable) */}
                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                     <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
                                     <div className="text-center">
@@ -1512,7 +1553,7 @@ const AddDeal = () => {
                                         </div>
                                     </div>
                                 </div>
-                                {/* Row 7: Profit Commission (Calculated) */}
+                                {/* Row 8: Profit Commission (Calculated) */}
                                 <div className="grid grid-cols-3 gap-4 mb-4 py-2">
                                     <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
                                     <div className="text-center">
@@ -1525,7 +1566,7 @@ const AddDeal = () => {
                                             const loss = parseFloat(exchangeForm.loss_amount || '0');
 
                                             // For exchange: Profit = Sale Price - Old Car Purchase Price - Buy Price - Loss
-                                            // Note: customer_car_eval_value and additional_customer_amount are display-only and don't affect profit
+                                            // Note: customer_car_eval_value, additional_customer_amount, and additional_company_amount are display-only and don't affect profit
                                             const profitCommission = sellPrice - buyPrice - loss;
 
                                             return (

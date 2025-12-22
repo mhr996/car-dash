@@ -140,6 +140,16 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Vehicle Sale Agreement</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            // Signal when Tailwind is loaded
+            window.tailwindReady = false;
+            document.addEventListener('DOMContentLoaded', () => {
+                // Wait for Tailwind to be applied
+                setTimeout(() => {
+                    window.tailwindReady = true;
+                }, 500);
+            });
+        </script>
         <style>
             @page { size: A4; margin: 8mm; }
             body { font-family: Arial, sans-serif; font-size: 11px; line-height: 1.2; }
@@ -415,7 +425,7 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                                     <path d="M14 6a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h10zM4 8a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
                                 </svg>
                                 
-                                ${contract.dealType === 'trade-in' ? '<span>Amount Added From Customer</span>' : '<span>Payment Details</span>'}
+                                ${contract.dealType === 'trade-in' ? '<span>Exchange Details</span>' : '<span>Payment Details</span>'}
                             </h2>
                         </div>
                         
@@ -425,13 +435,31 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                         </div>
                     </div>
                     
-                    <div class="mt-4 space-y-2">
+                    ${
+                        contract.dealType === 'trade-in' && contract.tradeInCar
+                            ? `
+                    <!-- Exchange Deal Breakdown - Compact -->
+                    <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
+                        <p class="text-xs"><span class="font-semibold text-gray-600">Trade-in:</span> <span class="text-emerald-700">${formatCurrency(contract.tradeInCar.estimatedValue)}</span>${
+                            contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
+                                ? `<p><span class="font-semibold text-gray-600">Additional from Customer:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
+                                : ''
+                        }${
+                            contract.additionalCompanyAmount && contract.additionalCompanyAmount > 0
+                                ? `<p><span class="font-semibold text-gray-600">Additional from Company:</span> <span class="text-orange-600">${formatCurrency(contract.additionalCompanyAmount)}</span></p>`
+                                : ''
+                        }</p>
+                    </div>
+                    `
+                            : ''
+                    }
+                    
+                    <div class="mt-3 space-y-2">
                         ${
                             contract.paymentMethods && contract.paymentMethods.length > 0
                                 ? `
-                            <div class="bg-white rounded-lg p-2 border border-emerald-200">
-                                <h3 class="font-semibold text-emerald-700 mb-1 text-sm">Payment Methods:</h3>
-                                <div class="flex flex-wrap gap-2">
+                            <div class="bg-white rounded-lg p-1.5 border border-emerald-200">
+                                <p class="text-xs"><span class="font-semibold text-emerald-700">Payment Methods:</span> <span class="flex-wrap gap-1.5 inline-flex">
                                     ${contract.paymentMethods
                                         .filter((method) => method.selected)
                                         .map((method) => {
@@ -442,12 +470,9 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                                                 check: 'Check',
                                             };
 
-                                            return `
-                                            <span class="font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded border text-xs">${methodLabels[method.type] || method.type}</span>
-                                        `;
+                                            return `<span class="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border text-xs">${methodLabels[method.type] || method.type}</span>`;
                                         })
-                                        .join('')}
-                                </div>
+                                        .join(' ')}</span></p>
                             </div>
                         `
                                 : ''
@@ -501,7 +526,13 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                     <!-- Company Signature -->
                     <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-2 border border-indigo-200 text-center">
                         <h3 class="font-bold mb-1 text-indigo-700 text-xs">Company</h3>
-                        <div class="border-b-2 border-indigo-300 h-6 mb-1"></div>
+                        ${
+                            contract.companySignatureUrl
+                                ? `<div class="flex items-center justify-center h-8 mb-1">
+                            <img src="${contract.companySignatureUrl}" alt="Company Signature" class="max-h-8 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-indigo-300 h-6 mb-1"></div>`
+                        }
                         <p class="text-xs text-indigo-600">Date: ${formatDate(contract.dealDate)}</p>
                     </div>
                     <!-- Seller Signature -->
@@ -513,19 +544,37 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                     <!-- Buyer Signature -->
                     <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200 text-center">
                         <h3 class="font-bold mb-1 text-blue-700 text-xs">Buyer</h3>
-                        <div class="border-b-2 border-blue-300 h-6 mb-1"></div>
+                        ${
+                            contract.customerSignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-1">
+                            <img src="${contract.customerSignatureUrl}" alt="Customer Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-blue-300 h-6 mb-1"></div>`
+                        }
                         <p class="text-xs text-blue-600">Date: ${formatDate(contract.dealDate)}</p>
                     </div>
                     `
                             : `
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-gray-700 text-sm">Seller's Signature</h3>
-                        <div class="border-b-2 border-gray-300 h-8 mb-2"></div>
+                        ${
+                            contract.companySignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-2">
+                            <img src="${contract.companySignatureUrl}" alt="Company Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-gray-300 h-8 mb-2"></div>`
+                        }
                         <p class="text-xs text-gray-600">Date: ${formatDate(contract.dealDate)}</p>
                     </div>
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-gray-700 text-sm">Buyer's Signature</h3>
-                        <div class="border-b-2 border-gray-300 h-8 mb-2"></div>
+                        ${
+                            contract.customerSignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-2">
+                            <img src="${contract.customerSignatureUrl}" alt="Customer Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-gray-300 h-8 mb-2"></div>`
+                        }
                         <p class="text-xs text-gray-600">Date: ${formatDate(contract.dealDate)}</p>
                     </div>
                     `
@@ -856,7 +905,7 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                         <!-- Payment Details Header and Total Amount -->
                         <div class="space-y-3">
                             <h2 class="font-bold text-lg text-emerald-700 flex items-center gap-2 justify-end section-title">
-                              ${contract.dealType === 'trade-in' ? '<span>المبلغ المضاف من الزبون</span>' : '<span>تفاصيل الدفع</span>'}
+                              ${contract.dealType === 'trade-in' ? '<span>تفاصيل التبديل</span>' : '<span>تفاصيل الدفع</span>'}
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4z" />
                                     <path d="M14 6a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h10zM4 8a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
@@ -870,13 +919,31 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                         </div>
                     </div>
                     
-                    <div class="mt-4 space-y-3">
+                    ${
+                        contract.dealType === 'trade-in' && contract.tradeInCar
+                            ? `
+                    <!-- Exchange Deal Breakdown - Compact -->
+                    <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
+                        <p class="text-xs text-right"><span class="font-semibold text-gray-600">قيمة التبديل:</span> <span class="text-emerald-700">${formatCurrency(contract.tradeInCar.estimatedValue)}</span>${
+                            contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
+                                ? `<p><span class="font-semibold text-gray-600">المبلغ الإضافي من الزبون:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
+                                : ''
+                        }${
+                            contract.additionalCompanyAmount && contract.additionalCompanyAmount > 0
+                                ? `<p><span class="font-semibold text-gray-600">المبلغ الإضافي من الشركة:</span> <span class="text-orange-600">${formatCurrency(contract.additionalCompanyAmount)}</span></p>`
+                                : ''
+                        }</p>
+                    </div>
+                    `
+                            : ''
+                    }
+                    
+                    <div class="mt-3 space-y-2">
                         ${
                             contract.paymentMethods && contract.paymentMethods.length > 0
                                 ? `
-                            <div class="bg-white rounded-lg p-4 border border-emerald-200">
-                                <h3 class="font-semibold text-emerald-700 mb-3 text-right">طرق الدفع:</h3>
-                                <div class="flex flex-wrap gap-3 justify-start">
+                            <div class="bg-white rounded-lg p-1.5 border border-emerald-200">
+                                <p class="text-xs text-right"><span class="font-semibold text-emerald-700">طرق الدفع:</span> <span class="flex-wrap gap-1.5 inline-flex">
                                     ${contract.paymentMethods
                                         .filter((method) => method.selected)
                                         .map((method) => {
@@ -887,12 +954,9 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                                                 check: 'دفع بشيك',
                                             };
 
-                                            return `
-                                            <span class="text-sm font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded border">${methodLabels[method.type] || method.type}</span>
-                                        `;
+                                            return `<span class="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border">${methodLabels[method.type] || method.type}</span>`;
                                         })
-                                        .join('')}
-                                </div>
+                                        .join(' ')}</span></p>
                             </div>
                         `
                                 : ''
@@ -946,7 +1010,13 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                     <!-- Company Signature -->
                     <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-2 border border-indigo-200 text-center">
                         <h3 class="font-bold mb-1 text-indigo-700 text-xs">الشركة</h3>
-                        <div class="border-b-2 border-indigo-300 h-6 mb-1"></div>
+                        ${
+                            contract.companySignatureUrl
+                                ? `<div class="flex items-center justify-center h-8 mb-1">
+                            <img src="${contract.companySignatureUrl}" alt="Company Signature" class="max-h-8 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-indigo-300 h-6 mb-1"></div>`
+                        }
                         <p class="text-xs text-indigo-600">التاريخ: ${formatDate(contract.dealDate)}</p>
                     </div>
                     <!-- Seller Signature -->
@@ -958,19 +1028,37 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                     <!-- Buyer Signature -->
                     <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200 text-center">
                         <h3 class="font-bold mb-1 text-blue-700 text-xs">المشتري</h3>
-                        <div class="border-b-2 border-blue-300 h-6 mb-1"></div>
+                        ${
+                            contract.customerSignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-1">
+                            <img src="${contract.customerSignatureUrl}" alt="Customer Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-blue-300 h-6 mb-1"></div>`
+                        }
                         <p class="text-xs text-blue-600">التاريخ: ${formatDate(contract.dealDate)}</p>
                     </div>
                     `
                             : `
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-gray-700 text-sm">توقيع المشتري</h3>
-                        <div class="border-b-2 border-gray-300 h-8 mb-2"></div>
+                        ${
+                            contract.customerSignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-2">
+                            <img src="${contract.customerSignatureUrl}" alt="Customer Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-gray-300 h-8 mb-2"></div>`
+                        }
                         <p class="text-xs text-gray-600">التاريخ: ${formatDate(contract.dealDate)}</p>
                     </div>
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-gray-700 text-sm">توقيع البائع</h3>
-                        <div class="border-b-2 border-gray-300 h-8 mb-2"></div>
+                        ${
+                            contract.companySignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-2">
+                            <img src="${contract.companySignatureUrl}" alt="Company Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-gray-300 h-8 mb-2"></div>`
+                        }
                         <p class="text-xs text-gray-600">التاريخ: ${formatDate(contract.dealDate)}</p>
                     </div>
                     `
@@ -1304,7 +1392,7 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                             <!-- Payment Details Header -->
                             <div class="space-y-3">
                                 <h2 class="font-bold text-lg text-emerald-700 flex items-center gap-2 justify-end section-title">
-                                    ${contract.dealType === 'trade-in' ? '<span>הסכום שנוסף על ידי הלקוח</span>' : '<span>פרטי תשלום</span>'}
+                                    ${contract.dealType === 'trade-in' ? '<span>פרטי החלפה</span>' : '<span>פרטי תשלום</span>'}
                                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                         <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4z" />
                                         <path d="M14 6a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h10zM4 8a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
@@ -1318,13 +1406,31 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                             </div>
                         </div>
                         
-                        <div class="mt-4 space-y-3">
+                        ${
+                            contract.dealType === 'trade-in' && contract.tradeInCar
+                                ? `
+                        <!-- Exchange Deal Breakdown - Compact -->
+                        <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
+                            <p class="text-xs text-right"><span class="font-semibold text-gray-600">ערך החלפה:</span> <span class="text-emerald-700">${formatCurrency(contract.tradeInCar.estimatedValue)}</span>${
+                                contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
+                                    ? `<p><span class="font-semibold text-gray-600">סכום נוסף מהלקוח:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
+                                    : ''
+                            }${
+                                contract.additionalCompanyAmount && contract.additionalCompanyAmount > 0
+                                    ? `<p><span class="font-semibold text-gray-600">סכום נוסף מהחברה:</span> <span class="text-orange-600">${formatCurrency(contract.additionalCompanyAmount)}</span></p>`
+                                    : ''
+                            }</p>
+                        </div>
+                        `
+                                : ''
+                        }
+                        
+                        <div class="mt-3 space-y-2">
                         ${
                             contract.paymentMethods && contract.paymentMethods.length > 0
                                 ? `
-                            <div class="bg-white rounded-lg p-3 border border-emerald-200">
-                                <h3 class="font-semibold text-emerald-700 mb-2 text-right text-xs">אמצעי תשלום:</h3>
-                                <div class="flex flex-wrap gap-3 justify-start">
+                            <div class="bg-white rounded-lg p-1.5 border border-emerald-200">
+                                <p class="text-xs text-right"><span class="font-semibold text-emerald-700">אמצעי תשלום:</span> <span class="flex-wrap gap-1.5 inline-flex">
                                     ${contract.paymentMethods
                                         .filter((method) => method.selected)
                                         .map((method) => {
@@ -1335,12 +1441,9 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                                                 check: 'תשלום בצ׳ק',
                                             };
 
-                                            return `
-                                            <span class="text-xs font-medium text-emerald-700 bg-emerald-50 px-3 py-2 rounded border">${methodLabels[method.type] || method.type}</span>
-                                        `;
+                                            return `<span class="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border">${methodLabels[method.type] || method.type}</span>`;
                                         })
-                                        .join('')}
-                                </div>
+                                        .join(' ')}</span></p>
                             </div>
                         `
                                 : ''
@@ -1397,7 +1500,13 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                     <!-- Company Signature -->
                     <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-2 border border-indigo-200 text-center">
                         <h3 class="font-bold mb-1 text-indigo-700 text-xs">חברה</h3>
-                        <div class="border-b-2 border-indigo-300 h-6 mb-1"></div>
+                        ${
+                            contract.companySignatureUrl
+                                ? `<div class="flex items-center justify-center h-8 mb-1">
+                            <img src="${contract.companySignatureUrl}" alt="Company Signature" class="max-h-8 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-indigo-300 h-6 mb-1"></div>`
+                        }
                         <p class="text-xs text-indigo-600">תאריך: ${formatDate(contract.dealDate)}</p>
                     </div>
                     <!-- Seller Signature -->
@@ -1409,19 +1518,37 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                     <!-- Buyer Signature -->
                     <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200 text-center">
                         <h3 class="font-bold mb-1 text-blue-700 text-xs">קונה</h3>
-                        <div class="border-b-2 border-blue-300 h-6 mb-1"></div>
+                        ${
+                            contract.customerSignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-1">
+                            <img src="${contract.customerSignatureUrl}" alt="Customer Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-blue-300 h-6 mb-1"></div>`
+                        }
                         <p class="text-xs text-blue-600">תאריך: ${formatDate(contract.dealDate)}</p>
                     </div>
                     `
                             : `
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-gray-700 text-sm">חתימת קונה</h3>
-                        <div class="border-b-2 border-gray-300 h-8 mb-2"></div>
+                        ${
+                            contract.customerSignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-2">
+                            <img src="${contract.customerSignatureUrl}" alt="Customer Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-gray-300 h-8 mb-2"></div>`
+                        }
                         <p class="text-xs text-gray-600">תאריך: ${formatDate(contract.dealDate)}</p>
                     </div>
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-gray-700 text-sm">חתימת מוכר</h3>
-                        <div class="border-b-2 border-gray-300 h-8 mb-2"></div>
+                        ${
+                            contract.companySignatureUrl
+                                ? `<div class="flex items-center justify-center h-12 mb-2">
+                            <img src="${contract.companySignatureUrl}" alt="Company Signature" class="max-h-12 max-w-full object-contain" />
+                        </div>`
+                                : `<div class="border-b-2 border-gray-300 h-8 mb-2"></div>`
+                        }
                         <p class="text-xs text-gray-600">תאריך: ${formatDate(contract.dealDate)}</p>
                     </div>
                     `

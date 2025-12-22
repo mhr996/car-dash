@@ -29,6 +29,9 @@ import IconBank from '@/components/icon/icon-bank';
 import IconCheck from '@/components/icon/icon-check';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
 import BillsTable from '@/components/bills/bills-table';
+import SignatureModal from '@/components/modals/signature-modal';
+import IconPencil from '@/components/icon/icon-pencil';
+import { uploadFile, getPublicUrlFromPath } from '@/utils/file-upload';
 
 interface Customer {
     id: string;
@@ -82,6 +85,9 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [paymentNotes, setPaymentNotes] = useState<string>('');
     const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
+    const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+    const [customerSignature, setCustomerSignature] = useState<string | null>(null);
+    const [isSigning, setIsSigning] = useState(false);
     const dealId = params.id;
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -233,6 +239,24 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
         loadCompanyInfo();
     }, []);
 
+    // Load existing signature if available
+    useEffect(() => {
+        const loadSignature = async () => {
+            if (!dealId) return;
+
+            try {
+                const { data, error } = await supabase.from('deal_signatures').select('customer_signature_url').eq('deal_id', dealId).single();
+
+                if (!error && data) {
+                    setCustomerSignature(data.customer_signature_url);
+                }
+            } catch (error) {
+                console.error('Failed to load signature:', error);
+            }
+        };
+        loadSignature();
+    }, [dealId]);
+
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -240,6 +264,57 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
         }).format(value);
+    };
+
+    const handleSaveSignature = async (signatureDataUrl: string) => {
+        setIsSigning(true);
+        try {
+            // Convert data URL to Blob
+            const response = await fetch(signatureDataUrl);
+            const blob = await response.blob();
+
+            // Create a File object
+            const file = new File([blob], 'signature.png', { type: 'image/png' });
+
+            // Upload signature to storage
+            const uploadResult = await uploadFile(file, 'deals', dealId, 'customer-signature.png');
+
+            if (!uploadResult.success || !uploadResult.url) {
+                throw new Error('Failed to upload signature');
+            }
+
+            // Get public URL
+            const signatureUrl = getPublicUrlFromPath(uploadResult.url);
+
+            // Save signature to database
+            const { error } = await supabase.from('deal_signatures').upsert(
+                {
+                    deal_id: dealId,
+                    customer_signature_url: signatureUrl,
+                    signed_by_name: customer?.name || '',
+                    signed_at: new Date().toISOString(),
+                },
+                { onConflict: 'deal_id' },
+            );
+
+            if (error) throw error;
+
+            setCustomerSignature(signatureUrl);
+            setAlert({
+                visible: true,
+                message: t('deal_signed_successfully'),
+                type: 'success',
+            });
+        } catch (error) {
+            console.error('Error saving signature:', error);
+            setAlert({
+                visible: true,
+                message: t('error_saving_signature') || 'Error saving signature',
+                type: 'danger',
+            });
+        } finally {
+            setIsSigning(false);
+        }
     };
 
     const getCarImageUrl = async (images: string[] | string | null) => {
@@ -408,6 +483,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     kilometers: carTakenFromClient.kilometers,
                     estimatedValue: carTakenFromClient.buy_price,
                 },
+                additionalCustomerAmount: deal.additional_customer_amount || 0,
+                additionalCompanyAmount: deal.additional_company_amount || 0,
             }),
 
             // Payment info - only include if bill exists
@@ -420,6 +497,10 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
 
             // Standard terms
             ownershipTransferDays: 30,
+
+            // Signatures
+            companySignatureUrl: companyInfo?.signature_url,
+            customerSignatureUrl: customerSignature || undefined,
         };
     };
     if (loading) {
@@ -487,6 +568,17 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     <p className="text-gray-500">#{deal.id}</p>
                 </div>
                 <div className="flex gap-3">
+                    <button className={`btn ${customerSignature ? 'btn-outline-success' : 'btn-outline-primary'} gap-2`} onClick={() => setIsSignatureModalOpen(true)} disabled={isSigning}>
+                        {isSigning ? (
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                            </svg>
+                        ) : (
+                            <IconPencil className="w-4 h-4" />
+                        )}
+                        {customerSignature ? t('update_signature') : t('sign_deal')}
+                    </button>
                     <button
                         className={`btn btn-outline-success gap-2${generatingContract ? ' opacity-60 pointer-events-none' : ''}`}
                         disabled={generatingContract}
@@ -725,6 +817,40 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                             <span className="text-sm text-gray-700 dark:text-gray-300">₪{deal.amount?.toFixed(0) || '0.00'}</span>
                                         </div>
                                     </div>
+
+                                    {/* Exchange Deal Specific Fields */}
+                                    {deal.deal_type === 'exchange' && carTakenFromClient && (
+                                        <>
+                                            {/* Customer Car Evaluation */}
+                                            <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-2">
+                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                    <div className="font-medium">{t('customer_car_evaluation')}</div>
+                                                    <div className="text-xs mt-1 text-gray-500">
+                                                        {carTakenFromClient.brand} {carTakenFromClient.title} - {carTakenFromClient.year}
+                                                    </div>
+                                                </div>
+                                                <div className="text-center">
+                                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{(deal.customer_car_eval_value || carTakenFromClient.buy_price || 0).toFixed(0)}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Additional Amount from Customer */}
+                                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
+                                                <div className="text-center">
+                                                    <span className="text-sm text-blue-600 dark:text-blue-400">₪{(deal.additional_customer_amount || 0).toFixed(0)}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Additional Amount from Company */}
+                                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
+                                                <div className="text-center">
+                                                    <span className="text-sm text-orange-600 dark:text-orange-400">₪{(deal.additional_company_amount || 0).toFixed(0)}</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
 
                                     {/* Row 5: Profit/Loss */}
                                     {deal.deal_type !== 'intermediary' && deal.deal_type !== 'financing_assistance_intermediary' && (
@@ -1038,6 +1164,9 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     />
                 )}
             </div>
+
+            {/* Signature Modal */}
+            <SignatureModal isOpen={isSignatureModalOpen} onClose={() => setIsSignatureModalOpen(false)} onSave={handleSaveSignature} title={t('sign_deal_contract')} />
         </div>
     );
 };

@@ -23,6 +23,61 @@ interface BillsTableProps {
 const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownloadPDF, downloadingPDF, readOnly = false, className = '', deal, car, carTakenFromClient, selectedCustomer }) => {
     const { t } = getTranslation();
 
+    // Calculate deal balance using the same logic from sales-deals page
+    const calculateDealBalance = (deal: any, bills: any[]): number => {
+        // Start with negative selling price (or amount if selling_price is not available)
+        const dealSellingPrice = deal?.selling_price || deal?.amount || 0;
+        let totalBalance = -Math.abs(dealSellingPrice);
+
+        // For exchange deals, add customer car evaluation value as credit
+        if (deal?.deal_type === 'exchange' && deal?.customer_car_eval_value) {
+            const carEvaluationAmount = parseFloat(deal.customer_car_eval_value) || 0;
+            totalBalance += carEvaluationAmount; // Add as credit (positive impact)
+        }
+
+        if (!bills || bills.length === 0) return totalBalance;
+
+        bills.forEach((bill) => {
+            // Only count receipts that affect the deal balance (payments received towards the deal)
+            if (bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') {
+                let billAmount = 0;
+
+                // If bill has bill_payments (new structure), use those
+                if (bill.bill_payments && bill.bill_payments.length > 0) {
+                    billAmount = bill.bill_payments.reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
+                } else if (bill.payments && bill.payments.length > 0) {
+                    billAmount = bill.payments.reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
+                } else {
+                    // Use legacy payment fields
+                    const visaAmount = parseFloat(bill.visa_amount || '0') || 0;
+                    const transferAmount = parseFloat(bill.transfer_amount || '0') || 0;
+                    const checkAmount = parseFloat(bill.check_amount || '0') || 0;
+                    const cashAmount = parseFloat(bill.cash_amount || '0') || 0;
+                    const bankAmount = parseFloat(bill.bank_amount || '0') || 0;
+
+                    billAmount = visaAmount + transferAmount + checkAmount + cashAmount + bankAmount;
+                }
+
+                // Receipt payments always increase the balance (moving towards 0 and potentially beyond)
+                // For tax_invoice_receipt bills, the receipt portion should always be treated as payment
+                // regardless of bill direction (bill direction is for tax/accounting purposes)
+                if (bill.bill_type === 'tax_invoice_receipt') {
+                    // Tax invoice with receipt: receipt portion is always a payment towards the deal
+                    totalBalance += Math.abs(billAmount);
+                } else {
+                    // For receipt_only bills, apply bill direction
+                    if (bill.bill_direction === 'negative') {
+                        totalBalance -= Math.abs(billAmount);
+                    } else {
+                        totalBalance += Math.abs(billAmount);
+                    }
+                }
+            }
+        });
+
+        return totalBalance;
+    };
+
     // Helper function to get bill amount based on bill type and payment method
     const getBillAmount = (bill: any) => {
         if (bill.bill_type === 'general') {
@@ -212,6 +267,52 @@ const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownl
                     </tbody>
                 </table>
             </div>
+
+            {/* Deal Balance Summary */}
+            {deal && (
+                <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <div className="flex justify-end">
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 min-w-[300px]">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('deal_balance')}:</span>
+                                {(() => {
+                                    const balance = calculateDealBalance(deal, bills);
+                                    const isOverpaid = balance > 0;
+                                    const isPaid = balance === 0;
+                                    const isUnpaid = balance < 0;
+
+                                    return (
+                                        <div className="flex items-center gap-2">
+                                            <span
+                                                className={`text-lg font-bold ${
+                                                    isPaid ? 'text-green-600 dark:text-green-400' : isOverpaid ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'
+                                                }`}
+                                            >
+                                                {formatCurrency(Math.abs(balance))}
+                                            </span>
+                                            {isPaid && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                                    {t('fully_paid')}
+                                                </span>
+                                            )}
+                                            {isOverpaid && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                                                    {t('overpaid')}
+                                                </span>
+                                            )}
+                                            {isUnpaid && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
+                                                    {t('remaining')}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

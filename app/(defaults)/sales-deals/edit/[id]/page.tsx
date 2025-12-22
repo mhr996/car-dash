@@ -419,6 +419,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const [selectedCar, setSelectedCar] = useState<Car | null>(null);
     const [carTakenFromClient, setCarTakenFromClient] = useState<Car | null>(null);
     const [dealDate, setDealDate] = useState(new Date().toISOString().split('T')[0]);
+    const [hasCustomerSignature, setHasCustomerSignature] = useState(false);
     const dealId = params.id;
 
     // Bill creation state
@@ -562,6 +563,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
         selling_price: '',
         customer_car_eval_value: '',
         additional_customer_amount: '',
+        additional_company_amount: '',
     }); // State for file attachments
     const [dealAttachments, setDealAttachments] = useState<DealAttachments>({
         carLicense: null,
@@ -611,6 +613,15 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     // Set the deal date from the existing deal's created_at, or default to today
                     setDealDate(data.created_at ? new Date(data.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
 
+                    // Check for customer signature
+                    const { data: signatureData } = await supabase
+                        .from('deal_signatures')
+                        .select('customer_signature_url')
+                        .eq('deal_id', dealId)
+                        .single();
+                    
+                    setHasCustomerSignature(!!signatureData?.customer_signature_url);
+
                     // Load payment methods if they exist
                     if (data.payment_methods && Array.isArray(data.payment_methods)) {
                         setPaymentMethods(data.payment_methods);
@@ -634,6 +645,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                         loss_amount: data.loss_amount?.toString() || '',
                         customer_car_eval_value: data.customer_car_eval_value?.toString() || '',
                         additional_customer_amount: data.additional_customer_amount?.toString() || '',
+                        additional_company_amount: data.additional_company_amount?.toString() || '',
                     });
 
                     // Set existing attachments
@@ -737,6 +749,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 ...prev,
                 customer_car_eval_value: purchasePrice.toString(),
                 additional_customer_amount: difference > 0 ? difference.toString() : '0',
+                additional_company_amount: difference < 0 ? Math.abs(difference).toString() : '0',
             }));
         }
     }, [dealType, carTakenFromClient, selectedCar]);
@@ -800,8 +813,20 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 // Set customer_car_eval_value to the purchase price from customer (buy_price of taken car)
                 updated.customer_car_eval_value = purchasePrice.toString();
 
-                // Set additional_customer_amount to the difference (only if positive)
-                updated.additional_customer_amount = difference > 0 ? difference.toString() : '0';
+                // Calculate which side pays the additional amount
+                if (difference > 0) {
+                    // Company's car is more expensive, customer pays the difference
+                    updated.additional_customer_amount = difference.toString();
+                    updated.additional_company_amount = '0';
+                } else if (difference < 0) {
+                    // Customer's car is more expensive, company pays the difference
+                    updated.additional_company_amount = Math.abs(difference).toString();
+                    updated.additional_customer_amount = '0';
+                } else {
+                    // Equal value
+                    updated.additional_customer_amount = '0';
+                    updated.additional_company_amount = '0';
+                }
             }
 
             return updated;
@@ -885,7 +910,21 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 const difference = salePrice - purchasePrice;
 
                 updated.customer_car_eval_value = purchasePrice.toString();
-                updated.additional_customer_amount = difference > 0 ? difference.toString() : '0';
+
+                // Calculate which side pays the additional amount
+                if (difference > 0) {
+                    // Company's car is more expensive, customer pays the difference
+                    updated.additional_customer_amount = difference.toString();
+                    updated.additional_company_amount = '0';
+                } else if (difference < 0) {
+                    // Customer's car is more expensive, company pays the difference
+                    updated.additional_company_amount = Math.abs(difference).toString();
+                    updated.additional_customer_amount = '0';
+                } else {
+                    // Equal value
+                    updated.additional_customer_amount = '0';
+                    updated.additional_company_amount = '0';
+                }
             }
 
             return updated;
@@ -1149,6 +1188,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 selling_price: form.selling_price ? parseFloat(form.selling_price) : null,
                 customer_car_eval_value: form.customer_car_eval_value ? parseFloat(form.customer_car_eval_value) : null,
                 additional_customer_amount: form.additional_customer_amount ? parseFloat(form.additional_customer_amount) : null,
+                additional_company_amount: form.additional_company_amount ? parseFloat(form.additional_company_amount) : null,
                 status: form.status,
                 customer_id: form.customer_id || null,
                 seller_id: form.seller_id || null,
@@ -2053,10 +2093,17 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                                     <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
                                                     <div className="text-center">
-                                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(form.additional_customer_amount || '0').toFixed(0)}</span>
+                                                        <span className="text-sm text-blue-600 dark:text-blue-400">₪{parseFloat(form.additional_customer_amount || '0').toFixed(0)}</span>
                                                     </div>
                                                 </div>
-                                                {/* Row 6: Loss (Editable) */}
+                                                {/* Row 6: Additional Amount from Company (Auto-calculated) */}
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm text-orange-600 dark:text-orange-400">₪{parseFloat(form.additional_company_amount || '0').toFixed(0)}</span>
+                                                    </div>
+                                                </div>
+                                                {/* Row 7: Loss (Editable) */}
                                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                                     <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">{t('loss_amount')}</div>
                                                     <div className="text-center">
@@ -2079,7 +2126,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                {/* Row 7: Profit Commission (Calculated) */}
+                                                {/* Row 8: Profit Commission (Calculated) */}
                                                 <div className="grid grid-cols-3 gap-4 mb-4 py-2">
                                                     <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
                                                     <div className="text-center">
@@ -2477,17 +2524,31 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                             </div>
                             {/* Expandable Bill Creation Section */}
                             <div className="panel">
+                                {!hasCustomerSignature && (
+                                    <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                                        <p className="text-sm text-orange-700 dark:text-orange-300">
+                                            {t('signature_required_for_bill')}
+                                        </p>
+                                    </div>
+                                )}
                                 <div className="mb-5 border rounded-xl border-gray-200 dark:border-gray-700">
                                     <button
                                         type="button"
-                                        onClick={() => setIsBillSectionExpanded(!isBillSectionExpanded)}
-                                        className="flex items-center gap-3 w-full text-left hover:bg-gray-50 dark:hover:bg-gray-800 p-3 rounded-lg transition-colors duration-200"
+                                        onClick={() => hasCustomerSignature && setIsBillSectionExpanded(!isBillSectionExpanded)}
+                                        disabled={!hasCustomerSignature}
+                                        className={`flex items-center gap-3 w-full text-left p-3 rounded-lg transition-colors duration-200 ${
+                                            hasCustomerSignature 
+                                                ? 'hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer' 
+                                                : 'opacity-50 cursor-not-allowed'
+                                        }`}
                                     >
                                         <div className="flex items-center gap-3 flex-1">
                                             <IconDollarSign className="w-5 h-5 text-primary" />
                                             <h5 className="text-lg font-semibold dark:text-white-light">{t('automate_bill_for_deal')}</h5>
                                         </div>{' '}
-                                        <IconCaretDown className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isBillSectionExpanded ? 'rotate-180' : ''}`} />
+                                        {hasCustomerSignature && (
+                                            <IconCaretDown className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isBillSectionExpanded ? 'rotate-180' : ''}`} />
+                                        )}
                                     </button>
                                 </div>
 

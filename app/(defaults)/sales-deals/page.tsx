@@ -6,7 +6,7 @@ import IconTrashLines from '@/components/icon/icon-trash-lines';
 import { sortBy } from 'lodash';
 import { DataTableSortStatus, DataTable } from 'mantine-datatable';
 import Link from 'next/link';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
@@ -17,6 +17,12 @@ import { logActivity } from '@/utils/activity-logger';
 import DealFilters from '@/components/deal-filters/deal-filters';
 import { handleDealDeleted, getCustomerIdFromDeal } from '@/utils/balance-manager';
 import ViewToggle from '@/components/view-toggle/view-toggle';
+import { ContractPDFGenerator } from '@/utils/contract-pdf-generator-new';
+import { CarContract } from '@/types/contract';
+import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
+import IconDocument from '@/components/icon/icon-document';
+import IconPdf from '@/components/icon/icon-pdf';
+import IconCaretDown from '@/components/icon/icon-caret-down';
 
 type DealType = 'new_used_sale' | 'new_sale' | 'used_sale' | 'new_used_sale_tax_inclusive' | 'exchange' | 'intermediary' | 'financing_assistance_intermediary' | 'company_commission' | '';
 
@@ -84,6 +90,11 @@ const DealsList = () => {
     const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
     const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
     const [alert, setAlert] = useState<{ message: string; type: 'success' | 'danger' } | null>(null);
+    const [generatingContractPDF, setGeneratingContractPDF] = useState<string | null>(null);
+    const [downloadingBillPDF, setDownloadingBillPDF] = useState<string | null>(null);
+    const [openBillDropdown, setOpenBillDropdown] = useState<string | null>(null);
+    const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const fetchDeals = async () => {
@@ -298,6 +309,125 @@ const DealsList = () => {
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
         }).format(value);
+    };
+
+    // Fetch company info on mount
+    useEffect(() => {
+        const fetchCompanyInfo = async () => {
+            try {
+                const info = await getCompanyInfo();
+                setCompanyInfo(info);
+            } catch (error) {
+                console.error('Error fetching company info:', error);
+            }
+        };
+        fetchCompanyInfo();
+    }, []);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setOpenBillDropdown(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Handle contract PDF generation
+    const handleGenerateContractPDF = async (deal: any) => {
+        setGeneratingContractPDF(deal.id);
+        try {
+            // Get language from cookie
+            const getCookie = (name: string) => {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) {
+                    const part = parts.pop();
+                    if (part) {
+                        return part.split(';').shift();
+                    }
+                }
+                return null;
+            };
+
+            const lang = getCookie('i18nextLng') || 'he';
+            const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
+
+            // Create contract data
+            const contractData: CarContract = {
+                dealId: deal.id,
+                dealType: deal.deal_type || 'normal',
+                contractDate: new Date(deal.created_at).toLocaleDateString('he-IL'),
+
+                // Seller info
+                sellerName: companyInfo?.name || '',
+                sellerIdNumber: companyInfo?.registration_number || '',
+                sellerAddress: companyInfo?.address || '',
+                sellerPhone: companyInfo?.phone || '',
+                sellerEmail: companyInfo?.email || '',
+
+                // Buyer info
+                buyerName: deal.customers?.name || '',
+                buyerIdNumber: deal.customers?.id_number || '',
+                buyerAddress: deal.customers?.address || '',
+                buyerPhone: deal.customers?.phone || '',
+
+                // Car info
+                carMake: deal.cars?.brand || '',
+                carModel: deal.cars?.title || '',
+                carYear: deal.cars?.year || '',
+                carPlateNumber: deal.cars?.car_number || '',
+                carColor: deal.cars?.color || '',
+
+                // Payment info
+                totalAmount: deal.selling_price || deal.amount || 0,
+                paymentMethod: 'Various',
+
+                companySignatureUrl: companyInfo?.signature_url || null,
+                customerSignatureUrl: null,
+            };
+
+            const filename = `contract-${deal.id}-${new Date().toISOString().split('T')[0]}.pdf`;
+
+            await ContractPDFGenerator.generateFromContract(contractData, {
+                filename,
+                language: normalizedLang,
+                format: 'A4',
+                orientation: 'portrait',
+            });
+
+            setAlert({ message: t('contract_generated_successfully'), type: 'success' });
+        } catch (error) {
+            console.error('Error generating contract PDF:', error);
+            setAlert({ message: t('error_generating_pdf'), type: 'danger' });
+        } finally {
+            setGeneratingContractPDF(null);
+        }
+    };
+
+    // Handle bill PDF download
+    const handleDownloadBillPDF = async (bill: any) => {
+        setDownloadingBillPDF(bill.id);
+        setOpenBillDropdown(null);
+        try {
+            const tranzilaRetrievalKey = bill.tranzila_retrieval_key;
+
+            if (!tranzilaRetrievalKey) {
+                setAlert({ message: t('bill_not_created_with_tranzila'), type: 'danger' });
+                return;
+            }
+
+            // Open Tranzila PDF in new tab via proxy API
+            const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
+            window.open(proxyUrl, '_blank');
+        } catch (error) {
+            console.error('Error downloading PDF:', error);
+            setAlert({ message: t('error_downloading_pdf'), type: 'danger' });
+        } finally {
+            setDownloadingBillPDF(null);
+        }
     };
 
     /**
@@ -577,25 +707,96 @@ const DealsList = () => {
                                     title: t('actions'),
                                     sortable: false,
                                     textAlignment: 'center',
-                                    render: ({ id, status }) => (
-                                        <div className="mx-auto flex w-max items-center gap-4">
-                                            <Link
-                                                href={`/sales-deals/edit/${id}`}
-                                                className={`flex hover:text-info ${status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
-                                                title={status === 'cancelled' ? t('deal_cancelled_no_edit') : t('edit')}
-                                            >
-                                                <IconEdit className="h-4.5 w-4.5" />
-                                            </Link>
-                                            <button
-                                                type="button"
-                                                className={`flex hover:text-danger ${status === 'completed' || status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
-                                                onClick={() => status !== 'completed' && status !== 'cancelled' && deleteRow(id)}
-                                                title={status === 'completed' ? t('deal_completed_no_delete') : status === 'cancelled' ? t('deal_cancelled_no_delete') : t('delete')}
-                                            >
-                                                <IconTrashLines />
-                                            </button>
-                                        </div>
-                                    ),
+                                    render: (deal: any) => {
+                                        const { id, status, bills } = deal;
+                                        const hasBills = bills && bills.length > 0;
+
+                                        return (
+                                            <div className="mx-auto flex w-max items-center gap-2">
+                                                {/* Generate Contract PDF Button */}
+                                                <button
+                                                    type="button"
+                                                    className="flex hover:text-success"
+                                                    onClick={() => handleGenerateContractPDF(deal)}
+                                                    disabled={generatingContractPDF === id}
+                                                    title={t('generate_contract')}
+                                                >
+                                                    {generatingContractPDF === id ? (
+                                                        <div className="animate-spin rounded-full h-4.5 w-4.5 border-2 border-success border-l-transparent"></div>
+                                                    ) : (
+                                                        <IconDocument className="h-4.5 w-4.5" />
+                                                    )}
+                                                </button>
+
+                                                {/* Bill PDFs Dropdown - Only show if deal has bills */}
+                                                {hasBills && (
+                                                    <div className="relative" ref={openBillDropdown === id ? dropdownRef : null}>
+                                                        <button
+                                                            type="button"
+                                                            className="flex items-center gap-1 hover:text-primary"
+                                                            onClick={() => setOpenBillDropdown(openBillDropdown === id ? null : id)}
+                                                            title={t('download_bills')}
+                                                        >
+                                                            <IconPdf className="h-4.5 w-4.5" />
+                                                            <IconCaretDown className="h-3 w-3" />
+                                                        </button>
+
+                                                        {openBillDropdown === id && (
+                                                            <div className="absolute right-0 z-50 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700">
+                                                                <div className="py-1">
+                                                                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                                                                        {t('select_bill')}
+                                                                    </div>
+                                                                    {bills.map((bill: any, index: number) => (
+                                                                        <button
+                                                                            key={bill.id}
+                                                                            type="button"
+                                                                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                                                                            onClick={() => handleDownloadBillPDF(bill)}
+                                                                            disabled={downloadingBillPDF === bill.id}
+                                                                        >
+                                                                            {downloadingBillPDF === bill.id ? (
+                                                                                <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-l-transparent"></div>
+                                                                            ) : (
+                                                                                <IconPdf className="h-3 w-3" />
+                                                                            )}
+                                                                            <span className="truncate">
+                                                                                {t(`bill_type_${bill.bill_type}`)} #{bill.id}
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* View Button */}
+                                                <Link href={`/sales-deals/preview/${id}`} className="flex hover:text-info" title={t('view')}>
+                                                    <IconEye className="h-4.5 w-4.5" />
+                                                </Link>
+
+                                                {/* Edit Button */}
+                                                <Link
+                                                    href={`/sales-deals/edit/${id}`}
+                                                    className={`flex hover:text-info ${status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
+                                                    title={status === 'cancelled' ? t('deal_cancelled_no_edit') : t('edit')}
+                                                >
+                                                    <IconEdit className="h-4.5 w-4.5" />
+                                                </Link>
+
+                                                {/* Delete Button */}
+                                                <button
+                                                    type="button"
+                                                    className={`flex hover:text-danger ${status === 'completed' || status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
+                                                    onClick={() => status !== 'completed' && status !== 'cancelled' && deleteRow(id)}
+                                                    title={status === 'completed' ? t('deal_completed_no_delete') : status === 'cancelled' ? t('deal_cancelled_no_delete') : t('delete')}
+                                                >
+                                                    <IconTrashLines />
+                                                </button>
+                                            </div>
+                                        );
+                                    },
                                 },
                             ]}
                             highlightOnHover
@@ -627,7 +828,7 @@ const DealsList = () => {
                                     const balance = calculateDealBalance(deal, deal.bills || []);
                                     const hasBills = deal.bills && deal.bills.length > 0;
                                     return (
-                                        <div key={deal.id} className="panel p-0 overflow-hidden hover:shadow-lg transition-shadow border border-gray-200 dark:border-blue-400/30">
+                                        <div key={deal.id} className="panel p-0 hover:shadow-lg transition-shadow border border-gray-200 dark:border-blue-400/30 relative">
                                             <div className="p-5">
                                                 <div className="mb-3">
                                                     <div className="flex items-start justify-between mb-2">
@@ -706,11 +907,72 @@ const DealsList = () => {
                                                         </p>
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-2">
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {/* Generate Contract PDF Button */}
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-success btn-sm"
+                                                        onClick={() => handleGenerateContractPDF(deal)}
+                                                        disabled={generatingContractPDF === deal.id}
+                                                        title={t('generate_contract')}
+                                                    >
+                                                        {generatingContractPDF === deal.id ? (
+                                                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-success border-l-transparent"></div>
+                                                        ) : (
+                                                            <IconDocument className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+
+                                                    {/* Bill PDFs Dropdown - Only show if deal has bills */}
+                                                    {hasBills && (
+                                                        <div className="relative" ref={openBillDropdown === deal.id ? dropdownRef : null}>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-primary btn-sm flex items-center gap-1"
+                                                                onClick={() => setOpenBillDropdown(openBillDropdown === deal.id ? null : deal.id)}
+                                                                title={t('download_bills')}
+                                                            >
+                                                                <IconPdf className="w-4 h-4" />
+                                                                <IconCaretDown className="w-3 h-3" />
+                                                            </button>
+
+                                                            {openBillDropdown === deal.id && (
+                                                                <div className="absolute left-0 bottom-full mb-2 z-50 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700">
+                                                                    <div className="py-1">
+                                                                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                                                                            {t('select_bill')}
+                                                                        </div>
+                                                                        {deal.bills.map((bill: any) => (
+                                                                            <button
+                                                                                key={bill.id}
+                                                                                type="button"
+                                                                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+                                                                                onClick={() => handleDownloadBillPDF(bill)}
+                                                                                disabled={downloadingBillPDF === bill.id}
+                                                                            >
+                                                                                {downloadingBillPDF === bill.id ? (
+                                                                                    <div className="animate-spin rounded-full h-3 w-3 border-2 border-primary border-l-transparent"></div>
+                                                                                ) : (
+                                                                                    <IconPdf className="h-3 w-3" />
+                                                                                )}
+                                                                                <span className="truncate">
+                                                                                    {t(`bill_type_${bill.bill_type}`)} #{bill.id}
+                                                                                </span>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* View Button */}
                                                     <Link href={`/sales-deals/preview/${deal.id}`} className="btn btn-primary btn-sm flex-1 justify-center">
                                                         <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
                                                         {t('view')}
                                                     </Link>
+
+                                                    {/* Edit Button */}
                                                     <Link
                                                         href={`/sales-deals/edit/${deal.id}`}
                                                         className={`btn btn-info btn-sm ${deal.status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}

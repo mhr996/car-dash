@@ -5,6 +5,7 @@ export interface CompanyInfo {
     id?: string;
     name: string;
     logo_url?: string;
+    signature_url?: string;
     address?: string;
     phone?: string;
     tax_number?: string;

@@ -64,7 +64,6 @@ const convertBillToBillData = (bill: Bill): BillData => {
     };
 };
 
-
 interface Bill extends BillWithPayments {
     // Legacy payment fields for backward compatibility
     payment_type?: string;
@@ -511,12 +510,22 @@ const BillPreview = () => {
                                     </div>
 
                                     {/* Row 5: Additional Customer Amount */}
-                                    <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_customer_amount')}</div>
+                                    <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
                                         <div className="text-center">-</div>
                                         <div className="text-center">-</div>
                                         <div className="text-center">
                                             <span className="text-sm text-blue-600 dark:text-blue-400">₪{Math.max(0, (bill.deal.car.sale_price || 0) - (bill.deal.amount || 0)).toFixed(0)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Row 6: Additional Company Amount */}
+                                    <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
+                                        <div className="text-center">-</div>
+                                        <div className="text-center">-</div>
+                                        <div className="text-center">
+                                            <span className="text-sm text-orange-600 dark:text-orange-400">₪{Math.max(0, (bill.deal.amount || 0) - (bill.deal.car.sale_price || 0)).toFixed(0)}</span>
                                         </div>
                                     </div>
                                 </>

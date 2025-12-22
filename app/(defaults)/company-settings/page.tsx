@@ -21,6 +21,7 @@ interface CompanyInfo {
     id?: string;
     name: string;
     logo_url?: string;
+    signature_url?: string;
     address?: string;
     phone?: string;
     tax_number?: string;
@@ -36,11 +37,13 @@ const CompanySettings = () => {
     const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
         name: '',
         logo_url: '',
+        signature_url: '',
         address: '',
         phone: '',
         tax_number: '',
     });
     const [logoFile, setLogoFile] = useState<FileItem | null>(null);
+    const [signatureFile, setSignatureFile] = useState<FileItem | null>(null);
     const [alert, setAlert] = useState<{ message: string; type: 'success' | 'danger' } | null>(null);
 
     useEffect(() => {
@@ -79,6 +82,10 @@ const CompanySettings = () => {
         setLogoFile(file);
     };
 
+    const handleSignatureChange = (file: FileItem | null) => {
+        setSignatureFile(file);
+    };
+
     const validateForm = () => {
         if (!companyInfo.name.trim()) {
             setAlert({ message: t('company_name_required'), type: 'danger' });
@@ -95,6 +102,7 @@ const CompanySettings = () => {
         setSaving(true);
         try {
             let logoUrl = companyInfo.logo_url;
+            let signatureUrl = companyInfo.signature_url;
 
             // Upload new logo if provided
             if (logoFile) {
@@ -108,9 +116,22 @@ const CompanySettings = () => {
                 }
             }
 
+            // Upload new signature if provided
+            if (signatureFile) {
+                const uploadResult = await uploadFile(signatureFile.file, 'company', 'signature', `signature.${signatureFile.file.name.split('.').pop()}`);
+
+                if (uploadResult.success && uploadResult.url) {
+                    // Convert relative path to full Supabase public URL
+                    signatureUrl = getPublicUrlFromPath(uploadResult.url);
+                } else {
+                    throw new Error('Failed to upload signature');
+                }
+            }
+
             const companyData = {
                 ...companyInfo,
                 logo_url: logoUrl,
+                signature_url: signatureUrl,
                 updated_at: new Date().toISOString(),
             };
 
@@ -134,6 +155,7 @@ const CompanySettings = () => {
 
             setCompanyInfo(result.data);
             setLogoFile(null);
+            setSignatureFile(null);
             setAlert({ message: t('company_info_updated_successfully'), type: 'success' });
 
             // Trigger a page reload to update the dashboard with new company info
@@ -224,6 +246,39 @@ const CompanySettings = () => {
                                 onFileChange={handleLogoChange}
                                 title={t('upload_new_logo')}
                                 description={t('logo_upload_description')}
+                                accept="image/*"
+                                className="border-2 border-dashed border-primary/30 rounded-lg p-6 hover:border-primary/50 transition-colors"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Company Signature Section */}
+                    <div className="panel mt-6">
+                        <div className="mb-5">
+                            <h3 className="text-lg font-semibold flex items-center gap-2">
+                                <IconEdit className="w-5 h-5 text-primary" />
+                                {t('company_signature')}
+                            </h3>
+                            <p className="text-gray-500 text-sm mt-2">{t('company_signature_description')}</p>
+                        </div>
+
+                        <div className="text-center">
+                            {/* Current Signature Display */}
+                            {companyInfo.signature_url && (
+                                <div className="mb-6">
+                                    <div className="w-full max-w-xs mx-auto rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 p-4">
+                                        <img src={companyInfo.signature_url} alt="Company Signature" className="w-full h-auto object-contain" />
+                                    </div>
+                                    <p className="text-sm text-gray-500 mt-2">{t('current_signature')}</p>
+                                </div>
+                            )}
+
+                            {/* Signature Upload */}
+                            <SingleFileUpload
+                                file={signatureFile}
+                                onFileChange={handleSignatureChange}
+                                title={t('upload_new_signature')}
+                                description={t('signature_upload_description')}
                                 accept="image/*"
                                 className="border-2 border-dashed border-primary/30 rounded-lg p-6 hover:border-primary/50 transition-colors"
                             />

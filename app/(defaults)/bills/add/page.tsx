@@ -173,17 +173,29 @@ const AddBill = () => {
 
             if (error) throw error;
 
-            // Process the data to ensure we have proper fallbacks
-            const processedDeals = (data || []).map((deal) => ({
-                ...deal,
-                customer: deal.customer || null,
-                seller: deal.seller || null,
-                buyer: deal.buyer || null,
-                car: deal.car || null,
-            }));
+            // Fetch deal signatures
+            const { data: signatures, error: sigError } = await supabase.from('deal_signatures').select('deal_id, customer_signature_url');
+
+            if (sigError) {
+                console.error('Error fetching signatures:', sigError);
+            }
+
+            // Create a set of deal IDs that have signatures
+            const signedDealIds = new Set((signatures || []).filter((sig) => sig.customer_signature_url).map((sig) => sig.deal_id));
+
+            // Process the data and filter out deals without signatures
+            const processedDeals = (data || [])
+                .filter((deal) => signedDealIds.has(deal.id)) // Only include deals with signatures
+                .map((deal) => ({
+                    ...deal,
+                    customer: deal.customer || null,
+                    seller: deal.seller || null,
+                    buyer: deal.buyer || null,
+                    car: deal.car || null,
+                }));
 
             setDeals(processedDeals);
-            console.log('Fetched deals:', processedDeals);
+            console.log('Fetched deals with signatures:', processedDeals);
         } catch (error) {
             console.error('Error fetching deals:', error);
             setAlert({ message: t('error_loading_deals'), type: 'danger' });
@@ -1334,12 +1346,22 @@ const AddBill = () => {
                                             </div>
 
                                             {/* Row 5: Additional Customer Amount */}
-                                            <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_customer_amount')}</div>
+                                            <div className="grid grid-cols-4 gap-4 mb-3 py-2">
+                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
                                                 <div className="text-center">-</div>
                                                 <div className="text-center">-</div>
                                                 <div className="text-center">
                                                     <span className="text-sm text-blue-600 dark:text-blue-400">₪{Math.max(0, selectedDeal.car.sale_price - selectedDeal.amount).toFixed(0)}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 6: Additional Company Amount */}
+                                            <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
+                                                <div className="text-center">-</div>
+                                                <div className="text-center">-</div>
+                                                <div className="text-center">
+                                                    <span className="text-sm text-orange-600 dark:text-orange-400">₪{Math.max(0, selectedDeal.amount - selectedDeal.car.sale_price).toFixed(0)}</span>
                                                 </div>
                                             </div>
                                         </>
