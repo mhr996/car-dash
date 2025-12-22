@@ -109,7 +109,7 @@ export class PDFService {
 
             // Wait for Tailwind to be ready (if using Tailwind CDN)
             try {
-                await page.waitForFunction('window.tailwindReady === true', { timeout: 5000 });
+                await (page as Page).waitForFunction(() => (window as any).tailwindReady === true, { timeout: 5000 });
             } catch (e) {
                 // Fallback: just wait 1 second if the tailwindReady flag isn't set
                 console.log('Tailwind ready flag not found, using fallback wait');
