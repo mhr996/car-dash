@@ -105,23 +105,43 @@ const DealsList = () => {
                         `
                         *,
                         customers!deals_customer_id_fkey (
+                            id,
                             name,
-                            id_number
+                            id_number,
+                            phone
                         ),
                         seller:customers!deals_seller_id_fkey (
+                            id,
                             name,
-                            id_number
+                            id_number,
+                            phone
                         ),
                         buyer:customers!deals_buyer_id_fkey (
+                            id,
                             name,
-                            id_number
+                            id_number,
+                            phone
                         ),
                         cars!deals_car_id_fkey (
                             id,
                             title,
                             brand,
                             car_number,
-                            year
+                            year,
+                            type,
+                            kilometers,
+                            buy_price,
+                            sale_price
+                        ),
+                        car_taken_from_client:cars!deals_car_taken_from_client_fkey (
+                            id,
+                            title,
+                            brand,
+                            car_number,
+                            year,
+                            type,
+                            kilometers,
+                            buy_price
                         ),
                         bills (
                             id,
@@ -133,6 +153,7 @@ const DealsList = () => {
                             cash_amount,
                             bank_amount,
                             bill_amount,
+                            tranzila_retrieval_key,
                             bill_payments (
                                 amount,
                                 payment_type
@@ -355,38 +376,110 @@ const DealsList = () => {
             const lang = getCookie('i18nextLng') || 'he';
             const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
 
-            // Create contract data
+            // Determine if this is an intermediary deal
+            const isIntermediaryDeal = deal.deal_type === 'intermediary';
+
+            // Determine deal type for contract
+            let contractDealType: string;
+            if (deal.deal_type === 'exchange') {
+                contractDealType = 'trade-in';
+            } else if (deal.deal_type === 'intermediary') {
+                contractDealType = 'intermediary';
+            } else if (deal.deal_type === 'financing_assistance_intermediary') {
+                contractDealType = 'financing_assistance_intermediary';
+            } else {
+                contractDealType = deal.deal_type;
+            }
+
+            // Create contract data following the same logic as preview page
             const contractData: CarContract = {
-                dealId: deal.id,
-                dealType: deal.deal_type || 'normal',
-                contractDate: new Date(deal.created_at).toLocaleDateString('he-IL'),
+                dealType: contractDealType as any,
+                dealDate: new Date(deal.created_at).toISOString().split('T')[0],
 
-                // Seller info
-                sellerName: companyInfo?.name || '',
-                sellerIdNumber: companyInfo?.registration_number || '',
-                sellerAddress: companyInfo?.address || '',
-                sellerPhone: companyInfo?.phone || '',
-                sellerEmail: companyInfo?.email || '',
+                // Company info (always the dealership/intermediary)
+                companyName: companyInfo?.name || 'Car Dealership',
+                companyTaxNumber: companyInfo?.tax_number || '',
+                companyAddress: companyInfo?.address || '',
+                companyPhone: companyInfo?.phone || '',
 
-                // Buyer info
-                buyerName: deal.customers?.name || '',
-                buyerIdNumber: deal.customers?.id_number || '',
-                buyerAddress: deal.customers?.address || '',
-                buyerPhone: deal.customers?.phone || '',
+                // For intermediary deals, these are the actual seller and buyer
+                // For regular deals, seller is the company and buyer is the customer
+                sellerName: isIntermediaryDeal ? deal.seller?.name || 'Unknown Seller' : companyInfo?.name || 'Car Dealership',
+                sellerTaxNumber: isIntermediaryDeal ? '' : companyInfo?.tax_number || '',
+                sellerAddress: isIntermediaryDeal ? '' : companyInfo?.address || '',
+                sellerPhone: isIntermediaryDeal ? '' : companyInfo?.phone || '',
+
+                buyerName: isIntermediaryDeal ? deal.buyer?.name || 'Unknown Buyer' : deal.customers?.name || 'Unknown Customer',
+                buyerId: isIntermediaryDeal ? deal.buyer?.id_number?.toString() || '' : deal.customers?.id_number?.toString() || '',
+                buyerAddress: '',
+                buyerPhone: isIntermediaryDeal ? deal.buyer?.phone || '' : deal.customers?.phone || '',
+
+                // Mark as intermediary deal and include additional info
+                ...(isIntermediaryDeal && {
+                    isIntermediaryDeal: true,
+                    actualSeller: {
+                        name: deal.seller?.name || 'Unknown Seller',
+                        id: deal.seller?.id_number?.toString() || '',
+                        address: '',
+                        phone: deal.seller?.phone || '',
+                    },
+                    actualBuyer: {
+                        name: deal.buyer?.name || 'Unknown Buyer',
+                        id: deal.buyer?.id_number?.toString() || '',
+                        address: '',
+                        phone: deal.buyer?.phone || '',
+                    },
+                }),
 
                 // Car info
+                carType: deal.cars?.type || '',
                 carMake: deal.cars?.brand || '',
                 carModel: deal.cars?.title || '',
-                carYear: deal.cars?.year || '',
+                carYear: parseInt(deal.cars?.year) || 0,
                 carPlateNumber: deal.cars?.car_number || '',
-                carColor: deal.cars?.color || '',
+                carVin: '',
+                carEngineNumber: '',
+                carKilometers: parseFloat(deal.cars?.kilometers) || 0,
+
+                // Deal amount - for exchange deals, use customer_car_eval_value, otherwise use selling_price
+                dealAmount: deal.deal_type === 'exchange' && deal.customer_car_eval_value ? deal.customer_car_eval_value : deal.selling_price || 0,
+
+                // Payment Methods - include if they exist
+                ...(deal.payment_methods &&
+                    Array.isArray(deal.payment_methods) && {
+                        paymentMethods: deal.payment_methods,
+                    }),
+
+                // Payment Notes - include if they exist
+                ...(deal.payment_notes && {
+                    paymentNotes: deal.payment_notes,
+                }),
+
+                // Trade-in car info if applicable (for exchange deals)
+                ...(deal.car_taken_from_client && {
+                    tradeInCar: {
+                        type: deal.car_taken_from_client.type || '',
+                        make: deal.car_taken_from_client.brand || '',
+                        model: deal.car_taken_from_client.title || '',
+                        plateNumber: deal.car_taken_from_client.car_number || '',
+                        year: parseInt(deal.car_taken_from_client.year) || 0,
+                        kilometers: parseFloat(deal.car_taken_from_client.kilometers) || 0,
+                        estimatedValue: parseFloat(deal.car_taken_from_client.buy_price) || 0,
+                    },
+                    additionalCustomerAmount: deal.additional_customer_amount || 0,
+                    additionalCompanyAmount: deal.additional_company_amount || 0,
+                }),
+
+                // Standard terms
+                ownershipTransferDays: 30,
 
                 // Payment info
                 totalAmount: deal.selling_price || deal.amount || 0,
-                paymentMethod: 'Various',
+                paymentMethod: 'other',
 
-                companySignatureUrl: companyInfo?.signature_url || null,
-                customerSignatureUrl: null,
+                // Signatures
+                companySignatureUrl: companyInfo?.signature_url,
+                customerSignatureUrl: undefined,
             };
 
             const filename = `contract-${deal.id}-${new Date().toISOString().split('T')[0]}.pdf`;

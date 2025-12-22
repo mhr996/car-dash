@@ -8,6 +8,7 @@ export interface CompanyInfo {
     signature_url?: string;
     address?: string;
     phone?: string;
+    email?: string;
     tax_number?: string;
     created_at?: string;
     updated_at?: string;
