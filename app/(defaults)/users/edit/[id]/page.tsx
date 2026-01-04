@@ -5,6 +5,7 @@ import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import CountrySelect from '@/components/country-select/country-select';
+import RoleSelect from '@/components/role-select/role-select';
 import { getTranslation } from '@/i18n';
 
 const EditUserPage = () => {
@@ -32,6 +33,7 @@ const EditUserPage = () => {
         country: '',
         address: '',
         phone: '',
+        role: 'Admin',
     });
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -42,14 +44,24 @@ const EditUserPage = () => {
 
     const [loading, setLoading] = useState(false);
     const [fetchLoading, setFetchLoading] = useState(true);
+    const [permissions, setPermissions] = useState<string[]>([]);
+    const [availablePermissions, setAvailablePermissions] = useState<Array<{ key: string; name: string; description: string; category: string }>>([]);
 
     useEffect(() => {
         const fetchUser = async () => {
             try {
+                // Fetch user profile
                 const { data, error } = await supabase.from('users').select('full_name, email, country, address, phone').eq('id', userId).single();
 
                 if (error) throw error;
 
+                // Fetch user role
+                const { data: userRoleData } = await supabase.from('user_roles').select('role_id, roles(name)').eq('user_id', userId).single();
+
+                // Fetch user permissions
+                const { data: userPermsData } = await supabase.from('user_permissions').select('permissions(key)').eq('user_id', userId).eq('granted', true);
+
+                // Set all form data at once to avoid multiple re-renders
                 if (data) {
                     setForm({
                         full_name: data.full_name || '',
@@ -57,7 +69,13 @@ const EditUserPage = () => {
                         country: data.country || '',
                         address: data.address || '',
                         phone: data.phone || '',
+                        role: userRoleData?.roles?.[0]?.name || 'Admin',
                     });
+                }
+
+                if (userPermsData) {
+                    const permKeys = userPermsData.map((p: any) => p.permissions.key).filter(Boolean);
+                    setPermissions(permKeys);
                 }
             } catch (error) {
                 console.error('Error fetching user:', error);
@@ -76,13 +94,38 @@ const EditUserPage = () => {
         }
     }, [userId, t]);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({
             ...prev,
             [name]: value,
         }));
     };
+
+    const handlePermissionToggle = (permissionKey: string) => {
+        setPermissions((prev) => {
+            if (prev.includes(permissionKey)) {
+                return prev.filter((key) => key !== permissionKey);
+            } else {
+                return [...prev, permissionKey];
+            }
+        });
+    };
+
+    // Fetch available permissions on component mount
+    useEffect(() => {
+        const fetchPermissions = async () => {
+            try {
+                const { data, error } = await supabase.from('permissions').select('*').order('category', { ascending: true });
+                if (data && !error) {
+                    setAvailablePermissions(data);
+                }
+            } catch (error) {
+                console.error('Error fetching permissions:', error);
+            }
+        };
+        fetchPermissions();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -109,6 +152,44 @@ const EditUserPage = () => {
                 .eq('id', userId);
 
             if (profileError) throw profileError;
+
+            // Update user role
+            const { data: roleData } = await supabase.from('roles').select('id').eq('name', form.role).single();
+
+            if (roleData) {
+                // Delete existing role assignment
+                await supabase.from('user_roles').delete().eq('user_id', userId);
+
+                // Insert new role
+                await supabase.from('user_roles').insert({
+                    user_id: userId,
+                    role_id: roleData.id,
+                });
+            }
+
+            // Update user permissions (for Sales users)
+            if (form.role === 'Sales') {
+                // Delete existing permissions
+                await supabase.from('user_permissions').delete().eq('user_id', userId);
+
+                // Insert new permissions
+                if (permissions.length > 0) {
+                    const { data: permissionData } = await supabase.from('permissions').select('id, key').in('key', permissions);
+
+                    if (permissionData && permissionData.length > 0) {
+                        const userPermissions = permissionData.map((perm) => ({
+                            user_id: userId,
+                            permission_id: perm.id,
+                            granted: true,
+                        }));
+
+                        await supabase.from('user_permissions').insert(userPermissions);
+                    }
+                }
+            } else {
+                // If changed to Admin, clear custom permissions
+                await supabase.from('user_permissions').delete().eq('user_id', userId);
+            }
 
             // Update auth email if it changed
             const { data: authUser } = await supabase.auth.getUser();
@@ -236,6 +317,65 @@ const EditUserPage = () => {
                         </label>
                         <input type="text" id="phone" name="phone" value={form.phone} onChange={handleInputChange} className="form-input lg:max-w-[49%]" placeholder={t('enter_phone')} />
                     </div>
+                    <div className="sm:col-span-2">
+                        <label htmlFor="role" className="block text-sm font-bold text-gray-700 dark:text-white">
+                            {t('user_role')} *
+                        </label>
+                        <RoleSelect
+                            id="role"
+                            name="role"
+                            defaultValue={form.role}
+                            className="form-select text-white-dark lg:max-w-[49%]"
+                            onChange={(e) => {
+                                setForm((prev) => ({
+                                    ...prev,
+                                    role: e.target.value,
+                                }));
+                            }}
+                        />
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">{t('select_user_role_description')}</p>
+                    </div>
+
+                    {/* Permissions Section - Only visible for Sales role */}
+                    {form.role === 'Sales' && (
+                        <div className="sm:col-span-2">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-3">{t('page_access_permissions')}</label>
+                            <div className="rounded-md border border-[#ebedf2] bg-gray-50 p-4 dark:border-[#191e3a] dark:bg-[#0e1726]">
+                                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{t('select_pages_sales_user_can_access')}</p>
+
+                                {/* Group permissions by category */}
+                                {['main', 'users', 'accounting', 'settings'].map((category) => {
+                                    const categoryPerms = availablePermissions.filter((p) => p.category === category);
+                                    if (categoryPerms.length === 0) return null;
+
+                                    return (
+                                        <div key={category} className="mb-4">
+                                            <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-white capitalize">
+                                                {category === 'main' ? t('main') : category === 'users' ? t('user_and_pages') : category === 'accounting' ? t('accounting') : t('general_settings')}
+                                            </h3>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                                {categoryPerms.map((permission) => (
+                                                    <label key={permission.key} className="flex items-start cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={permissions.includes(permission.key)}
+                                                            onChange={() => handlePermissionToggle(permission.key)}
+                                                            className="form-checkbox mt-1 h-4 w-4 text-primary"
+                                                        />
+                                                        <span className="ltr:ml-2 rtl:mr-2">
+                                                            <span className="block text-sm font-medium text-gray-700 dark:text-white">{t(`permission_${permission.key}`)}</span>
+                                                            {permission.description && <span className="block text-xs text-gray-500 dark:text-gray-400">{t(`permission_${permission.key}_desc`)}</span>}
+                                                        </span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="sm:col-span-2 flex gap-4">
                         <button type="button" onClick={() => router.back()} className="btn btn-outline-danger">
                             {t('cancel')}

@@ -7,6 +7,7 @@ import AnimateHeight from 'react-animate-height';
 import { IRootState } from '@/store';
 import { useState, useEffect } from 'react';
 import supabase from '@/lib/supabase';
+import { usePermissions } from '@/hooks/usePermissions';
 import IconCaretsDown from '@/components/icon/icon-carets-down';
 import IconMenuDashboard from '@/components/icon/menu/icon-menu-dashboard';
 import IconCaretDown from '@/components/icon/icon-caret-down';
@@ -50,6 +51,8 @@ const Sidebar = () => {
     });
     const themeConfig = useSelector((state: IRootState) => state.themeConfig);
     const semidark = useSelector((state: IRootState) => state.themeConfig.semidark);
+    const { hasPermission, isAdmin, loading } = usePermissions();
+
     const toggleMenu = (value: string) => {
         setCurrentMenu((oldValue) => {
             return oldValue === value ? '' : value;
@@ -140,118 +143,150 @@ const Sidebar = () => {
 
                             <li className="nav-item">
                                 <ul>
-                                    <li className="nav-item">
-                                        <Link href="/" className="group">
-                                            <div className="flex items-center">
-                                                <IconMenuDashboard className="shrink-0 group-hover:!text-primary" />
-                                                <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('home')}</span>
-                                            </div>
-                                        </Link>
-                                    </li>
+                                    {hasPermission('view_dashboard') && (
+                                        <li className="nav-item">
+                                            <Link href="/" className="group">
+                                                <div className="flex items-center">
+                                                    <IconMenuDashboard className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('home')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
 
-                                    <li className="nav-item">
-                                        <Link href="/cars" className="group">
-                                            <div className="flex items-center">
-                                                <IconMenuWidgets className="shrink-0 group-hover:!text-primary" />
-                                                <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('cars')}</span>
-                                            </div>
-                                        </Link>
-                                    </li>
-                                    <li className="nav-item">
-                                        <Link href="/providers" className="group">
-                                            <div className="flex items-center">
-                                                <IconBox fill={true} className="shrink-0 group-hover:!text-primary" />
-                                                <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('providers')}</span>
-                                            </div>
-                                        </Link>
-                                    </li>
-                                    <li className="nav-item">
-                                        <Link href="/customers" className="group">
-                                            <div className="flex items-center">
-                                                <IconMenuUsers className="shrink-0 group-hover:!text-primary" />
-                                                <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('customers')}</span>
-                                            </div>
-                                        </Link>
-                                    </li>
+                                    {hasPermission('view_cars') && (
+                                        <li className="nav-item">
+                                            <Link href="/cars" className="group">
+                                                <div className="flex items-center">
+                                                    <IconMenuWidgets className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('cars')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
+                                    {hasPermission('view_providers') && (
+                                        <li className="nav-item">
+                                            <Link href="/providers" className="group">
+                                                <div className="flex items-center">
+                                                    <IconBox fill={true} className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('providers')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
+                                    {hasPermission('view_customers') && (
+                                        <li className="nav-item">
+                                            <Link href="/customers" className="group">
+                                                <div className="flex items-center">
+                                                    <IconMenuUsers className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('customers')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
                                 </ul>
                             </li>
 
-                            <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
-                                <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>{t('user_and_pages')}</span>
-                            </h2>
+                            {hasPermission('view_users') && (
+                                <>
+                                    <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
+                                        <IconMinus className="hidden h-5 w-4 flex-none" />
+                                        <span>{t('user_and_pages')}</span>
+                                    </h2>
 
-                            <li className="nav-item">
-                                <Link href="/users" className="group">
-                                    <div className="flex items-center">
-                                        <IconMenuUsers className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('users_list')}</span>
-                                    </div>
-                                </Link>
-                            </li>
+                                    <li className="nav-item">
+                                        <Link href="/users" className="group">
+                                            <div className="flex items-center">
+                                                <IconMenuUsers className="shrink-0 group-hover:!text-primary" />
+                                                <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('users_list')}</span>
+                                            </div>
+                                        </Link>
+                                    </li>
+                                </>
+                            )}
 
-                            <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
-                                <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>{t('accounting')}</span>
-                            </h2>
+                            {(hasPermission('view_sales_deals') || hasPermission('view_purchases_deals') || hasPermission('view_bills') || hasPermission('view_logs')) && (
+                                <>
+                                    <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
+                                        <IconMinus className="hidden h-5 w-4 flex-none" />
+                                        <span>{t('accounting')}</span>
+                                    </h2>
 
-                            <li className="nav-item">
-                                <Link href="/sales-deals" className="group">
-                                    <div className="flex items-center">
-                                        <IconMenuInvoice className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('sales_deals')}</span>
-                                    </div>
-                                </Link>
-                            </li>
+                                    {hasPermission('view_sales_deals') && (
+                                        <li className="nav-item">
+                                            <Link href="/sales-deals" className="group">
+                                                <div className="flex items-center">
+                                                    <IconMenuInvoice className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('sales_deals')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
 
-                            <li className="nav-item">
-                                <Link href="/purchases-deals" className="group">
-                                    <div className="flex items-center">
-                                        <IconCar className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('purchases_deals')}</span>
-                                    </div>
-                                </Link>
-                            </li>
+                                    {hasPermission('view_purchases_deals') && (
+                                        <li className="nav-item">
+                                            <Link href="/purchases-deals" className="group">
+                                                <div className="flex items-center">
+                                                    <IconCar className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('purchases_deals')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
 
-                            <li className="nav-item">
-                                <Link href="/bills" className="group">
-                                    <div className="flex items-center">
-                                        <IconMenuInvoice className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('bills')}</span>
-                                    </div>
-                                </Link>
-                            </li>
+                                    {hasPermission('view_bills') && (
+                                        <li className="nav-item">
+                                            <Link href="/bills" className="group">
+                                                <div className="flex items-center">
+                                                    <IconMenuInvoice className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('bills')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
 
-                            <li className="nav-item">
-                                <Link href="/logs" className="group">
-                                    <div className="flex items-center">
-                                        <IconListCheck className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('logs')}</span>
-                                    </div>
-                                </Link>
-                            </li>
+                                    {hasPermission('view_logs') && (
+                                        <li className="nav-item">
+                                            <Link href="/logs" className="group">
+                                                <div className="flex items-center">
+                                                    <IconListCheck className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('logs')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
+                                </>
+                            )}
 
-                            <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
-                                <IconMinus className="hidden h-5 w-4 flex-none" />
-                                <span>{t('general_settings')}</span>
-                            </h2>
+                            {(hasPermission('view_home_settings') || hasPermission('view_company_settings')) && (
+                                <>
+                                    <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
+                                        <IconMinus className="hidden h-5 w-4 flex-none" />
+                                        <span>{t('general_settings')}</span>
+                                    </h2>
 
-                            <li className="nav-item">
-                                <Link href="/home-settings" className="group">
-                                    <div className="flex items-center">
-                                        <IconSettings className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('home_page_settings')}</span>
-                                    </div>
-                                </Link>
-                            </li>
-                            <li className="nav-item">
-                                <Link href="/company-settings" className="group">
-                                    <div className="flex items-center">
-                                        <IconBuilding className="shrink-0 group-hover:!text-primary" />
-                                        <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('company_settings')}</span>
-                                    </div>
-                                </Link>
-                            </li>
+                                    {hasPermission('view_home_settings') && (
+                                        <li className="nav-item">
+                                            <Link href="/home-settings" className="group">
+                                                <div className="flex items-center">
+                                                    <IconSettings className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('home_page_settings')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
+                                    {hasPermission('view_company_settings') && (
+                                        <li className="nav-item">
+                                            <Link href="/company-settings" className="group">
+                                                <div className="flex items-center">
+                                                    <IconBuilding className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('company_settings')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
+                                </>
+                            )}
                         </ul>
                     </PerfectScrollbar>
                 </div>

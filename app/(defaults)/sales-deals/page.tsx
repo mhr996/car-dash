@@ -18,11 +18,13 @@ import DealFilters from '@/components/deal-filters/deal-filters';
 import { handleDealDeleted, getCustomerIdFromDeal } from '@/utils/balance-manager';
 import ViewToggle from '@/components/view-toggle/view-toggle';
 import { ContractPDFGenerator } from '@/utils/contract-pdf-generator-new';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 import { CarContract } from '@/types/contract';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
 import IconDocument from '@/components/icon/icon-document';
 import IconPdf from '@/components/icon/icon-pdf';
 import IconCaretDown from '@/components/icon/icon-caret-down';
+import { usePermissions } from '@/hooks/usePermissions';
 
 type DealType = 'new_used_sale' | 'new_sale' | 'used_sale' | 'new_used_sale_tax_inclusive' | 'exchange' | 'intermediary' | 'financing_assistance_intermediary' | 'company_commission' | '';
 
@@ -40,6 +42,7 @@ interface DealFilters {
 
 const DealsList = () => {
     const { t } = getTranslation();
+    const { hasPermission } = usePermissions();
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -142,7 +145,9 @@ const DealsList = () => {
                             type,
                             kilometers,
                             buy_price
-                        ),
+                        )${
+                            hasPermission('view_bills')
+                                ? `,
                         bills (
                             id,
                             bill_type,
@@ -158,7 +163,9 @@ const DealsList = () => {
                                 amount,
                                 payment_type
                             )
-                        )
+                        )`
+                                : ''
+                        }
                     `,
                     )
                     .order('created_at', { ascending: false });
@@ -785,15 +792,24 @@ const DealsList = () => {
                                     sortable: true,
                                     render: ({ status }) => <span className={`badge ${getStatusBadgeClass(status)}`}>{t(`status_${status}`)}</span>,
                                 },
-                                {
-                                    accessor: 'bill_status',
-                                    title: t('bill_status'),
-                                    sortable: true,
-                                    render: ({ bills }) => {
-                                        const hasBills = bills && bills.length > 0;
-                                        return <span className={`badge ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>{hasBills ? t('bill_created') : t('no_bill_created')}</span>;
-                                    },
-                                },
+                                ...(hasPermission('view_bills')
+                                    ? [
+                                          {
+                                              accessor: 'bill_status',
+                                              title: t('bill_status'),
+                                              sortable: true,
+                                              render: (record: Deal) => {
+                                                  const bills = record.bills as any[];
+                                                  const hasBills = bills && bills.length > 0;
+                                                  return (
+                                                      <span className={`badge ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>
+                                                          {hasBills ? t('bill_created') : t('no_bill_created')}
+                                                      </span>
+                                                  );
+                                              },
+                                          },
+                                      ]
+                                    : []),
 
                                 {
                                     accessor: 'action',
@@ -821,8 +837,8 @@ const DealsList = () => {
                                                     )}
                                                 </button>
 
-                                                {/* Bill PDFs Dropdown - Only show if deal has bills */}
-                                                {hasBills && (
+                                                {/* Bill PDFs Dropdown - Only show if deal has bills and user has permission */}
+                                                {hasPermission('view_bills') && hasBills && (
                                                     <div className="relative" ref={openBillDropdown === id ? dropdownRef : null}>
                                                         <button
                                                             type="button"
@@ -982,12 +998,14 @@ const DealsList = () => {
                                                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('status')}</p>
                                                             <span className={`badge ${getStatusBadgeClass(deal.status)}`}>{t(`status_${deal.status}`)}</span>
                                                         </div>
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('bill_status')}</p>
-                                                            <span className={`badge ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>
-                                                                {hasBills ? t('bill_created') : t('no_bill_created')}
-                                                            </span>
-                                                        </div>
+                                                        {hasPermission('view_bills') && (
+                                                            <div>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('bill_status')}</p>
+                                                                <span className={`badge ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>
+                                                                    {hasBills ? t('bill_created') : t('no_bill_created')}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <div className="mt-2">
                                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('deal_created_date')}</p>
@@ -1017,7 +1035,7 @@ const DealsList = () => {
                                                     </button>
 
                                                     {/* Bill PDFs Dropdown - Only show if deal has bills */}
-                                                    {hasBills && (
+                                                    {hasPermission('view_bills') && hasBills && (
                                                         <div className="relative" ref={openBillDropdown === deal.id ? dropdownRef : null}>
                                                             <button
                                                                 type="button"
@@ -1147,4 +1165,10 @@ const DealsList = () => {
     );
 };
 
-export default DealsList;
+const ProtectedSalesDealsPage = () => (
+    <PermissionGuard permission="view_sales_deals">
+        <DealsList />
+    </PermissionGuard>
+);
+
+export default ProtectedSalesDealsPage;

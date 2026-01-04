@@ -13,6 +13,7 @@ import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import CustomerFilters from '@/components/customer-filters/customer-filters';
 import ViewToggle from '@/components/view-toggle/view-toggle';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 interface Customer {
     id: string;
@@ -487,4 +488,10 @@ const CustomersList = () => {
     );
 };
 
-export default CustomersList;
+const ProtectedCustomersPage = () => (
+    <PermissionGuard permission="view_customers">
+        <CustomersList />
+    </PermissionGuard>
+);
+
+export default ProtectedCustomersPage;

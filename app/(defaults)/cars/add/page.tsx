@@ -16,6 +16,7 @@ import CustomerSelect from '@/components/customer-select/customer-select';
 import TypeSelect from '@/components/type-select/type-select';
 import CreateCustomerModal from '@/components/modals/create-customer-modal';
 import { logActivity } from '@/utils/activity-logger';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface ColorVariant {
     id: string;
@@ -35,6 +36,7 @@ interface Customer {
 const AddCar = () => {
     const { t } = getTranslation();
     const router = useRouter();
+    const { hasPermission } = usePermissions();
     const [saving, setSaving] = useState(false);
     const [activeTab, setActiveTab] = useState(1);
 
@@ -687,27 +689,29 @@ const AddCar = () => {
                                     </div>
                                 </div>
                                 {/* Value Price */}
-                                <div>
-                                    <label htmlFor="buy_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('buy_price')}
-                                    </label>
-                                    <div className="flex">
-                                        <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border border-r-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md ltr:border-r-0 rtl:border-l-0">
-                                            ₪
-                                        </span>
-                                        <input
-                                            type="number"
-                                            id="buy_price"
-                                            name="buy_price"
-                                            step="0.01"
-                                            min="0"
-                                            value={form.buy_price}
-                                            onChange={handleInputChange}
-                                            className="form-input ltr:rounded-l-none rtl:rounded-r-none"
-                                            placeholder="0.00"
-                                        />
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div>
+                                        <label htmlFor="buy_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('buy_price')}
+                                        </label>
+                                        <div className="flex">
+                                            <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border border-r-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md ltr:border-r-0 rtl:border-l-0">
+                                                ₪
+                                            </span>
+                                            <input
+                                                type="number"
+                                                id="buy_price"
+                                                name="buy_price"
+                                                step="0.01"
+                                                min="0"
+                                                value={form.buy_price}
+                                                onChange={handleInputChange}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                                 {/* Sale Price */}
                                 <div>
                                     <label htmlFor="sale_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
@@ -883,7 +887,6 @@ const AddCar = () => {
                                         </div>
                                         <input ref={contractInputRef} type="file" className="hidden" accept="image/*" onChange={handleContractChange} />
                                     </div> */}
-                             
                                 </div>
 
                                 {/* Gallery Section */}

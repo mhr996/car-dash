@@ -13,6 +13,8 @@ import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import { logActivity } from '@/utils/activity-logger';
 import CarFilters, { CarFilters as CarFiltersType } from '@/components/car-filters/car-filters';
+import { usePermissions } from '@/hooks/usePermissions';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 import ViewToggle from '@/components/view-toggle/view-toggle';
 
 interface Car {
@@ -59,6 +61,7 @@ type TabType = 'available' | 'archived';
 
 const CarsList = () => {
     const { t } = getTranslation();
+    const { hasPermission } = usePermissions();
     const [items, setItems] = useState<Car[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<TabType>('available');
@@ -710,15 +713,17 @@ const CarsList = () => {
                                                     </div>
                                                 </div>
                                                 <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">
-                                                    <div className="grid grid-cols-2 gap-3">
+                                                    <div className={`grid ${hasPermission('view_car_purchase_price') ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
                                                         <div>
                                                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('market_price')}</p>
                                                             <p className="font-bold text-success text-sm">{formatCurrency(car.market_price)}</p>
                                                         </div>
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('buy_price')}</p>
-                                                            <p className="font-bold text-warning text-sm">{formatCurrency(car.buy_price)}</p>
-                                                        </div>
+                                                        {hasPermission('view_car_purchase_price') && (
+                                                            <div>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('buy_price')}</p>
+                                                                <p className="font-bold text-warning text-sm">{formatCurrency(car.buy_price)}</p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="flex gap-2">
@@ -788,4 +793,10 @@ const CarsList = () => {
     );
 };
 
-export default CarsList;
+const CarsPage = () => (
+    <PermissionGuard permission="view_cars">
+        <CarsList />
+    </PermissionGuard>
+);
+
+export default CarsPage;

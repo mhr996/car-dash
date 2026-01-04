@@ -14,6 +14,7 @@ import ProviderSelect from '@/components/provider-select/provider-select';
 import TypeSelect from '@/components/type-select/type-select';
 import CustomerSelect from '@/components/customer-select/customer-select';
 import CreateCustomerModal from '@/components/modals/create-customer-modal';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface ColorVariant {
     id: string;
@@ -79,6 +80,7 @@ const EditCar = () => {
     const { t } = getTranslation();
     const router = useRouter();
     const params = useParams();
+    const { hasPermission } = usePermissions();
     const carId = params?.id as string;
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -172,9 +174,13 @@ const EditCar = () => {
                         desc: data.desc || '', // New description field
                         public: data.public || false, // Public visibility field
                     }); // Convert relative paths to full URLs for display and keep original paths
-                    if (data.images && data.images.length > 0) {
-                        setExistingImagePaths(data.images); // Store original relative paths
-                        const imageUrls = data.images.map((imagePath: string) => {
+
+                    // Parse images if they're a string
+                    const images = typeof data.images === 'string' ? JSON.parse(data.images || '[]') : data.images || [];
+
+                    if (images && images.length > 0) {
+                        setExistingImagePaths(images); // Store original relative paths
+                        const imageUrls = images.map((imagePath: string) => {
                             const { data: urlData } = supabase.storage.from('cars').getPublicUrl(imagePath);
                             return urlData.publicUrl;
                         });
@@ -194,9 +200,10 @@ const EditCar = () => {
                     }
 
                     // Load existing colors
-                    if (data.colors && data.colors.length > 0) {
+                    const colors = typeof data.colors === 'string' ? JSON.parse(data.colors || '[]') : data.colors || [];
+                    if (colors && colors.length > 0) {
                         const existingColors: ColorVariant[] = await Promise.all(
-                            data.colors.map(async (colorData: any, index: number) => {
+                            colors.map(async (colorData: any, index: number) => {
                                 const colorPreviews: string[] = [];
 
                                 if (colorData.images && colorData.images.length > 0) {
@@ -219,8 +226,9 @@ const EditCar = () => {
                     }
 
                     // Initialize features if they exist
-                    if (data.features && Array.isArray(data.features)) {
-                        const existingFeatures = data.features.map((feature: any, index: number) => ({
+                    const features = typeof data.features === 'string' ? JSON.parse(data.features || '[]') : data.features || [];
+                    if (features && Array.isArray(features)) {
+                        const existingFeatures = features.map((feature: any, index: number) => ({
                             id: `existing-${index}`,
                             label: feature.label || '',
                             value: feature.value || '',
@@ -845,27 +853,29 @@ const EditCar = () => {
                                     </div>
                                 </div>
                                 {/* Value Price */}
-                                <div>
-                                    <label htmlFor="buy_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('buy_price')}
-                                    </label>
-                                    <div className="flex">
-                                        <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
-                                            ₪
-                                        </span>
-                                        <input
-                                            type="number"
-                                            id="buy_price"
-                                            name="buy_price"
-                                            step="0.01"
-                                            min="0"
-                                            value={form.buy_price}
-                                            onChange={handleInputChange}
-                                            className="form-input ltr:rounded-l-none rtl:rounded-r-none"
-                                            placeholder="0.00"
-                                        />
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div>
+                                        <label htmlFor="buy_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('buy_price')}
+                                        </label>
+                                        <div className="flex">
+                                            <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
+                                                ₪
+                                            </span>
+                                            <input
+                                                type="number"
+                                                id="buy_price"
+                                                name="buy_price"
+                                                step="0.01"
+                                                min="0"
+                                                value={form.buy_price}
+                                                onChange={handleInputChange}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                                 {/* Sale Price */}
                                 <div>
                                     <label htmlFor="sale_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">

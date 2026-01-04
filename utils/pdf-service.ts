@@ -184,7 +184,7 @@ export class PDFService {
     }
 
     async generateFromContract(contractData: any): Promise<Uint8Array> {
-        // This is a placeholder - you should implement the actual contract HTML generation
+        // Placeholder
         const contractHtml = `
             <html>
                 <head>

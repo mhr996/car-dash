@@ -14,6 +14,7 @@ import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import { generateBillPDF, BillData } from '@/utils/pdf-generator';
 import { BillWithPayments } from '@/types/payment';
 import BillFilters from '@/components/bill-filters/bill-filters';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 interface BillFiltersInterface {
     search: string;
@@ -602,4 +603,10 @@ const Bills = () => {
     );
 };
 
-export default Bills;
+const ProtectedBillsPage = () => (
+    <PermissionGuard permission="view_bills">
+        <Bills />
+    </PermissionGuard>
+);
+
+export default ProtectedBillsPage;

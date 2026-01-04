@@ -12,6 +12,7 @@ import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import ViewToggle from '@/components/view-toggle/view-toggle';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 const UsersList = () => {
     const { t } = getTranslation();
@@ -500,4 +501,10 @@ const UsersList = () => {
     );
 };
 
-export default UsersList;
+const ProtectedUsersPage = () => (
+    <PermissionGuard permission="view_users">
+        <UsersList />
+    </PermissionGuard>
+);
+
+export default ProtectedUsersPage;

@@ -18,6 +18,7 @@ import { CarContract } from '@/types/contract';
 import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Car {
     id: string;
@@ -62,6 +63,7 @@ const CarPreview = () => {
     const { t } = getTranslation();
     const params = useParams();
     const router = useRouter();
+    const { hasPermission } = usePermissions();
     const [car, setCar] = useState<Car | null>(null);
     const [loading, setLoading] = useState(true);
     const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -580,12 +582,14 @@ const CarPreview = () => {
                                     </div>
                                     <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(car.market_price)}</span>
                                 </div>
-                                <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                    <div className="flex items-center">
-                                        <IconTrendingUp className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" /> <span className="text-sm text-gray-600">{t('buy_price')}:</span>
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                        <div className="flex items-center">
+                                            <IconTrendingUp className="w-5 h-5 text-gray-400 ltr:mr-2 rtl:ml-2" /> <span className="text-sm text-gray-600">{t('buy_price')}:</span>
+                                        </div>
+                                        <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(car.buy_price)}</span>
                                     </div>
-                                    <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(car.buy_price)}</span>
-                                </div>
+                                )}
                                 <div className="flex justify-between items-center p-3 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/20">
                                     <div className="flex items-center">
                                         <IconDollarSign className="w-5 h-5 text-primary ltr:mr-2 rtl:ml-2" />

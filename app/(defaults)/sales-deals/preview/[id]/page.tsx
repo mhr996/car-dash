@@ -28,6 +28,7 @@ import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconBank from '@/components/icon/icon-bank';
 import IconCheck from '@/components/icon/icon-check';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
+import { usePermissions } from '@/hooks/usePermissions';
 import BillsTable from '@/components/bills/bills-table';
 import SignatureModal from '@/components/modals/signature-modal';
 import IconPencil from '@/components/icon/icon-pencil';
@@ -70,6 +71,7 @@ interface Bill {
 const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
     const router = useRouter();
+    const { hasPermission } = usePermissions();
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'info' | 'attachments' | 'payments' | 'bills'>('info');
     const [deal, setDeal] = useState<Deal | null>(null);
@@ -196,21 +198,23 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                         }
                     }
 
-                    // Fetch bills linked to this deal
-                    const { data: billsData } = await supabase
-                        .from('bills')
-                        .select(
-                            `id, bill_type, status, customer_name, date, total_with_tax, total, created_at, bill_amount, payment_type, visa_amount, cash_amount, bank_amount, transfer_amount, check_amount, bill_direction,
-                            bill_payments (
-                                amount,
-                                payment_type
-                            )`,
-                        )
-                        .eq('deal_id', dealId)
-                        .order('created_at', { ascending: false });
+                    // Fetch bills linked to this deal (only if user has permission)
+                    if (hasPermission('view_bills')) {
+                        const { data: billsData } = await supabase
+                            .from('bills')
+                            .select(
+                                `id, bill_type, status, customer_name, date, total_with_tax, total, created_at, bill_amount, payment_type, visa_amount, cash_amount, bank_amount, transfer_amount, check_amount, bill_direction,
+                                bill_payments (
+                                    amount,
+                                    payment_type
+                                )`,
+                            )
+                            .eq('deal_id', dealId)
+                            .order('created_at', { ascending: false });
 
-                    if (billsData) {
-                        setBills(billsData);
+                        if (billsData) {
+                            setBills(billsData);
+                        }
                     }
                 }
             } catch (error) {
@@ -678,18 +682,20 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 {t('payment_methods')}
                             </button>
                         </li>
-                        <li className="mx-2">
-                            <button
-                                type="button"
-                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
-                                    activeTab === 'bills' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                                }`}
-                                onClick={() => setActiveTab('bills')}
-                            >
-                                <IconReceipt className="w-4 h-4" />
-                                {t('connected_bills')}
-                            </button>
-                        </li>
+                        {hasPermission('view_bills') && (
+                            <li className="mx-2">
+                                <button
+                                    type="button"
+                                    className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                        activeTab === 'bills' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                    }`}
+                                    onClick={() => setActiveTab('bills')}
+                                >
+                                    <IconReceipt className="w-4 h-4" />
+                                    {t('connected_bills')}
+                                </button>
+                            </li>
+                        )}
                     </ul>
                 </div>
             </div>
@@ -796,12 +802,14 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                     </div>
 
                                     {/* Row 2: Buy Price */}
-                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price')}</div>
-                                        <div className="text-center">
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{car.buy_price?.toFixed(0) || '0.00'}</span>
+                                    {hasPermission('view_car_purchase_price') && (
+                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price')}</div>
+                                            <div className="text-center">
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">₪{car.buy_price?.toFixed(0) || '0.00'}</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                     {/* Row 3: Sale Price */}
                                     <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                         <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('sale_price')}</div>
@@ -811,12 +819,14 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                     </div>
 
                                     {/* Row 4: Deal Amount */}
-                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount')}</div>
-                                        <div className="text-center">
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{deal.amount?.toFixed(0) || '0.00'}</span>
+                                    {hasPermission('view_car_purchase_price') && (
+                                        <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount')}</div>
+                                            <div className="text-center">
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">₪{deal.amount?.toFixed(0) || '0.00'}</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* Exchange Deal Specific Fields */}
                                     {deal.deal_type === 'exchange' && carTakenFromClient && (
@@ -853,7 +863,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                     )}
 
                                     {/* Row 5: Profit/Loss */}
-                                    {deal.deal_type !== 'intermediary' && deal.deal_type !== 'financing_assistance_intermediary' && (
+                                    {hasPermission('view_car_purchase_price') && deal.deal_type !== 'intermediary' && deal.deal_type !== 'financing_assistance_intermediary' && (
                                         <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-2">
                                             <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('profit_loss')}</div>
                                             <div className="text-center">
@@ -954,15 +964,17 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                         </div>
                                     </div>
                                     {/* Car Pricing */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className={`grid grid-cols-1 md:grid-cols-${hasPermission('view_car_purchase_price') ? '3' : '2'} gap-6`}>
                                         <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                             <p className="text-blue-600 dark:text-blue-400 font-medium mb-2">{t('market_price')}</p>
                                             <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(car.market_price)}</p>
                                         </div>
-                                        <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                            <p className="text-emerald-600 dark:text-emerald-400 font-medium mb-2">{t('buy_price')}</p>
-                                            <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(car.buy_price)}</p>
-                                        </div>
+                                        {hasPermission('view_car_purchase_price') && (
+                                            <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                                <p className="text-emerald-600 dark:text-emerald-400 font-medium mb-2">{t('buy_price')}</p>
+                                                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(car.buy_price)}</p>
+                                            </div>
+                                        )}
                                         <div className="p-6 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
                                             <p className="text-amber-600 dark:text-amber-400 font-medium mb-2">{t('sale_price')}</p>
                                             <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{formatCurrency(car.sale_price)}</p>
@@ -1015,19 +1027,23 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                     </div>
 
                                     {/* Car Pricing */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className={`grid grid-cols-1 md:grid-cols-${hasPermission('view_car_purchase_price') ? '3' : '1'} gap-6`}>
                                         <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
                                             <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('market_price')}</p>
                                             <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.market_price)}</p>
                                         </div>
-                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('buy_price')}</p>
-                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                        </div>
-                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('received_value')}</p>
-                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                        </div>
+                                        {hasPermission('view_car_purchase_price') && (
+                                            <>
+                                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('buy_price')}</p>
+                                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
+                                                </div>
+                                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('received_value')}</p>
+                                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1150,7 +1166,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                 )}
 
                 {/* Bills Tab */}
-                {activeTab === 'bills' && (
+                {hasPermission('view_bills') && activeTab === 'bills' && (
                     <BillsTable
                         bills={bills}
                         loading={false}

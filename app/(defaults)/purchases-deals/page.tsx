@@ -13,6 +13,7 @@ import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-p
 import { CarContract } from '@/types/contract';
 import { getCompanyInfo } from '@/lib/company-info';
 import ViewToggle from '@/components/view-toggle/view-toggle';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 interface Provider {
     id: number;
@@ -562,4 +563,10 @@ const CarDealsPage = () => {
     );
 };
 
-export default CarDealsPage;
+const ProtectedPurchaseDealsPage = () => (
+    <PermissionGuard permission="view_purchases_deals">
+        <CarDealsPage />
+    </PermissionGuard>
+);
+
+export default ProtectedPurchaseDealsPage;

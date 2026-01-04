@@ -5,6 +5,7 @@ import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import CountrySelect from '@/components/country-select/country-select';
+import RoleSelect from '@/components/role-select/role-select';
 import { getTranslation } from '@/i18n';
 import IconEye from '@/components/icon/icon-eye';
 
@@ -19,6 +20,7 @@ const AddUserPage = () => {
         address: '',
         phone: '',
         status: 'Active',
+        role: 'Admin',
     });
     const [showPassword, setShowPassword] = useState(false);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -27,14 +29,41 @@ const AddUserPage = () => {
         type: 'success',
     });
     const [loading, setLoading] = useState(false);
+    const [permissions, setPermissions] = useState<string[]>([]);
+    const [availablePermissions, setAvailablePermissions] = useState<Array<{ key: string; name: string; description: string; category: string }>>([]);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({
             ...prev,
             [name]: value,
         }));
     };
+
+    const handlePermissionToggle = (permissionKey: string) => {
+        setPermissions((prev) => {
+            if (prev.includes(permissionKey)) {
+                return prev.filter((key) => key !== permissionKey);
+            } else {
+                return [...prev, permissionKey];
+            }
+        });
+    };
+
+    // Fetch available permissions on component mount
+    React.useEffect(() => {
+        const fetchPermissions = async () => {
+            try {
+                const { data, error } = await supabase.from('permissions').select('*').order('category', { ascending: true });
+                if (data && !error) {
+                    setAvailablePermissions(data);
+                }
+            } catch (error) {
+                console.error('Error fetching permissions:', error);
+            }
+        };
+        fetchPermissions();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -82,6 +111,8 @@ const AddUserPage = () => {
                         phone: form.phone,
                         status: form.status,
                     },
+                    role: form.role,
+                    permissions: form.role === 'Sales' ? permissions : [],
                 }),
             });
             const result = await response.json();
@@ -231,12 +262,71 @@ const AddUserPage = () => {
                         </label>
                         <input type="text" id="address" name="address" value={form.address} onChange={handleInputChange} className="form-input" placeholder={t('enter_address')} />
                     </div>
-                    <div className="sm:col-span-2">
+                    <div className="w-full">
                         <label htmlFor="phone" className="block text-sm font-bold text-gray-700 dark:text-white">
                             {t('phone')}
                         </label>
                         <input type="text" id="phone" name="phone" value={form.phone} onChange={handleInputChange} className="form-input lg:max-w-[49%]" placeholder={t('enter_phone')} />
                     </div>
+                    <div className="sm:col-span-2">
+                        <label htmlFor="role" className="block text-sm font-bold text-gray-700 dark:text-white">
+                            {t('user_role')} *
+                        </label>
+                        <RoleSelect
+                            id="role"
+                            name="role"
+                            defaultValue={form.role}
+                            className="form-select text-white-dark lg:max-w-[49%]"
+                            onChange={(e) => {
+                                setForm((prev) => ({
+                                    ...prev,
+                                    role: e.target.value,
+                                }));
+                            }}
+                        />
+                        <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">{t('select_user_role_description')}</p>
+                    </div>
+
+                    {/* Permissions Section - Only visible for Sales role */}
+                    {form.role === 'Sales' && (
+                        <div className="sm:col-span-2">
+                            <label className="block text-sm font-bold text-gray-700 dark:text-white mb-3">{t('page_access_permissions')}</label>
+                            <div className="rounded-md border border-[#ebedf2] bg-gray-50 p-4 dark:border-[#191e3a] dark:bg-[#0e1726]">
+                                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">{t('select_pages_sales_user_can_access')}</p>
+
+                                {/* Group permissions by category */}
+                                {['main', 'users', 'accounting', 'settings'].map((category) => {
+                                    const categoryPerms = availablePermissions.filter((p) => p.category === category);
+                                    if (categoryPerms.length === 0) return null;
+
+                                    return (
+                                        <div key={category} className="mb-4">
+                                            <h3 className="mb-2 text-sm font-semibold text-gray-700 dark:text-white capitalize">
+                                                {category === 'main' ? t('main') : category === 'users' ? t('user_and_pages') : category === 'accounting' ? t('accounting') : t('general_settings')}
+                                            </h3>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                                {categoryPerms.map((permission) => (
+                                                    <label key={permission.key} className="flex items-start cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={permissions.includes(permission.key)}
+                                                            onChange={() => handlePermissionToggle(permission.key)}
+                                                            className="form-checkbox mt-1 h-4 w-4 text-primary"
+                                                        />
+                                                        <span className="ltr:ml-2 rtl:mr-2">
+                                                            <span className="block text-sm font-medium text-gray-700 dark:text-white">{t(`permission_${permission.key}`)}</span>
+                                                            {permission.description && <span className="block text-xs text-gray-500 dark:text-gray-400">{t(`permission_${permission.key}_desc`)}</span>}
+                                                        </span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="sm:col-span-2">
                         <button type="submit" disabled={loading} className="btn btn-primary">
                             {loading ? t('creating_user') : t('create_active_user')}

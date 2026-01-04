@@ -19,6 +19,7 @@ import CreateCustomerModal from '@/components/modals/create-customer-modal';
 import DealPaymentMethods, { PaymentMethod } from '@/components/deal-payment-methods/deal-payment-methods';
 import { Deal, Customer, Car, FileItem, DealAttachments, DealAttachment } from '@/types';
 import { BillWithPayments } from '@/types/payment';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Bill extends BillWithPayments {
     amount: number;
@@ -407,6 +408,7 @@ import IconCreditCard from '@/components/icon/icon-credit-card';
 const EditDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
     const router = useRouter();
+    const { hasPermission } = usePermissions();
     const [activeTab, setActiveTab] = useState<'info' | 'attachments' | 'payments' | 'bills'>('info');
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -614,12 +616,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     setDealDate(data.created_at ? new Date(data.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
 
                     // Check for customer signature
-                    const { data: signatureData } = await supabase
-                        .from('deal_signatures')
-                        .select('customer_signature_url')
-                        .eq('deal_id', dealId)
-                        .single();
-                    
+                    const { data: signatureData } = await supabase.from('deal_signatures').select('customer_signature_url').eq('deal_id', dealId).single();
+
                     setHasCustomerSignature(!!signatureData?.customer_signature_url);
 
                     // Load payment methods if they exist
@@ -1792,18 +1790,20 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 {t('payment_methods')}
                             </button>
                         </li>
-                        <li className="mx-2">
-                            <button
-                                type="button"
-                                className={`flex items-center gap-2 p-4 text-sm font-medium ${
-                                    activeTab === 'bills' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                                }`}
-                                onClick={() => setActiveTab('bills')}
-                            >
-                                <IconReceipt className="w-4 h-4" />
-                                {t('connected_bills')}
-                            </button>
-                        </li>
+                        {hasPermission('view_bills') && (
+                            <li className="mx-2">
+                                <button
+                                    type="button"
+                                    className={`flex items-center gap-2 p-4 text-sm font-medium ${
+                                        activeTab === 'bills' ? 'border-b-2 border-primary text-primary' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                    }`}
+                                    onClick={() => setActiveTab('bills')}
+                                >
+                                    <IconReceipt className="w-4 h-4" />
+                                    {t('connected_bills')}
+                                </button>
+                            </li>
+                        )}
                     </ul>
                 </div>
             </div>
@@ -2005,25 +2005,27 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 </div>
 
                                                 {/* Row 5: Profit Commission (Calculated) */}
-                                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                                    <div className="text-center">
-                                                        {(() => {
-                                                            if (!form.amount || !selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
+                                                {hasPermission('view_car_purchase_price') && (
+                                                    <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                                        <div className="text-center">
+                                                            {(() => {
+                                                                if (!form.amount || !selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
 
-                                                            const buyPrice = selectedCar.buy_price || 0;
-                                                            const sellPrice = parseFloat(form.selling_price || '0') || 0;
-                                                            const loss = parseFloat(form.loss_amount || '0');
-                                                            const profitCommission = sellPrice - buyPrice - loss;
+                                                                const buyPrice = selectedCar.buy_price || 0;
+                                                                const sellPrice = parseFloat(form.selling_price || '0') || 0;
+                                                                const loss = parseFloat(form.loss_amount || '0');
+                                                                const profitCommission = sellPrice - buyPrice - loss;
 
-                                                            return (
-                                                                <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                                    {profitCommission >= 0 ? '+' : ''}₪{profitCommission.toFixed(0)}
-                                                                </span>
-                                                            );
-                                                        })()}
+                                                                return (
+                                                                    <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                                        {profitCommission >= 0 ? '+' : ''}₪{profitCommission.toFixed(0)}
+                                                                    </span>
+                                                                );
+                                                            })()}
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </>
                                         )}
 
@@ -2526,9 +2528,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                             <div className="panel">
                                 {!hasCustomerSignature && (
                                     <div className="mb-4 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                                        <p className="text-sm text-orange-700 dark:text-orange-300">
-                                            {t('signature_required_for_bill')}
-                                        </p>
+                                        <p className="text-sm text-orange-700 dark:text-orange-300">{t('signature_required_for_bill')}</p>
                                     </div>
                                 )}
                                 <div className="mb-5 border rounded-xl border-gray-200 dark:border-gray-700">
@@ -2537,18 +2537,14 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                         onClick={() => hasCustomerSignature && setIsBillSectionExpanded(!isBillSectionExpanded)}
                                         disabled={!hasCustomerSignature}
                                         className={`flex items-center gap-3 w-full text-left p-3 rounded-lg transition-colors duration-200 ${
-                                            hasCustomerSignature 
-                                                ? 'hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer' 
-                                                : 'opacity-50 cursor-not-allowed'
+                                            hasCustomerSignature ? 'hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer' : 'opacity-50 cursor-not-allowed'
                                         }`}
                                     >
                                         <div className="flex items-center gap-3 flex-1">
                                             <IconDollarSign className="w-5 h-5 text-primary" />
                                             <h5 className="text-lg font-semibold dark:text-white-light">{t('automate_bill_for_deal')}</h5>
                                         </div>{' '}
-                                        {hasCustomerSignature && (
-                                            <IconCaretDown className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isBillSectionExpanded ? 'rotate-180' : ''}`} />
-                                        )}
+                                        {hasCustomerSignature && <IconCaretDown className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isBillSectionExpanded ? 'rotate-180' : ''}`} />}
                                     </button>
                                 </div>
 
@@ -3033,19 +3029,21 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                         </div>
 
                                                                         {/* Row 4: Deal Amount */}
-                                                                        <div className="grid grid-cols-4 gap-4 mb-4 py-2">
-                                                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount_exchange')}</div>
-                                                                            <div className="text-center">
-                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
+                                                                        {hasPermission('view_car_purchase_price') && (
+                                                                            <div className="grid grid-cols-4 gap-4 mb-4 py-2">
+                                                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount_exchange')}</div>
+                                                                                <div className="text-center">
+                                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount || 0)}</span>
+                                                                                </div>
+                                                                                <div className="text-center">
+                                                                                    <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
+                                                                                </div>
+                                                                                <div className="text-center">
+                                                                                    {' '}
+                                                                                    <span className="text-sm text-blue-600 dark:text-blue-400">{formatCurrency(deal?.amount || 0)}</span>
+                                                                                </div>
                                                                             </div>
-                                                                            <div className="text-center">
-                                                                                <span className="text-sm text-gray-700 dark:text-gray-300">1</span>
-                                                                            </div>
-                                                                            <div className="text-center">
-                                                                                {' '}
-                                                                                <span className="text-sm text-blue-600 dark:text-blue-400">{formatCurrency(deal?.amount || 0)}</span>
-                                                                            </div>
-                                                                        </div>
+                                                                        )}
                                                                     </>
                                                                 )}
                                                                 {deal?.deal_type === 'company_commission' && (
@@ -3202,7 +3200,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     )}
 
                     {/* Bills Tab */}
-                    {activeTab === 'bills' && (
+                    {hasPermission('view_bills') && activeTab === 'bills' && (
                         <>
                             {/* Connected Bills Section */}
                             <BillsTable

@@ -16,6 +16,7 @@ import LogFilters from '@/components/log-filters/log-filters';
 import { formatDate } from '@/utils/date-formatter';
 import { LogsPDFGenerator } from '@/utils/logs-pdf-generator';
 import IconDownload from '@/components/icon/icon-download';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 interface LogFilters {
     search: string;
@@ -655,4 +656,10 @@ const LogsPage = () => {
     );
 };
 
-export default LogsPage;
+const ProtectedLogsPage = () => (
+    <PermissionGuard permission="view_logs">
+        <LogsPage />
+    </PermissionGuard>
+);
+
+export default ProtectedLogsPage;

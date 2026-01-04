@@ -12,6 +12,7 @@ import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import ViewToggle from '@/components/view-toggle/view-toggle';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 interface Provider {
     id: string;
@@ -375,4 +376,10 @@ const ProvidersList = () => {
     );
 };
 
-export default ProvidersList;
+const ProtectedProvidersPage = () => (
+    <PermissionGuard permission="view_providers">
+        <ProvidersList />
+    </PermissionGuard>
+);
+
+export default ProtectedProvidersPage;

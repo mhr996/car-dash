@@ -14,6 +14,7 @@ import IconDiamond from '@/components/icon/icon-diamond';
 import IconTrash from '@/components/icon/icon-trash';
 import IconPlus from '@/components/icon/icon-plus';
 import IconSearch from '@/components/icon/icon-search';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 interface Car {
     id: string;
@@ -462,4 +463,10 @@ const HomePageSettings = () => {
     );
 };
 
-export default HomePageSettings;
+const ProtectedHomeSettingsPage = () => (
+    <PermissionGuard permission="view_home_settings">
+        <HomePageSettings />
+    </PermissionGuard>
+);
+
+export default ProtectedHomeSettingsPage;

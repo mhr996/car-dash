@@ -23,10 +23,12 @@ import { Customer, Car, FileItem, DealAttachments } from '@/types';
 import { logActivity } from '@/utils/activity-logger';
 import { handleDealCreated, getCustomerIdFromDeal } from '@/utils/balance-manager';
 import DealPaymentMethods, { PaymentMethod } from '@/components/deal-payment-methods/deal-payment-methods';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const AddDeal = () => {
     const { t } = getTranslation();
     const router = useRouter();
+    const { hasPermission } = usePermissions();
 
     // Ref to track the last auto-filled selling price and car ID to prevent overriding user edits
     const lastAutoFilledRef = useRef<{ carId: string | null; price: string }>({ carId: null, price: '' });
@@ -986,10 +988,12 @@ const AddDeal = () => {
                                     <span className="text-green-600 dark:text-green-300 font-medium">{t('status')}:</span>
                                     <p className="text-green-800 dark:text-green-100">{selectedCar.status}</p>
                                 </div>
-                                <div>
-                                    <span className="text-green-600 dark:text-green-300 font-medium">{t('buy_price')}:</span>
-                                    <p className="text-green-800 dark:text-green-100">{formatCurrency(selectedCar.buy_price)}</p>
-                                </div>
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div>
+                                        <span className="text-green-600 dark:text-green-300 font-medium">{t('buy_price')}:</span>
+                                        <p className="text-green-800 dark:text-green-100">{formatCurrency(selectedCar.buy_price)}</p>
+                                    </div>
+                                )}
                                 <div>
                                     <span className="text-green-600 dark:text-green-300 font-medium">{t('market_price')}:</span>
                                     <p className="text-green-800 dark:text-green-100">{formatCurrency(selectedCar.market_price)}</p>
@@ -1040,12 +1044,14 @@ const AddDeal = () => {
                                     <div className="text-center">-</div>
                                 </div>{' '}
                                 {/* Row 2: Buy Price */}
-                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
-                                    <div className="text-center">
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price)}</span>
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
+                                        <div className="text-center">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price)}</span>
+                                        </div>
                                     </div>
-                                </div>{' '}
+                                )}{' '}
                                 {/* Row 3: Selling Price */}
                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                     <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
@@ -1094,26 +1100,28 @@ const AddDeal = () => {
                                     </div>
                                 </div>{' '}
                                 {/* Row 5: Profit Commission (Calculated) */}
-                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                    <div className="text-center">
-                                        {(() => {
-                                            if (!saleForm.selling_price || !selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(0)}</span>;
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                        <div className="text-center">
+                                            {(() => {
+                                                if (!saleForm.selling_price || !selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(0)}</span>;
 
-                                            const buyPrice = selectedCar.buy_price;
-                                            const sellPrice = parseFloat(saleForm.selling_price);
-                                            const loss = parseFloat(saleForm.loss_amount || '0');
-                                            const profitCommission = sellPrice - buyPrice - loss;
+                                                const buyPrice = selectedCar.buy_price;
+                                                const sellPrice = parseFloat(saleForm.selling_price);
+                                                const loss = parseFloat(saleForm.loss_amount || '0');
+                                                const profitCommission = sellPrice - buyPrice - loss;
 
-                                            return (
-                                                <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                    {profitCommission >= 0 ? '+' : ''}
-                                                    {formatCurrency(profitCommission)}
-                                                </span>
-                                            );
-                                        })()}
+                                                return (
+                                                    <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                        {profitCommission >= 0 ? '+' : ''}
+                                                        {formatCurrency(profitCommission)}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </div>
                                     </div>
-                                </div>{' '}
+                                )}{' '}
                             </div>
                         </div>
                     )}
@@ -1469,12 +1477,14 @@ const AddDeal = () => {
                                     <div className="text-center">-</div>
                                 </div>
                                 {/* Row 2: Buy Price */}
-                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
-                                    <div className="text-center">
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price)}</span>
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price_auto')}</div>
+                                        <div className="text-center">
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(selectedCar.buy_price)}</span>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                                 {/* Row 3: Selling Price (Editable) */}
                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                     <div className="text-sm pt-2 text-gray-700 dark:text-gray-300 text-right">
@@ -1554,30 +1564,32 @@ const AddDeal = () => {
                                     </div>
                                 </div>
                                 {/* Row 8: Profit Commission (Calculated) */}
-                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                    <div className="text-center">
-                                        {(() => {
-                                            if (!selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(0)}</span>;
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                        <div className="text-center">
+                                            {(() => {
+                                                if (!selectedCar) return <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(0)}</span>;
 
-                                            const buyPrice = selectedCar.buy_price;
-                                            const sellPrice = selectedCar.sale_price;
-                                            const oldCarPurchasePrice = parseFloat(exchangeForm.old_car_purchase_price || '0');
-                                            const loss = parseFloat(exchangeForm.loss_amount || '0');
+                                                const buyPrice = selectedCar.buy_price;
+                                                const sellPrice = selectedCar.sale_price;
+                                                const oldCarPurchasePrice = parseFloat(exchangeForm.old_car_purchase_price || '0');
+                                                const loss = parseFloat(exchangeForm.loss_amount || '0');
 
-                                            // For exchange: Profit = Sale Price - Old Car Purchase Price - Buy Price - Loss
-                                            // Note: customer_car_eval_value, additional_customer_amount, and additional_company_amount are display-only and don't affect profit
-                                            const profitCommission = sellPrice - buyPrice - loss;
+                                                // For exchange: Profit = Sale Price - Old Car Purchase Price - Buy Price - Loss
+                                                // Note: customer_car_eval_value, additional_customer_amount, and additional_company_amount are display-only and don't affect profit
+                                                const profitCommission = sellPrice - buyPrice - loss;
 
-                                            return (
-                                                <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                                                    {profitCommission >= 0 ? '+' : ''}
-                                                    {formatCurrency(profitCommission)}
-                                                </span>
-                                            );
-                                        })()}
+                                                return (
+                                                    <span className={`text-sm ${profitCommission >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                                                        {profitCommission >= 0 ? '+' : ''}
+                                                        {formatCurrency(profitCommission)}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -2040,27 +2052,29 @@ const AddDeal = () => {
                                     </div>
                                 </div>
                                 {/* Row 3: Profit Commission (Editable) */}
-                                <div className="grid grid-cols-3 gap-4 mb-4 py-2">
-                                    <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
-                                    <div className="text-center">
-                                        <div className="flex justify-center">
-                                            <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
-                                                $
-                                            </span>
-                                            <input
-                                                type="number"
-                                                name="profit_commission"
-                                                step="0.01"
-                                                min="0"
-                                                value={intermediaryForm.profit_commission}
-                                                onChange={handleIntermediaryFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
-                                                style={{ direction: 'ltr', textAlign: 'center' }}
-                                                placeholder="0.00"
-                                            />
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div className="grid grid-cols-3 gap-4 mb-4 py-2">
+                                        <div className="text-sm pt-1 text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
+                                        <div className="text-center">
+                                            <div className="flex justify-center">
+                                                <span className="inline-flex items-center px-2 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md text-xs">
+                                                    $
+                                                </span>
+                                                <input
+                                                    type="number"
+                                                    name="profit_commission"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={intermediaryForm.profit_commission}
+                                                    onChange={handleIntermediaryFormChange}
+                                                    className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                    style={{ direction: 'ltr', textAlign: 'center' }}
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}

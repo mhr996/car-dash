@@ -16,6 +16,7 @@ import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import SingleFileUpload from '@/components/file-upload/single-file-upload';
 import { uploadFile, getPublicUrlFromPath } from '@/utils/file-upload';
 import { FileItem } from '@/types';
+import { PermissionGuard } from '@/components/auth/permission-guard';
 
 interface CompanyInfo {
     id?: string;
@@ -420,4 +421,10 @@ const CompanySettings = () => {
     );
 };
 
-export default CompanySettings;
+const ProtectedCompanySettingsPage = () => (
+    <PermissionGuard permission="view_company_settings">
+        <CompanySettings />
+    </PermissionGuard>
+);
+
+export default ProtectedCompanySettingsPage;
