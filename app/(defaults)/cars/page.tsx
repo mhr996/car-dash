@@ -744,6 +744,7 @@ const CarsList = () => {
                             onSelectedRecordsChange={setSelectedRecords}
                             paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
                             minHeight={300}
+                            noRecordsText={t('no_records')}
                         />
 
                         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
@@ -780,7 +781,7 @@ const CarsList = () => {
                                                                     : 'badge-outline-secondary'
                                                         } bg-white dark:bg-gray-800`}
                                                     >
-                                                        {t(`car_status_${car.status}`)}
+                                                        {t(`car_status`)} {car.status}
                                                     </span>
                                                 </div>
                                             </div>

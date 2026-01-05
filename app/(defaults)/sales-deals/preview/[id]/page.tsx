@@ -105,7 +105,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             const tranzilaRetrievalKey = bill.tranzila_retrieval_key;
 
             if (!tranzilaRetrievalKey) {
-                setAlert({ visible: true, message: t('bill_not_created_with_tranzila') || 'This bill was not created through Tranzila and cannot be downloaded.', type: 'danger' });
+                setAlert({ visible: true, message: t('bill_not_created_with_tranzila'), type: 'danger' });
                 return;
             }
 
@@ -114,7 +114,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             window.open(proxyUrl, '_blank');
         } catch (error) {
             console.error('Error downloading PDF:', error);
-            setAlert({ visible: true, message: t('error_downloading_pdf') || 'Error downloading PDF', type: 'danger' });
+            setAlert({ visible: true, message: t('error_downloading_pdf'), type: 'danger' });
         } finally {
             setDownloadingPDF(null);
         }
@@ -313,7 +313,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             console.error('Error saving signature:', error);
             setAlert({
                 visible: true,
-                message: t('error_saving_signature') || 'Error saving signature',
+                message: t('error_saving_signature'),
                 type: 'danger',
             });
         } finally {
@@ -419,19 +419,19 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             dealDate: new Date(deal.created_at).toISOString().split('T')[0],
 
             // Company info (always the dealership/intermediary)
-            companyName: companyInfo?.name || 'Car Dealership',
+            companyName: companyInfo?.name || t('car_dealership'),
             companyTaxNumber: companyInfo?.tax_number || '',
             companyAddress: companyInfo?.address || '',
             companyPhone: companyInfo?.phone || '',
 
             // For intermediary deals, these are the actual seller and buyer
             // For regular deals, seller is the company and buyer is the customer
-            sellerName: isIntermediaryDeal ? deal.seller?.name || 'Unknown Seller' : companyInfo?.name || 'Car Dealership',
+            sellerName: isIntermediaryDeal ? deal.seller?.name || t('unknown_seller') : companyInfo?.name || t('car_dealership'),
             sellerTaxNumber: isIntermediaryDeal ? '' : companyInfo?.tax_number || '',
             sellerAddress: isIntermediaryDeal ? '' : companyInfo?.address || '',
             sellerPhone: isIntermediaryDeal ? '' : companyInfo?.phone || '',
 
-            buyerName: isIntermediaryDeal ? deal.buyer?.name || 'Unknown Buyer' : customer?.name || 'Unknown Customer',
+            buyerName: isIntermediaryDeal ? deal.buyer?.name || t('unknown_buyer') : customer?.name || t('unknown_customer'),
             buyerId: isIntermediaryDeal ? deal.buyer?.id_number || '' : customer?.id || '',
             buyerAddress: '',
             buyerPhone: isIntermediaryDeal ? '' : customer?.phone || '',
@@ -440,13 +440,13 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             ...(isIntermediaryDeal && {
                 isIntermediaryDeal: true,
                 actualSeller: {
-                    name: deal.seller?.name || 'Unknown Seller',
+                    name: deal.seller?.name || t('unknown_seller'),
                     id: deal.seller?.id_number || '',
                     address: '',
                     phone: '',
                 },
                 actualBuyer: {
-                    name: deal.buyer?.name || 'Unknown Buyer',
+                    name: deal.buyer?.name || t('unknown_buyer'),
                     id: deal.buyer?.id_number || '',
                     address: '',
                     phone: '',
@@ -509,8 +509,9 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     };
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex flex-col items-center justify-center min-h-screen gap-4">
                 <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">{t('loading')}</p>
             </div>
         );
     }
@@ -619,7 +620,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 });
                             } catch (error) {
                                 console.error('Error generating contract:', error);
-                                setAlert({ visible: true, message: t('error_generating_pdf') || 'Error generating PDF', type: 'danger' });
+                                setAlert({ visible: true, message: t('error_generating_pdf'), type: 'danger' });
                             } finally {
                                 setGeneratingContract(false);
                             }

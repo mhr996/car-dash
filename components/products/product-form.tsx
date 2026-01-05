@@ -182,7 +182,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ productId }) => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         if (files.length + previewUrls.length > 10) {
-            setAlert({ type: 'danger', message: 'Maximum 10 images allowed' });
+            setAlert({ type: 'danger', message: t('maximum_images_allowed') });
             return;
         }
         setSelectedFiles((prev) => [...prev, ...files]);
@@ -217,10 +217,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ productId }) => {
             setFormData((prev) => ({ ...prev, category: data.id.toString() }));
             setShowNewCategoryForm(false);
             setNewCategory({ title: '', desc: '' });
-            setAlert({ type: 'success', message: 'Category created successfully' });
+            setAlert({ type: 'success', message: t('category_created_successfully') });
         } catch (error) {
             console.error('Error creating category:', error);
-            setAlert({ type: 'danger', message: 'Error creating category' });
+            setAlert({ type: 'danger', message: t('error_creating_category') });
         }
     };
 
@@ -251,17 +251,17 @@ const ProductForm: React.FC<ProductFormProps> = ({ productId }) => {
         // Validate sale price if enabled
         if (hasSalePrice) {
             if (!discountValue || parseFloat(discountValue) <= 0) {
-                setAlert({ type: 'danger', message: 'Please enter a valid discount value' });
+                setAlert({ type: 'danger', message: t('please_enter_valid_discount') });
                 return;
             }
 
             if (discountType === 'percentage' && parseFloat(discountValue) > 100) {
-                setAlert({ type: 'danger', message: 'Percentage discount cannot exceed 100%' });
+                setAlert({ type: 'danger', message: t('percentage_discount_cannot_exceed') });
                 return;
             }
 
             if (discountType === 'fixed' && parseFloat(discountValue) >= parseFloat(formData.price)) {
-                setAlert({ type: 'danger', message: 'Fixed discount cannot be equal to or greater than the product price' });
+                setAlert({ type: 'danger', message: t('fixed_discount_cannot_be_equal') });
                 return;
             }
         }
@@ -425,7 +425,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ productId }) => {
             }
         } catch (error) {
             console.error('Error saving product:', error);
-            setAlert({ type: 'danger', message: error instanceof Error ? error.message : 'Error saving product' });
+            setAlert({ type: 'danger', message: error instanceof Error ? error.message : t('error_saving_product') });
         } finally {
             setLoading(false);
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -674,7 +674,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ productId }) => {
                                                 <input
                                                     type="text"
                                                     className="w-full rounded border border-[#e0e6ed] p-2 focus:border-primary focus:outline-none dark:border-[#191e3a] dark:bg-black dark:text-white-dark"
-                                                    placeholder="Search..."
+                                                    placeholder={t('search')}
                                                     value={searchTerm.category}
                                                     onChange={(e) => setSearchTerm((prev) => ({ ...prev, category: e.target.value }))}
                                                 />

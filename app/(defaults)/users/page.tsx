@@ -16,6 +16,14 @@ import { PermissionGuard } from '@/components/auth/permission-guard';
 
 const UsersList = () => {
     const { t } = getTranslation();
+    
+    const getStatusTranslation = (status: string | undefined) => {
+        if (!status) return status || '';
+        const statusKey = status.toLowerCase();
+        // Check if translation exists, otherwise return original status
+        const translation = t(statusKey);
+        return translation !== statusKey ? translation : status;
+    };
     const [items, setItems] = useState<
         Array<{
             id: string;
@@ -346,7 +354,7 @@ const UsersList = () => {
                                     accessor: 'status',
                                     title: t('status'),
                                     sortable: true,
-                                    render: ({ status }) => <span className={`badge badge-outline-${status === 'Active' ? 'success' : 'danger'} `}>{status}</span>,
+                                    render: ({ status }) => <span className={`badge badge-outline-${status === 'Active' ? 'success' : 'danger'} `}>{getStatusTranslation(status)}</span>,
                                 },
                                 {
                                     accessor: 'action',
@@ -378,6 +386,7 @@ const UsersList = () => {
                             onSelectedRecordsChange={setSelectedRecords}
                             paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
                             minHeight={300}
+                            noRecordsText={t('no_records')}
                         />
 
                         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
@@ -409,7 +418,7 @@ const UsersList = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('status')}</p>
-                                                    <span className={`badge badge-outline-${user.status === 'Active' ? 'success' : 'danger'}`}>{user.status}</span>
+                                                    <span className={`badge badge-outline-${user.status === 'Active' ? 'success' : 'danger'}`}>{getStatusTranslation(user.status)}</span>
                                                 </div>
                                             </div>
                                             <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">

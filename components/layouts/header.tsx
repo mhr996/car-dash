@@ -290,8 +290,8 @@ const Header = () => {
                                 <ul className="w-[300px] divide-y !py-0 text-dark dark:divide-white/10 dark:text-white-dark sm:w-[350px]">
                                     <li onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-between px-4 py-2 font-semibold">
-                                            <h4 className="text-lg">Notification</h4>
-                                            {notifications.length ? <span className="badge bg-primary/80">{notifications.length}New</span> : ''}
+                                            <h4 className="text-lg">{t('notification')}</h4>
+                                            {notifications.length ? <span className="badge bg-primary/80">{notifications.length} {t('new')}</span> : ''}
                                         </div>
                                     </li>
                                     {notifications.length > 0 ? (
@@ -329,7 +329,7 @@ const Header = () => {
                                             })}
                                             <li>
                                                 <div className="p-4">
-                                                    <button className="btn btn-primary btn-small block w-full">Read All Notifications</button>
+                                                    <button className="btn btn-primary btn-small block w-full">{t('read_all_notifications')}</button>
                                                 </div>
                                             </li>
                                         </>
@@ -339,7 +339,7 @@ const Header = () => {
                                                 <div className="mx-auto mb-4 rounded-full ring-4 ring-primary/30">
                                                     <IconInfoCircle fill={true} className="h-10 w-10 text-primary" />
                                                 </div>
-                                                No data available.
+                                                {t('no_data_available')}
                                             </button>
                                         </li>
                                     )}
@@ -366,7 +366,7 @@ const Header = () => {
                                             <div className="truncate ltr:pl-4 rtl:pr-4">
                                                 <h4 className="text-base">
                                                     {user?.user?.user_metadata?.display_name || ''}
-                                                    <span className="rounded bg-success-light px-1 text-xs text-success ltr:ml-2 rtl:ml-2">Pro</span>
+                                                    <span className="rounded bg-success-light px-1 text-xs text-success ltr:ml-2 rtl:ml-2">{t('pro')}</span>
                                                 </h4>
                                                 <button type="button" className="text-black/60 hover:text-primary dark:text-dark-light/60 dark:hover:text-white">
                                                     {user?.user?.email}
@@ -377,14 +377,14 @@ const Header = () => {
                                     <li>
                                         <Link href="/profile" className="dark:hover:text-white">
                                             <IconUser className="h-4.5 w-4.5 shrink-0 ltr:mr-2 rtl:ml-2" />
-                                            Profile
+                                            {t('profile')}
                                         </Link>
                                     </li>
 
                                     <li className="border-t border-white-light dark:border-white-light/10">
                                         <button onClick={handleSignOut} className="!py-3 text-danger flex w-full items-center">
                                             <IconLogout className="h-4.5 w-4.5 shrink-0 rotate-90 ltr:mr-2 rtl:ml-2" />
-                                            Sign Out
+                                            {t('sign_out')}
                                         </button>
                                     </li>
                                 </ul>

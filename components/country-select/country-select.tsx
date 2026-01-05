@@ -23,6 +23,24 @@ const CountrySelect = ({ defaultValue, className = 'form-select text-white-dark'
         setSelectedCountry(defaultValue);
     }, [defaultValue]);
 
+    // Function to get translated country name
+    const getCountryTranslation = (countryName: string) => {
+        // Convert country name to translation key format
+        // Handle special cases first
+        let normalizedName = countryName;
+        if (normalizedName === 'Korea, North') normalizedName = 'Korea North';
+        if (normalizedName === 'Korea, South') normalizedName = 'Korea South';
+        
+        // Convert to key: lowercase, replace spaces with underscores, remove commas, keep hyphens
+        const countryKey = `country_${normalizedName.toLowerCase()
+            .replace(/\s+/g, '_')
+            .replace(/,/g, '')}`;
+        
+        const translation = t(countryKey);
+        // If translation exists and is different from the key, return it; otherwise return original
+        return translation !== countryKey ? translation : countryName;
+    };
+
     const countries = [
         'Afghanistan',
         'Albania',
@@ -245,7 +263,7 @@ const CountrySelect = ({ defaultValue, className = 'form-select text-white-dark'
     return (
         <div ref={wrapperRef} className="relative">
             <div className={`${className} cursor-pointer dark:bg-black dark:text-white-dark dark:border-[#374151] flex items-center justify-between`} onClick={() => setIsOpen(!isOpen)}>
-                <span>{selectedCountry || t('select_country')}</span>
+                <span>{selectedCountry ? getCountryTranslation(selectedCountry) : t('select_country')}</span>
                 <IconCaretDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </div>
             {isOpen && (
@@ -254,7 +272,7 @@ const CountrySelect = ({ defaultValue, className = 'form-select text-white-dark'
                         <input
                             type="text"
                             className="w-full rounded border border-gray-300 p-2 focus:border-primary focus:outline-none dark:bg-black dark:border-[#374151] dark:text-white-dark"
-                            placeholder="Search country..."
+                            placeholder={t('search_country')}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -262,7 +280,7 @@ const CountrySelect = ({ defaultValue, className = 'form-select text-white-dark'
                     <div className="max-h-60 overflow-y-auto">
                         {filteredCountries.map((country) => (
                             <div key={country} className="cursor-pointer px-4 py-2 hover:bg-gray-100 dark:text-white-dark dark:hover:bg-[#191e3a]" onClick={() => handleCountrySelect(country)}>
-                                {country}
+                                {getCountryTranslation(country)}
                             </div>
                         ))}
                     </div>

@@ -8,10 +8,12 @@ import IconX from '@/components/icon/icon-x';
 import IconSun from '@/components/icon/icon-sun';
 import IconMoon from '@/components/icon/icon-moon';
 import IconLaptop from '@/components/icon/icon-laptop';
+import { getTranslation } from '@/i18n';
 
 const Setting = () => {
     const themeConfig = useSelector((state: IRootState) => state.themeConfig);
     const dispatch = useDispatch();
+    const { t } = getTranslation();
 
     const [showCustomizer, setShowCustomizer] = useState(false);
 
@@ -38,34 +40,34 @@ const Setting = () => {
                             <IconX className="h-5 w-5" />
                         </button>
 
-                        <h4 className="mb-1 dark:text-white">TEMPLATE CUSTOMIZER</h4>
-                        <p className="text-white-dark">Set preferences that will be cookied for your live preview demonstration.</p>
+                        <h4 className="mb-1 dark:text-white">{t('template_customizer')}</h4>
+                        <p className="text-white-dark">{t('set_preferences_cookie')}</p>
                     </div>
 
                     <div className="mb-3 rounded-md border border-dashed border-white-light p-3 dark:border-[#1b2e4b]">
-                        <h5 className="mb-1 text-base leading-none dark:text-white">Color Scheme</h5>
-                        <p className="text-xs text-white-dark">Overall light or dark presentation.</p>
+                        <h5 className="mb-1 text-base leading-none dark:text-white">{t('color_scheme')}</h5>
+                        <p className="text-xs text-white-dark">{t('overall_light_dark')}</p>
                         <div className="mt-3 grid grid-cols-3 gap-2">
                             <button type="button" className={`${themeConfig.theme === 'light' ? 'btn-primary' : 'btn-outline-primary'} btn`} onClick={() => dispatch(toggleTheme('light'))}>
                                 <IconSun className="h-5 w-5 shrink-0 ltr:mr-2 rtl:ml-2" />
-                                Light
+                                {t('light')}
                             </button>
 
                             <button type="button" className={`${themeConfig.theme === 'dark' ? 'btn-primary' : 'btn-outline-primary'} btn`} onClick={() => dispatch(toggleTheme('dark'))}>
                                 <IconMoon className="h-5 w-5 shrink-0 ltr:mr-2 rtl:ml-2" />
-                                Dark
+                                {t('dark')}
                             </button>
 
                             <button type="button" className={`${themeConfig.theme === 'system' ? 'btn-primary' : 'btn-outline-primary'} btn`} onClick={() => dispatch(toggleTheme('system'))}>
                                 <IconLaptop className="h-5 w-5 shrink-0 ltr:mr-2 rtl:ml-2" />
-                                System
+                                {t('system')}
                             </button>
                         </div>
                     </div>
 
                     <div className="mb-3 rounded-md border border-dashed border-white-light p-3 dark:border-[#1b2e4b]">
-                        <h5 className="mb-1 text-base leading-none dark:text-white">Navigation Position</h5>
-                        <p className="text-xs text-white-dark">Select the primary navigation paradigm for your app.</p>
+                        <h5 className="mb-1 text-base leading-none dark:text-white">{t('navigation_position')}</h5>
+                        <p className="text-xs text-white-dark">{t('select_primary_navigation')}</p>
                         <div className="mt-3 grid grid-cols-3 gap-2">
                             <button
                                 type="button"
@@ -75,7 +77,7 @@ const Setting = () => {
                                     dispatch(resetToggleSidebar());
                                 }}
                             >
-                                Horizontal
+                                {t('horizontal')}
                             </button>
 
                             <button
@@ -86,7 +88,7 @@ const Setting = () => {
                                     dispatch(resetToggleSidebar());
                                 }}
                             >
-                                Vertical
+                                {t('vertical')}
                             </button>
 
                             <button
@@ -97,52 +99,52 @@ const Setting = () => {
                                     dispatch(resetToggleSidebar());
                                 }}
                             >
-                                Collapsible
+                                {t('collapsible')}
                             </button>
                         </div>
                         <div className="mt-5 text-primary">
                             <label className="mb-0 inline-flex">
                                 <input type="checkbox" className="form-checkbox" checked={themeConfig.semidark} onChange={(e) => dispatch(toggleSemidark(e.target.checked))} />
-                                <span>Semi Dark (Sidebar & Header)</span>
+                                <span>{t('semi_dark_sidebar_header')}</span>
                             </label>
                         </div>
                     </div>
 
                     <div className="mb-3 rounded-md border border-dashed border-white-light p-3 dark:border-[#1b2e4b]">
-                        <h5 className="mb-1 text-base leading-none dark:text-white">Layout Style</h5>
-                        <p className="text-xs text-white-dark">Select the primary layout style for your app.</p>
+                        <h5 className="mb-1 text-base leading-none dark:text-white">{t('layout_style')}</h5>
+                        <p className="text-xs text-white-dark">{t('select_primary_layout')}</p>
                         <div className="mt-3 flex gap-2">
                             <button
                                 type="button"
                                 className={`${themeConfig.layout === 'boxed-layout' ? 'btn-primary' : 'btn-outline-primary'} btn flex-auto`}
                                 onClick={() => dispatch(toggleLayout('boxed-layout'))}
                             >
-                                Box
+                                {t('box')}
                             </button>
 
                             <button type="button" className={`${themeConfig.layout === 'full' ? 'btn-primary' : 'btn-outline-primary'} btn flex-auto`} onClick={() => dispatch(toggleLayout('full'))}>
-                                Full
+                                {t('full')}
                             </button>
                         </div>
                     </div>
 
                     <div className="mb-3 rounded-md border border-dashed border-white-light p-3 dark:border-[#1b2e4b]">
-                        <h5 className="mb-1 text-base leading-none dark:text-white">Direction</h5>
-                        <p className="text-xs text-white-dark">Select the direction for your app.</p>
+                        <h5 className="mb-1 text-base leading-none dark:text-white">{t('direction')}</h5>
+                        <p className="text-xs text-white-dark">{t('select_direction')}</p>
                         <div className="mt-3 flex gap-2">
                             <button type="button" className={`${themeConfig.rtlClass === 'ltr' ? 'btn-primary' : 'btn-outline-primary'} btn flex-auto`} onClick={() => dispatch(toggleRTL('ltr'))}>
-                                LTR
+                                {t('ltr')}
                             </button>
 
                             <button type="button" className={`${themeConfig.rtlClass === 'rtl' ? 'btn-primary' : 'btn-outline-primary'} btn flex-auto`} onClick={() => dispatch(toggleRTL('rtl'))}>
-                                RTL
+                                {t('rtl')}
                             </button>
                         </div>
                     </div>
 
                     <div className="mb-3 rounded-md border border-dashed border-white-light p-3 dark:border-[#1b2e4b]">
-                        <h5 className="mb-1 text-base leading-none dark:text-white">Navbar Type</h5>
-                        <p className="text-xs text-white-dark">Sticky or Floating.</p>
+                        <h5 className="mb-1 text-base leading-none dark:text-white">{t('navbar_type')}</h5>
+                        <p className="text-xs text-white-dark">{t('sticky_or_floating')}</p>
                         <div className="mt-3 flex items-center gap-3 text-primary">
                             <label className="mb-0 inline-flex">
                                 <input
@@ -152,7 +154,7 @@ const Setting = () => {
                                     className="form-radio"
                                     onChange={() => dispatch(toggleNavbar('navbar-sticky'))}
                                 />
-                                <span>Sticky</span>
+                                <span>{t('sticky')}</span>
                             </label>
                             <label className="mb-0 inline-flex">
                                 <input
@@ -162,7 +164,7 @@ const Setting = () => {
                                     className="form-radio"
                                     onChange={() => dispatch(toggleNavbar('navbar-floating'))}
                                 />
-                                <span>Floating</span>
+                                <span>{t('floating')}</span>
                             </label>
                             <label className="mb-0 inline-flex">
                                 <input
@@ -172,26 +174,26 @@ const Setting = () => {
                                     className="form-radio"
                                     onChange={() => dispatch(toggleNavbar('navbar-static'))}
                                 />
-                                <span>Static</span>
+                                <span>{t('static')}</span>
                             </label>
                         </div>
                     </div>
 
                     <div className="mb-3 rounded-md border border-dashed border-white-light p-3 dark:border-[#1b2e4b]">
-                        <h5 className="mb-1 text-base leading-none dark:text-white">Router Transition</h5>
-                        <p className="text-xs text-white-dark">Animation of main content.</p>
+                        <h5 className="mb-1 text-base leading-none dark:text-white">{t('router_transition')}</h5>
+                        <p className="text-xs text-white-dark">{t('animation_main_content')}</p>
                         <div className="mt-3">
                             <select className="form-select border-primary text-primary" value={themeConfig.animation} onChange={(e) => dispatch(toggleAnimation(e.target.value))}>
-                                <option value=" ">None</option>
-                                <option value="animate__fadeIn">Fade</option>
-                                <option value="animate__fadeInDown">Fade Down</option>
-                                <option value="animate__fadeInUp">Fade Up</option>
-                                <option value="animate__fadeInLeft">Fade Left</option>
-                                <option value="animate__fadeInRight">Fade Right</option>
-                                <option value="animate__slideInDown">Slide Down</option>
-                                <option value="animate__slideInLeft">Slide Left</option>
-                                <option value="animate__slideInRight">Slide Right</option>
-                                <option value="animate__zoomIn">Zoom In</option>
+                                <option value=" ">{t('none')}</option>
+                                <option value="animate__fadeIn">{t('fade')}</option>
+                                <option value="animate__fadeInDown">{t('fade_down')}</option>
+                                <option value="animate__fadeInUp">{t('fade_up')}</option>
+                                <option value="animate__fadeInLeft">{t('fade_left')}</option>
+                                <option value="animate__fadeInRight">{t('fade_right')}</option>
+                                <option value="animate__slideInDown">{t('slide_down')}</option>
+                                <option value="animate__slideInLeft">{t('slide_left')}</option>
+                                <option value="animate__slideInRight">{t('slide_right')}</option>
+                                <option value="animate__zoomIn">{t('zoom_in')}</option>
                             </select>
                         </div>
                     </div>

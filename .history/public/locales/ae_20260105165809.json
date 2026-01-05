@@ -957,6 +957,7 @@
     "customer_created_successfully": "تم إنشاء العميل بنجاح",
     "error_creating_customer": "خطأ في إنشاء العميل",
     "sale_deal_for": "صفقة بيع لـ",
+    "provider_type": "نوع المزود",
     "sale_deal_description": "صفقة بيع سيارة",
     "try_adjusting_filters": "حاول تعديل الفلاتر",
     "select_deal_type_desc": "اختر نوع الصفقة لبدء إنشاء صفقة جديدة",

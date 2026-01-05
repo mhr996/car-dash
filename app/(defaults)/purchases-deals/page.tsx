@@ -450,6 +450,7 @@ const CarDealsPage = () => {
                             minHeight={200}
                             paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
                             fetching={loading}
+                            noRecordsText={t('no_records')}
                         />
                     </div>
                 ) : (

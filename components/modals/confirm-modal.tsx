@@ -3,6 +3,7 @@ import { Fragment } from 'react';
 import { Dialog, Transition, DialogPanel, TransitionChild } from '@headlessui/react';
 import IconX from '@/components/icon/icon-x';
 import React from 'react';
+import { getTranslation } from '@/i18n';
 
 interface ConfirmModalProps {
     isOpen: boolean;
@@ -15,7 +16,10 @@ interface ConfirmModalProps {
     size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onCancel, onConfirm, confirmLabel = 'Confirm', cancelLabel = 'Cancel', size = 'sm' }) => {
+const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onCancel, onConfirm, confirmLabel, cancelLabel, size = 'sm' }) => {
+    const { t } = getTranslation();
+    const defaultConfirmLabel = confirmLabel || t('confirm');
+    const defaultCancelLabel = cancelLabel || t('cancel');
     const sizeClasses = {
         sm: 'max-w-sm',
         md: 'max-w-md',
@@ -51,10 +55,10 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, title, message, onC
                             </div>
                             <div className="mt-6 flex justify-end gap-3">
                                 <button onClick={onCancel} className="btn btn-secondary">
-                                    {cancelLabel}
+                                    {defaultCancelLabel}
                                 </button>
                                 <button onClick={onConfirm} className="btn btn-danger">
-                                    {confirmLabel}
+                                    {defaultConfirmLabel}
                                 </button>
                             </div>
                         </DialogPanel>

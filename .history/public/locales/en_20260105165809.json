@@ -717,6 +717,7 @@
     "create_provider": "Create Provider",
     "update_provider": "Update Provider",
     "provider_details": "Provider Details",
+    "provider_type": "Provider Type",
     "provider_name_required": "Provider name is required",
     "phone_required": "Phone number is required",
     "address_required": "Address is required",

@@ -304,7 +304,7 @@ const CustomersList = () => {
                                     accessor: 'customer_type',
                                     title: t('customer_type'),
                                     sortable: true,
-                                    render: ({ customer_type }) => <span className={`badge ${getCustomerTypeBadgeClass(customer_type)}`}>{t(`customer_type_${customer_type}`)}</span>,
+                                    render: ({ customer_type }) => <span className={`badge ${getCustomerTypeBadgeClass(customer_type)}`}>{t(`customer_type`)}${customer_type}</span>,
                                 },
                                 {
                                     accessor: 'balance',
@@ -356,6 +356,7 @@ const CustomersList = () => {
                             onSelectedRecordsChange={setSelectedRecords}
                             paginationText={({ from, to, totalRecords }) => `${t('showing')} ${from} ${t('to')} ${to} ${t('of')} ${totalRecords} ${t('entries')}`}
                             minHeight={300}
+                            noRecordsText={t('no_records')}
                         />
 
                         {loading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}

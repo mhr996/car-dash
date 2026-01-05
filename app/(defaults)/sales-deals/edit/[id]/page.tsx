@@ -1036,7 +1036,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             const tranzilaRetrievalKey = bill.tranzila_retrieval_key;
 
             if (!tranzilaRetrievalKey) {
-                setAlert({ message: t('bill_not_created_with_tranzila') || 'This bill was not created through Tranzila and cannot be downloaded.', type: 'danger' });
+                setAlert({ message: t('bill_not_created_with_tranzila'), type: 'danger' });
                 return;
             }
 
@@ -1045,7 +1045,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             window.open(proxyUrl, '_blank');
         } catch (error) {
             console.error('Error downloading PDF:', error);
-            setAlert({ message: t('error_downloading_pdf') || 'Error downloading PDF', type: 'danger' });
+            setAlert({ message: t('error_downloading_pdf'), type: 'danger' });
         } finally {
             setDownloadingPDF(null);
         }
@@ -1653,8 +1653,9 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
+            <div className="flex flex-col items-center justify-center min-h-screen gap-4">
                 <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+                <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">{t('loading')}</p>
             </div>
         );
     }
@@ -3080,7 +3081,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                         <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
                                                                             <div className="font-medium">{t('deal_item')}</div>
                                                                             <div className="text-xs text-gray-500">
-                                                                                {deal?.title || 'Deal'} - {deal?.deal_type || 'Unknown type'}
+                                                                                {deal?.title || t('deal')} - {deal?.deal_type || t('unknown_type')}
                                                                             </div>
                                                                         </div>
                                                                         <div className="text-center">

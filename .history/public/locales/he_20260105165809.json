@@ -508,6 +508,7 @@
     "create_provider": "צור ספק",
     "update_provider": "עדכן ספק",
     "provider_details": "פרטי הספק",
+    "provider_type": "סוג הספק",
     "provider_name_required": "שם הספק נדרש",
     "phone_required": "מספר טלפון נדרש",
     "address_required": "כתובת נדרשת",

@@ -407,7 +407,7 @@ const Bills = () => {
             const tranzilaRetrievalKey = (bill as any).tranzila_retrieval_key;
 
             if (!tranzilaRetrievalKey) {
-                setAlertState({ message: t('bill_not_created_with_tranzila') || 'This bill was not created through Tranzila and cannot be downloaded.', type: 'danger' });
+                setAlertState({ message: t('bill_not_created_with_tranzila'), type: 'danger' });
                 return;
             }
 
@@ -596,6 +596,7 @@ const Bills = () => {
                         className={`${loading ? 'filter blur-sm pointer-events-none' : 'table-hover whitespace-nowrap'} rtl-table-headers`}
                         highlightOnHover
                         minHeight={300}
+                        noRecordsText={t('no_records')}
                     />
                 </div>
             </div>
