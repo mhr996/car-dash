@@ -533,11 +533,13 @@
     "positive_bill_desc": "חשבונית חיוב",
     "negative_bill": "חשבונית זיכוי",
     "negative_bill_desc": "חשבונית זיכוי",
-    "general_bill_details": "פרטי חשבונית כללי",
-    "bill_description": "תיאור החשבונית",
-    "enter_bill_description": "הזן תיאור החשבונית",
-    "bill_amount": "סכום החשבונית",
-    "enter_bill_amount": "הזן סכום החשבונית",
+    general_bill_details
+bill_description *
+enter_bill_description
+bill_amount *
+₪
+enter_bill_amount
+
     "contact": "צור קשר",
     "select_brand": "בחר מותג",
     "brands": "מותגים",
