@@ -16,6 +16,10 @@ import CarFilters, { CarFilters as CarFiltersType } from '@/components/car-filte
 import { usePermissions } from '@/hooks/usePermissions';
 import { PermissionGuard } from '@/components/auth/permission-guard';
 import ViewToggle from '@/components/view-toggle/view-toggle';
+import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
+import { CarContract } from '@/types/contract';
+import { getCompanyInfo } from '@/lib/company-info';
+import IconFile from '@/components/icon/icon-file';
 
 interface Car {
     id: string;
@@ -117,6 +121,7 @@ const CarsList = () => {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
     const [carToDelete, setCarToDelete] = useState<Car | null>(null);
+    const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
         visible: false,
         message: '',
@@ -326,6 +331,66 @@ const CarsList = () => {
         return new Intl.NumberFormat('en-US').format(value);
     };
 
+    const getCookie = (name: string) => {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
+        return null;
+    };
+
+    const handleGeneratePDF = async (car: Car) => {
+        try {
+            setGeneratingPdf(car.id);
+            const companyInfo = await getCompanyInfo();
+
+            const contract: CarContract = {
+                dealType: 'normal',
+                dealDate: new Date(car.created_at).toLocaleDateString('he-IL'),
+                companyName: companyInfo.name,
+                companyTaxNumber: companyInfo.tax_number || '',
+                companyAddress: companyInfo.address || '',
+                companyPhone: companyInfo.phone || '',
+                sellerName: car.providers?.name || '',
+                sellerTaxNumber: '',
+                sellerPhone: car.providers?.phone || '',
+                sellerAddress: car.providers?.address || '',
+                buyerName: companyInfo.name,
+                buyerId: companyInfo.tax_number || '',
+                buyerAddress: companyInfo.address || '',
+                buyerPhone: companyInfo.phone || '',
+                carType: car.type || '',
+                carMake: car.brand,
+                carModel: car.title,
+                carYear: car.year,
+                carPlateNumber: car.car_number || '',
+                carVin: '',
+                carEngineNumber: '',
+                carKilometers: car.kilometers,
+                carBuyPrice: car.buy_price,
+                dealAmount: car.buy_price,
+                ownershipTransferDays: 30,
+            };
+
+            const lang = getCookie('i18nextLng') || 'he';
+            const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
+
+            const carIdentifier = car.car_number || `CAR-${car.id}`;
+            const filename = `car-purchase-contract-${carIdentifier}-${new Date().toISOString().split('T')[0]}.pdf`;
+
+            await CarPurchaseContractPDFGenerator.generateFromContract(contract, {
+                filename,
+                language: normalizedLang,
+                format: 'A4',
+                orientation: 'portrait',
+            });
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            setAlert({ visible: true, message: t('error_generating_pdf'), type: 'danger' });
+        } finally {
+            setGeneratingPdf(null);
+        }
+    };
+
     const togglePublicStatus = async (car: Car) => {
         try {
             const newPublicStatus = !car.public;
@@ -516,6 +581,24 @@ const CarsList = () => {
                                     sortable: true,
                                 },
                                 {
+                                    accessor: 'type',
+                                    title: t('car_type'),
+                                    sortable: true,
+                                    render: ({ type }) => <span className="capitalize">{type || 'N/A'}</span>,
+                                },
+                                {
+                                    accessor: 'kilometers',
+                                    title: t('kilometers'),
+                                    sortable: true,
+                                    render: ({ kilometers }) => <span>{formatNumber(kilometers)}</span>,
+                                },
+                                {
+                                    accessor: 'car_number',
+                                    title: t('car_number'),
+                                    sortable: true,
+                                    render: ({ car_number }) => <span>{car_number || 'N/A'}</span>,
+                                },
+                                {
                                     accessor: 'status',
                                     title: t('car_status'),
                                     sortable: true,
@@ -542,11 +625,21 @@ const CarsList = () => {
                                     render: ({ providers, provider }) => <span>{providers?.name || provider || '-'}</span>,
                                 },
                                 {
-                                    accessor: 'sale_price',
-                                    title: t('sale_price'),
+                                    accessor: 'market_price',
+                                    title: t('market_price'),
                                     sortable: true,
-                                    render: ({ sale_price }) => <span>{formatCurrency(sale_price)}</span>,
+                                    render: ({ market_price }) => <span>{formatCurrency(market_price)}</span>,
                                 },
+                                ...(hasPermission('view_car_purchase_price')
+                                    ? [
+                                          {
+                                              accessor: 'buy_price',
+                                              title: t('buy_price'),
+                                              sortable: true,
+                                              render: (car: Car) => <span>{formatCurrency(car.buy_price)}</span>,
+                                          },
+                                      ]
+                                    : []),
                                 // Conditional column for archived cars - Deal information
                                 ...(activeTab === 'archived'
                                     ? [
@@ -611,12 +704,27 @@ const CarsList = () => {
                                     title: t('actions'),
                                     sortable: false,
                                     textAlignment: 'center' as const,
-                                    render: ({ id }) => (
+                                    render: (car: Car) => (
                                         <div className="mx-auto flex w-max items-center gap-4">
-                                            <Link href={`/cars/edit/${id}`} className="flex hover:text-info">
+                                            {hasPermission('view_car_purchase_price') && (
+                                                <button
+                                                    type="button"
+                                                    className="flex hover:text-primary"
+                                                    onClick={() => handleGeneratePDF(car)}
+                                                    disabled={generatingPdf === car.id}
+                                                    title={t('generate_purchase_contract')}
+                                                >
+                                                    {generatingPdf === car.id ? (
+                                                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
+                                                    ) : (
+                                                        <IconFile className="h-4.5 w-4.5" />
+                                                    )}
+                                                </button>
+                                            )}
+                                            <Link href={`/cars/edit/${car.id}`} className="flex hover:text-info">
                                                 <IconEdit className="h-4.5 w-4.5" />
                                             </Link>
-                                            <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(id)}>
+                                            <button type="button" className="flex hover:text-danger" onClick={() => deleteRow(car.id)}>
                                                 <IconTrashLines />
                                             </button>
                                         </div>
@@ -704,6 +812,10 @@ const CarsList = () => {
                                                         <p className="font-semibold text-sm">{car.year}</p>
                                                     </div>
                                                     <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('car_type')}</p>
+                                                        <p className="font-semibold text-sm capitalize">{car.type || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('kilometers')}</p>
                                                         <p className="font-semibold text-sm">{formatNumber(car.kilometers)}</p>
                                                     </div>
@@ -731,6 +843,21 @@ const CarsList = () => {
                                                         <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
                                                         {t('view')}
                                                     </Link>
+                                                    {hasPermission('view_car_purchase_price') && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-primary btn-sm"
+                                                            onClick={() => handleGeneratePDF(car)}
+                                                            disabled={generatingPdf === car.id}
+                                                            title={t('generate_purchase_contract')}
+                                                        >
+                                                            {generatingPdf === car.id ? (
+                                                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
+                                                            ) : (
+                                                                <IconFile className="w-4 h-4" />
+                                                            )}
+                                                        </button>
+                                                    )}
                                                     <Link href={`/cars/edit/${car.id}`} className="btn btn-info btn-sm">
                                                         <IconEdit className="w-4 h-4" />
                                                     </Link>
