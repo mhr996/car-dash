@@ -511,7 +511,8 @@
     "provider_name_required": "שם הספק נדרש",
     "phone_required": "מספר טלפון נדרש",
     "address_required": "כתובת נדרשת",
-    "search_brands": "חפש מותגים",
+    search_brands
+
     "back_to_providers": "חזור לספקים",
     "provider_summary": "סיכום הספק",
     "contact_information": "פרטי התקשרות",

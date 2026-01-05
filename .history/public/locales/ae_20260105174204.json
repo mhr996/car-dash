@@ -958,7 +958,8 @@
     "error_creating_customer": "خطأ في إنشاء العميل",
     "sale_deal_for": "صفقة بيع لـ",
     "sale_deal_description": "صفقة بيع سيارة",
-    "search_brands": "البحث عن الماركات",
+    search_brands
+
     "try_adjusting_filters": "حاول تعديل الفلاتر",
     "select_deal_type_desc": "اختر نوع الصفقة لبدء إنشاء صفقة جديدة",
     "form_coming_soon": "النموذج قادم قريباً",
