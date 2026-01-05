@@ -14,6 +14,7 @@ import { CarContract } from '@/types/contract';
 import { getCompanyInfo } from '@/lib/company-info';
 import ViewToggle from '@/components/view-toggle/view-toggle';
 import { PermissionGuard } from '@/components/auth/permission-guard';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Provider {
     id: number;
@@ -47,6 +48,7 @@ interface CarDeal {
 
 const CarDealsPage = () => {
     const { t } = getTranslation();
+    const { hasPermission } = usePermissions();
     const [page, setPage] = useState(1);
     const PAGE_SIZES = [10, 20, 30, 50, 100];
     const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
@@ -356,12 +358,16 @@ const CarDealsPage = () => {
             sortable: true,
             render: (car) => <span className="text-sm">{car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}</span>,
         },
-        {
-            accessor: 'buy_price',
-            title: t('buy_price'),
-            sortable: true,
-            render: ({ buy_price }) => <span className="font-medium">₪{buy_price?.toLocaleString() || '0'}</span>,
-        },
+        ...(hasPermission('view_car_purchase_price')
+            ? [
+                  {
+                      accessor: 'buy_price',
+                      title: t('buy_price'),
+                      sortable: true,
+                      render: ({ buy_price }) => <span className="font-medium">₪{buy_price?.toLocaleString() || '0'}</span>,
+                  },
+              ]
+            : []),
         {
             accessor: 'sale_price',
             title: t('sale_price'),
@@ -396,13 +402,21 @@ const CarDealsPage = () => {
             title: t('actions'),
             render: (car) => (
                 <div className="flex items-center gap-2">
-                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => handleGeneratePDF(car)} disabled={generatingPdf === car.id} title={t('generate_purchase_contract')}>
-                        {generatingPdf === car.id ? (
-                            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
-                        ) : (
-                            <IconFile className="h-4 w-4" />
-                        )}
-                    </button>
+                    {hasPermission('view_car_purchase_price') && (
+                        <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => handleGeneratePDF(car)}
+                            disabled={generatingPdf === car.id}
+                            title={t('generate_purchase_contract')}
+                        >
+                            {generatingPdf === car.id ? (
+                                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
+                            ) : (
+                                <IconFile className="h-4 w-4" />
+                            )}
+                        </button>
+                    )}
                 </div>
             ),
         },
@@ -490,10 +504,12 @@ const CarDealsPage = () => {
                                                     <p className="font-semibold text-sm truncate">{car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}</p>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-3">
-                                                    <div>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('buy_price')}</p>
-                                                        <p className="font-bold text-warning text-sm">₪{car.buy_price?.toLocaleString() || '0'}</p>
-                                                    </div>
+                                                    {hasPermission('view_car_purchase_price') && (
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('buy_price')}</p>
+                                                            <p className="font-bold text-warning text-sm">₪{car.buy_price?.toLocaleString() || '0'}</p>
+                                                        </div>
+                                                    )}
                                                     <div>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('sale_price')}</p>
                                                         <p className="font-bold text-success text-sm">₪{car.sale_price?.toLocaleString() || '0'}</p>
@@ -509,19 +525,21 @@ const CarDealsPage = () => {
                                                     <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
                                                     {t('view')}
                                                 </Link>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-outline-primary btn-sm"
-                                                    onClick={() => handleGeneratePDF(car)}
-                                                    disabled={generatingPdf === car.id}
-                                                    title={t('generate_purchase_contract')}
-                                                >
-                                                    {generatingPdf === car.id ? (
-                                                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
-                                                    ) : (
-                                                        <IconFile className="w-4 h-4" />
-                                                    )}
-                                                </button>
+                                                {hasPermission('view_car_purchase_price') && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline-primary btn-sm"
+                                                        onClick={() => handleGeneratePDF(car)}
+                                                        disabled={generatingPdf === car.id}
+                                                        title={t('generate_purchase_contract')}
+                                                    >
+                                                        {generatingPdf === car.id ? (
+                                                            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-l-transparent"></span>
+                                                        ) : (
+                                                            <IconFile className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

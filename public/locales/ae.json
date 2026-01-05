@@ -718,6 +718,7 @@
     "create_provider": "إنشاء مزود",
     "update_provider": "تحديث المزود",
     "provider_details": "تفاصيل المزود",
+    "provider_type": "نوع المزود",
     "provider_name_required": "اسم المزود مطلوب",
     "phone_required": "رقم الهاتف مطلوب",
     "address_required": "العنوان مطلوب",

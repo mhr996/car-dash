@@ -231,11 +231,20 @@ const LogsPage = () => {
 
         const car = log.car;
         const provider = car.providers || car.provider_details;
+        const customer = car.customers || car.customer_details;
+
+        // Determine source name based on source_type
+        let sourceName = t('not_available');
+        if (car.source_type === 'provider') {
+            sourceName = provider?.name || car.provider || t('not_available');
+        } else if (car.source_type === 'customer') {
+            sourceName = customer?.name || t('not_available');
+        }
 
         return (
             <div className="text-sm">
                 <div className="font-medium">{formatDate(car.created_at) || t('not_available')}</div>
-                <div className="text-gray-500 dark:text-gray-400">{provider?.name || car.provider || t('not_available')}</div>
+                <div className="text-gray-500 dark:text-gray-400">{sourceName}</div>
                 <div className="text-gray-500 dark:text-gray-400">₪{car.buy_price?.toLocaleString() || '0'}</div>
             </div>
         );
@@ -571,25 +580,21 @@ const LogsPage = () => {
                                 render: (log) => getPurchaseInfo(log),
                             },
                             {
-                                accessor: 'provider_details',
-                                title: t('provider_details'),
+                                accessor: 'provider_type',
+                                title: t('provider_type'),
                                 render: (log) => {
                                     if (!log.car) return <span className="text-gray-400">{t('not_available')}</span>;
 
                                     const car = log.car;
-                                    const provider = car.providers || car.provider_details;
+                                    const sourceType = car.source_type;
 
-                                    if (!provider && !car.provider) {
+                                    if (!sourceType) {
                                         return <span className="text-gray-400">{t('not_available')}</span>;
                                     }
 
-                                    return (
-                                        <div className="text-sm">
-                                            <div className="font-medium">{provider?.name || car.provider || t('not_available')}</div>
-                                            {provider?.phone && <div className="text-gray-500 dark:text-gray-400">{provider.phone}</div>}
-                                            {provider?.address && <div className="text-gray-500 dark:text-gray-400 text-xs">{provider.address}</div>}
-                                        </div>
-                                    );
+                                    // Display badge based on source type
+                                    const isProvider = sourceType === 'provider';
+                                    return <span className={`badge ${isProvider ? 'badge-outline-primary' : 'badge-outline-success'}`}>{isProvider ? t('provider') : t('customer')}</span>;
                                 },
                             },
                             {

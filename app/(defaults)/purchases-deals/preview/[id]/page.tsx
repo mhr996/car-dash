@@ -16,6 +16,7 @@ import Image from 'next/image';
 import { CarContract } from '@/types/contract';
 import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Car {
     id: string;
@@ -58,6 +59,7 @@ interface Car {
 
 const CarDealPreview = () => {
     const { t } = getTranslation();
+    const { hasPermission } = usePermissions();
     const params = useParams();
     const router = useRouter();
     const [car, setCar] = useState<Car | null>(null);
@@ -172,7 +174,7 @@ const CarDealPreview = () => {
                         {t('back')}
                     </button>
 
-                    {companyInfo && (
+                    {companyInfo && hasPermission('view_car_purchase_price') && (
                         <div className="flex gap-2">
                             <button
                                 className="btn btn-success gap-2"
@@ -306,12 +308,14 @@ const CarDealPreview = () => {
                             </div>
 
                             <div className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <div>
-                                        <p className="text-sm text-gray-500">{t('buy_price')}</p>
-                                        <p className="font-semibold text-lg">₪{car.buy_price.toLocaleString()}</p>
+                                {hasPermission('view_car_purchase_price') && (
+                                    <div className="flex items-center gap-3">
+                                        <div>
+                                            <p className="text-sm text-gray-500">{t('buy_price')}</p>
+                                            <p className="font-semibold text-lg">₪{car.buy_price.toLocaleString()}</p>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {car.market_price > 0 && (
                                     <div className="flex items-center gap-3">
