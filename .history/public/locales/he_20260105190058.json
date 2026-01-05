@@ -537,6 +537,8 @@
     "bill_description": "תיאור החשבונית",
     "amount_from": "סכום מ",
     "amount_to": "סכום עד",
+    "date_from": "תאריך מ",
+    "date_to": "תאריך עד",
     "enter_bill_description": "הזן תיאור החשבונית",
     "bill_amount": "סכום החשבונית",
     "enter_bill_amount": "הזן סכום החשבונית",
