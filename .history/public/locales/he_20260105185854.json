@@ -533,6 +533,12 @@
     "positive_bill_desc": "חשבונית חיוב",
     "negative_bill": "חשבונית זיכוי",
     "negative_bill_desc": "חשבונית זיכוי",
+
++ positive_bill
+positive_bill_desc
+
+- negative_bill
+negative_bill_desc
     "contact": "צור קשר",
     "select_brand": "בחר מותג",
     "brands": "מותגים",
