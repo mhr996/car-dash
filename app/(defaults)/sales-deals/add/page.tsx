@@ -833,7 +833,7 @@ const AddDeal = () => {
             // Update customer balance if applicable
             const customerId = getCustomerIdFromDeal(dealData);
             if (customerId && dealData.selling_price) {
-                const balanceUpdateSuccess = await handleDealCreated(dealId, customerId, dealData.selling_price, dealData.title || 'Deal');
+                const balanceUpdateSuccess = await handleDealCreated(dealId, customerId, dealData.selling_price, dealData.title || t('deal_fallback'));
 
                 if (!balanceUpdateSuccess) {
                     console.warn('Failed to update customer balance for deal:', dealId);

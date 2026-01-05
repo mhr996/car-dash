@@ -131,6 +131,7 @@ interface BillPayment {
  * Create invoice/receipt document in Tranzila
  */
 const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null, selectedCar?: Car | null) => {
+    const { t } = getTranslation();
     try {
         // Map bill type to Tranzila document type
         // Document types from Tranzila API:
@@ -344,8 +345,8 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     document_date: billData.date || new Date().toISOString().split('T')[0],
                     document_currency_code: 'ILS',
                     vat_percent: 18,
-                    client_company: billData.customer_name || 'Customer',
-                    client_name: billData.customer_name || 'Customer',
+                    client_company: billData.customer_name || t('unknown_customer'),
+                    client_name: billData.customer_name || t('unknown_customer'),
                     client_id: customerId,
                     client_email: customerEmail,
                     client_phone: customerPhone || undefined,
@@ -983,7 +984,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     bill_type: 'general',
                     bill_direction: 'negative', // Refund bills should be negative
                     status: 'pending',
-                    customer_name: selectedCustomer?.name || 'Customer',
+                    customer_name: selectedCustomer?.name || t('unknown_customer'),
                     phone: selectedCustomer?.phone || '',
                     date: new Date().toISOString().split('T')[0],
                     bill_description: `${t('refund_bill_for_deal')}: ${deal.title}`,
@@ -1557,7 +1558,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 // For general bills, don't pass payments array as the amount is in bill_amount field
                 const paymentsToPass = billForm.bill_type === 'general' ? undefined : payments;
 
-                const balanceUpdateSuccess = await handleReceiptCreated(billResult.id, customerId, billData, customerName || 'Customer', dealSellingPrice, paymentsToPass, deal);
+                const balanceUpdateSuccess = await handleReceiptCreated(billResult.id, customerId, billData, customerName || t('unknown_customer'), dealSellingPrice, paymentsToPass, deal);
 
                 if (!balanceUpdateSuccess) {
                     console.warn('Failed to update customer balance for bill:', billResult.id);
