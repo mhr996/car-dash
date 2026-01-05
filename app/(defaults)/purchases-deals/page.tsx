@@ -364,7 +364,7 @@ const CarDealsPage = () => {
                       accessor: 'buy_price',
                       title: t('buy_price'),
                       sortable: true,
-                      render: ({ buy_price }) => <span className="font-medium">₪{buy_price?.toLocaleString() || '0'}</span>,
+                      render: (car: CarDeal) => <span className="font-medium">₪{car.buy_price?.toLocaleString() || '0'}</span>,
                   },
               ]
             : []),
