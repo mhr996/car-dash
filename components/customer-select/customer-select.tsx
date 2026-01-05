@@ -36,7 +36,7 @@ const CustomerSelect = ({ selectedCustomer, onCustomerSelect, onCreateNew, class
     }, [isOpen]);
 
     useEffect(() => {
-        const filtered = customers.filter((customer) => customer.name.toLowerCase().includes(searchTerm.toLowerCase()) || customer.phone.includes(searchTerm));
+        const filtered = customers.filter((customer) => customer.name.toLowerCase().includes(searchTerm.toLowerCase()) || (customer.phone && customer.phone.includes(searchTerm)));
         setFilteredCustomers(filtered);
     }, [customers, searchTerm]);
 
