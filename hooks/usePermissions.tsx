@@ -31,7 +31,7 @@ export const usePermissions = (): PermissionHook => {
                 // Get user role
                 const { data: userRoleData } = await supabase.from('user_roles').select('roles(name)').eq('user_id', user.id).single();
 
-                if (Array.isArray(userRoleData?.roles) && userRoleData.roles[0]?.name === 'Admin') {
+                if (userRoleData?.roles && (userRoleData.roles as any).name === 'Admin') {
                     setIsAdmin(true);
                     // Admin has all permissions - we can set a flag or all permission keys
                     // For simplicity, we'll just use the isAdmin flag
