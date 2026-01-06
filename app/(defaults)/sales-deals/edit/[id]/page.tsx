@@ -167,7 +167,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             items.push({
                 type: 'I',
                 code: null,
-                name: `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` || billData.car_details || 'פרטי רכב',
+                name: `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}` || billData.car_details || 'פרטי רכב',
                 price_type: 'G', // Gross (includes VAT)
                 unit_price: 0, // No price for this row
                 units_number: 1,

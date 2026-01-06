@@ -322,7 +322,7 @@ const AddBill = () => {
                 items.push({
                     type: 'I',
                     code: null,
-                    name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}` || billData.car_details || 'פרטי רכב',
+                    name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}${deal.car.car_number ? ` - ${deal.car.car_number}` : ''}` || billData.car_details || 'פרטי רכב',
                     price_type: 'G', // Gross (includes VAT)
                     unit_price: 0, // No price for this row
                     units_number: 1,
