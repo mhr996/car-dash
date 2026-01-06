@@ -145,6 +145,7 @@
     "enter_bill_notes": "أدخل أي ملاحظات إضافية للفاتورة",
     "bill_created_successfully": "تم إنشاء الفاتورة بنجاح",
     "error_creating_bill": "خطأ في إنشاء الفاتورة",
+    "tranzila_document_creation_failed": "فشل إنشاء مستند Tranzila. تم إلغاء إنشاء الفاتورة",
     "error_loading_deals": "خطأ في تحميل الصفقات",
     "deal_required": "الرجاء اختيار صفقة",
     "bill_type_required": "الرجاء اختيار نوع الفاتورة",

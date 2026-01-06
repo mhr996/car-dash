@@ -331,14 +331,14 @@ const AddBill = () => {
                     to_doc_currency_exchange_rate: 1,
                 });
 
-                // Row 2: Buy Price
+                // Row 2: Buy Price (informational only)
                 if (deal.car.buy_price) {
                     items.push({
                         type: 'I',
                         code: null,
-                        name: 'מחיר קנייה',
+                        name: `מחיר קנייה (${deal.car.buy_price.toLocaleString()})`,
                         price_type: 'G',
-                        unit_price: deal.car.buy_price,
+                        unit_price: 0,
                         units_number: 1,
                         unit_type: 1,
                         currency_code: 'ILS',
@@ -346,14 +346,14 @@ const AddBill = () => {
                     });
                 }
 
-                // Row 3: Selling Price
+                // Row 3: Selling Price (informational only)
                 if (deal.selling_price) {
                     items.push({
                         type: 'I',
                         code: null,
-                        name: 'מחיר מכירה',
+                        name: `מחיר מכירה (${deal.selling_price.toLocaleString()})`,
                         price_type: 'G',
-                        unit_price: deal.selling_price,
+                        unit_price: 0,
                         units_number: 1,
                         unit_type: 1,
                         currency_code: 'ILS',
@@ -408,47 +408,49 @@ const AddBill = () => {
             // Prepare payments array with all payment details
             const tranzilaPayments =
                 payments.length > 0
-                    ? payments.map((payment) => {
-                          const basePayment = {
-                              payment_method: paymentMethodMap[payment.payment_type] || 1,
-                              payment_date: billData.date || new Date().toISOString().split('T')[0],
-                              amount: payment.amount || 0,
-                              currency_code: 'ILS',
-                              to_doc_currency_exchange_rate: 1,
-                          };
+                    ? payments
+                          .filter((payment) => payment.amount && payment.amount > 0) // Filter out payments with 0 or invalid amounts
+                          .map((payment) => {
+                              const basePayment = {
+                                  payment_method: paymentMethodMap[payment.payment_type] || 1,
+                                  payment_date: billData.date || new Date().toISOString().split('T')[0],
+                                  amount: payment.amount,
+                                  currency_code: 'ILS',
+                                  to_doc_currency_exchange_rate: 1,
+                              };
 
-                          // Add payment-type-specific fields
-                          if (payment.payment_type === 'visa') {
-                              return {
-                                  ...basePayment,
-                                  cc_last_4_digits: payment.visa_last_four || null,
-                                  cc_installments_number: payment.visa_installments || 1,
-                                  cc_type: payment.visa_card_type || null,
-                                  approval_number: payment.approval_number || null,
-                              };
-                          } else if (payment.payment_type === 'check') {
-                              return {
-                                  ...basePayment,
-                                  check_number: payment.check_number || null,
-                                  check_bank_name: payment.check_bank_name || null,
-                                  check_branch: payment.check_branch || null,
-                                  check_account_number: payment.check_account_number || null,
-                                  check_holder_name: payment.check_holder_name || null,
-                              };
-                          } else if (payment.payment_type === 'bank_transfer') {
-                              return {
-                                  ...basePayment,
-                                  transfer_number: payment.transfer_number || null,
-                                  transfer_bank_name: payment.transfer_bank_name || null,
-                                  transfer_branch: payment.transfer_branch || null,
-                                  transfer_account_number: payment.transfer_account_number || null,
-                                  transfer_holder_name: payment.transfer_holder_name || null,
-                              };
-                          }
+                              // Add payment-type-specific fields
+                              if (payment.payment_type === 'visa') {
+                                  return {
+                                      ...basePayment,
+                                      cc_last_4_digits: payment.visa_last_four || null,
+                                      cc_installments_number: payment.visa_installments || 1,
+                                      cc_type: payment.visa_card_type || null,
+                                      approval_number: payment.approval_number || null,
+                                  };
+                              } else if (payment.payment_type === 'check') {
+                                  return {
+                                      ...basePayment,
+                                      check_number: payment.check_number || null,
+                                      check_bank_name: payment.check_bank_name || null,
+                                      check_branch: payment.check_branch || null,
+                                      check_account_number: payment.check_account_number || null,
+                                      check_holder_name: payment.check_holder_name || null,
+                                  };
+                              } else if (payment.payment_type === 'bank_transfer') {
+                                  return {
+                                      ...basePayment,
+                                      transfer_number: payment.transfer_number || null,
+                                      transfer_bank_name: payment.transfer_bank_name || null,
+                                      transfer_branch: payment.transfer_branch || null,
+                                      transfer_account_number: payment.transfer_account_number || null,
+                                      transfer_holder_name: payment.transfer_holder_name || null,
+                                  };
+                              }
 
-                          // Cash or other payment types
-                          return basePayment;
-                      })
+                              // Cash or other payment types
+                              return basePayment;
+                          })
                     : [
                           {
                               payment_method: 1, // Default to credit card
@@ -458,6 +460,17 @@ const AddBill = () => {
                               to_doc_currency_exchange_rate: 1,
                           },
                       ];
+
+            // Validate payments only for receipts (RE, IR)
+            // Tax invoices (IN) don't require payment confirmation
+            const requiresPayments = documentType === 'RE' || documentType === 'IR';
+
+            if (requiresPayments) {
+                const hasValidPayments = tranzilaPayments.some((p) => p.amount && p.amount > 0);
+                if (!hasValidPayments) {
+                    throw new Error('No valid payments found. Receipts require at least one payment with amount > 0.');
+                }
+            }
 
             // Get customer information from deal
             let customerId = ''; // Default fallback for missing ID
@@ -512,26 +525,29 @@ const AddBill = () => {
 
             const result = await response.json();
 
-            if (result.ok && result.response?.status_code === 0) {
-                // Document created successfully, update bill record with Tranzila info
-                const { error: updateError } = await supabase
-                    .from('bills')
-                    .update({
-                        tranzila_document_id: result.response.document.id,
-                        tranzila_document_number: result.response.document.number,
-                        tranzila_retrieval_key: result.response.document.retrieval_key,
-                        tranzila_created_at: result.response.document.created_at,
-                    })
-                    .eq('id', billId);
-
-                if (updateError) {
-                    console.error('Error updating bill with Tranzila data:', updateError);
-                } else {
-                    console.log('Tranzila document created successfully:', result.response.document.number);
-                }
-            } else {
-                console.error('Tranzila API error:', result.response);
+            // Check if Tranzila returned an error
+            if (!result.ok || !result.response || result.response.status_code !== 0) {
+                const errorMsg = result.response?.status_msg || 'Unknown Tranzila error';
+                const statusCode = result.response?.status_code || 'N/A';
+                throw new Error(`Tranzila error (${statusCode}): ${errorMsg}`);
             }
+
+            // Document created successfully, update bill record with Tranzila info
+            const { error: updateError } = await supabase
+                .from('bills')
+                .update({
+                    tranzila_document_id: result.response.document.id,
+                    tranzila_document_number: result.response.document.number,
+                    tranzila_retrieval_key: result.response.document.retrieval_key,
+                    tranzila_created_at: result.response.document.created_at,
+                })
+                .eq('id', billId);
+
+            if (updateError) {
+                throw new Error('Failed to update bill with Tranzila data: ' + updateError.message);
+            }
+
+            console.log('Tranzila document created successfully:', result.response.document.number);
         } catch (error) {
             console.error('Error calling Tranzila API:', error);
             throw error;
@@ -667,7 +683,7 @@ const AddBill = () => {
 
             if (error) throw error;
 
-            // Insert multiple payments for receipts
+            // Insert multiple payments for receipts (before Tranzila so we can send them to Tranzila)
             if ((billForm.bill_type === 'receipt_only' || billForm.bill_type === 'tax_invoice_receipt') && payments.length > 0) {
                 const paymentInserts = payments.map((payment) => ({
                     bill_id: billResult.id,
@@ -697,12 +713,27 @@ const AddBill = () => {
                 const { error: paymentsError } = await supabase.from('bill_payments').insert(paymentInserts);
 
                 if (paymentsError) {
-                    console.error('Error inserting payments:', paymentsError);
-                    // Don't fail the entire operation, but log the error
+                    // Rollback: Delete the bill
+                    await supabase.from('bills').delete().eq('id', billResult.id);
+                    throw paymentsError;
                 }
             }
 
-            if (error) throw error;
+            // Create document in Tranzila - THIS IS MANDATORY
+            // If Tranzila fails, we'll rollback the bill creation
+            try {
+                await createTranzilaDocument(billResult.id, billData, payments, selectedDeal);
+            } catch (tranzilaError) {
+                // Rollback: Delete the bill and payments that were just created
+                await supabase.from('bills').delete().eq('id', billResult.id);
+
+                // Delete payments if they were inserted
+                if ((billForm.bill_type === 'receipt_only' || billForm.bill_type === 'tax_invoice_receipt') && payments.length > 0) {
+                    await supabase.from('bill_payments').delete().eq('bill_id', billResult.id);
+                }
+
+                throw new Error(t('tranzila_document_creation_failed') + ': ' + (tranzilaError instanceof Error ? tranzilaError.message : 'Unknown error'));
+            }
 
             setAlert({ message: t('bill_created_successfully'), type: 'success' });
 
@@ -717,15 +748,6 @@ const AddBill = () => {
                 type: 'bill_created',
                 bill: billLogData,
             });
-
-            // Create document in Tranzila after successful bill creation
-            try {
-                await createTranzilaDocument(billResult.id, billData, payments, selectedDeal);
-            } catch (tranzilaError) {
-                console.error('Tranzila document creation failed:', tranzilaError);
-                // Don't fail the bill creation, just log the error
-                // The bill was created successfully, Tranzila is supplementary
-            }
 
             // Update customer balance for all bill types
             let customerId = null;

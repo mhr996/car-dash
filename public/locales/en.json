@@ -154,6 +154,7 @@
     "enter_bill_notes": "Enter any additional notes for this bill",
     "bill_created_successfully": "Bill created successfully",
     "error_creating_bill": "Error creating bill",
+    "tranzila_document_creation_failed": "Failed to create Tranzila document. Bill creation cancelled",
     "error_loading_deals": "Error loading deals",
     "deal_required": "Please select a deal",
     "bill_type_required": "Please select a bill type",
