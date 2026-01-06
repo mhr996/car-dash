@@ -101,7 +101,9 @@ const ProvidersList = () => {
     useEffect(() => {
         setInitialRecords(
             items.filter((item) => {
-                return item.name.toLowerCase().includes(search.toLowerCase()) || item.address.toLowerCase().includes(search.toLowerCase()) || item.phone.toLowerCase().includes(search.toLowerCase());
+                return (
+                    item.name?.toLowerCase().includes(search.toLowerCase()) || item.address?.toLowerCase().includes(search.toLowerCase()) || item.phone?.toLowerCase().includes(search.toLowerCase())
+                );
             }),
         );
     }, [items, search]);

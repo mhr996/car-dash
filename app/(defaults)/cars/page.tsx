@@ -176,12 +176,12 @@ const CarsList = () => {
                 const searchTerm = filters.search.toLowerCase();
                 const matchesSearch =
                     !searchTerm ||
-                    item.title.toLowerCase().includes(searchTerm) ||
-                    item.brand.toLowerCase().includes(searchTerm) ||
-                    item.status.toLowerCase().includes(searchTerm) ||
-                    item.providers?.name.toLowerCase().includes(searchTerm) ||
-                    item.year.toString().includes(searchTerm) ||
-                    (item.car_number && item.car_number.toLowerCase().includes(searchTerm));
+                    item.title?.toLowerCase().includes(searchTerm) ||
+                    item.brand?.toLowerCase().includes(searchTerm) ||
+                    item.status?.toLowerCase().includes(searchTerm) ||
+                    item.providers?.name?.toLowerCase().includes(searchTerm) ||
+                    item.year?.toString().includes(searchTerm) ||
+                    item.car_number?.toLowerCase().includes(searchTerm);
 
                 // Brand filter - exact match since brand is stored as exact string
                 const matchesBrand = !filters.brand || item.brand.toLowerCase() === filters.brand.toLowerCase();

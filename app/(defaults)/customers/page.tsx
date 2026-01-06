@@ -117,10 +117,10 @@ const CustomersList = () => {
                 const searchTerm = filters.search.toLowerCase();
                 const matchesSearch =
                     !searchTerm ||
-                    item.name.toLowerCase().includes(searchTerm) ||
-                    item.phone.toLowerCase().includes(searchTerm) ||
-                    item.car_number.toLowerCase().includes(searchTerm) ||
-                    item.customer_type.toLowerCase().includes(searchTerm);
+                    item.name?.toLowerCase().includes(searchTerm) ||
+                    item.phone?.toLowerCase().includes(searchTerm) ||
+                    item.car_number?.toLowerCase().includes(searchTerm) ||
+                    item.customer_type?.toLowerCase().includes(searchTerm);
 
                 // Country filter
                 const matchesCountry = true;
@@ -304,7 +304,11 @@ const CustomersList = () => {
                                     accessor: 'customer_type',
                                     title: t('customer_type'),
                                     sortable: true,
-                                    render: ({ customer_type }) => <span className={`badge ${getCustomerTypeBadgeClass(customer_type)}`}>{t(`customer_type`)}${customer_type}</span>,
+                                    render: ({ customer_type }) => (
+                                        <span className={`badge ${getCustomerTypeBadgeClass(customer_type)}`}>
+                                            {t(`customer_type`)}${customer_type}
+                                        </span>
+                                    ),
                                 },
                                 {
                                     accessor: 'balance',
