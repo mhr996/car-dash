@@ -23,6 +23,7 @@ interface LogActivityParams {
     deal?: any; // The actual deal object/data
     car?: any; // The actual car object/data
     bill?: any; // The actual bill object/data
+    customTimestamp?: string; // Optional custom timestamp for historical entries
 }
 
 // Helper function to get provider details
@@ -185,11 +186,16 @@ const updateDealLogWithBill = async (bill: any) => {
     }
 };
 
-export const logActivity = async ({ type, deal, car, bill }: LogActivityParams) => {
+export const logActivity = async ({ type, deal, car, bill, customTimestamp }: LogActivityParams) => {
     try {
         let logData: any = {
             type,
         };
+
+        // Use custom timestamp if provided (for historical entries)
+        if (customTimestamp) {
+            logData.created_at = customTimestamp;
+        }
 
         // Skip bill-related logging since we now fetch bills dynamically
         if (type === 'bill_created' || type === 'bill_updated' || type === 'bill_deleted') {
@@ -296,6 +302,19 @@ export const logActivity = async ({ type, deal, car, bill }: LogActivityParams) 
                 if (provider) {
                     enrichedCar.provider_details = provider;
                 }
+            }
+
+            // Get customer details if source_customer_id exists (for cars received from customers)
+            if (car.source_customer_id) {
+                const customer = await getCustomerDetails(car.source_customer_id);
+                if (customer) {
+                    enrichedCar.customer_details = customer;
+                }
+            }
+
+            // If customer object is already provided (e.g., from exchange deals), use it
+            if (car.customer && !enrichedCar.customer_details) {
+                enrichedCar.customer_details = car.customer;
             }
 
             logData.car = enrichedCar;

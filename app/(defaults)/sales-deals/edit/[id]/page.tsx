@@ -158,9 +158,6 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
 
         const documentType = documentTypeMap[billData.bill_type] || 'IR';
 
-        // TESTING MODE: Always use amount 1 to avoid actual billing
-        const TEST_AMOUNT = 1;
-
         // Prepare items array from deal data
         const items = [];
 
@@ -186,7 +183,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     code: null,
                     name: 'מחיר קנייה',
                     price_type: 'G',
-                    unit_price: TEST_AMOUNT, // In production: deal.car.buy_price
+                    unit_price: selectedCar.buy_price,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -201,7 +198,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     code: null,
                     name: 'מחיר מכירה',
                     price_type: 'G',
-                    unit_price: TEST_AMOUNT, // In production: deal.selling_price
+                    unit_price: deal.selling_price,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -216,7 +213,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     code: null,
                     name: 'סכום הפסד',
                     price_type: 'G',
-                    unit_price: TEST_AMOUNT, // In production: -deal.loss_amount (negative)
+                    unit_price: -deal.loss_amount,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -231,7 +228,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     code: null,
                     name: 'עמלת רווח',
                     price_type: 'G',
-                    unit_price: TEST_AMOUNT, // In production: deal.amount
+                    unit_price: deal.amount,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -243,9 +240,9 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             items.push({
                 type: 'I',
                 code: null,
-                name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית - מצב בדיקה',
+                name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית',
                 price_type: 'G', // Gross (includes VAT)
-                unit_price: TEST_AMOUNT, // Always 1 for testing
+                unit_price: parseFloat(billData.total_with_tax) || 0,
                 units_number: 1,
                 unit_type: 1,
                 currency_code: 'ILS',
@@ -260,7 +257,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                       const basePayment = {
                           payment_method: paymentMethodMap[payment.payment_type] || 1,
                           payment_date: billData.date || new Date().toISOString().split('T')[0],
-                          amount: TEST_AMOUNT, // Always 1 for testing (override actual amount)
+                          amount: payment.amount || 0,
                           currency_code: 'ILS',
                           to_doc_currency_exchange_rate: 1,
                       };
@@ -301,7 +298,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                       {
                           payment_method: 1, // Default to credit card
                           payment_date: billData.date || new Date().toISOString().split('T')[0],
-                          amount: TEST_AMOUNT, // Always 1 for testing
+                          amount: parseFloat(billData.total_with_tax) || 0,
                           currency_code: 'ILS',
                           to_doc_currency_exchange_rate: 1,
                       },

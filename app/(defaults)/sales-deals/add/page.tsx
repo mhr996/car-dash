@@ -644,6 +644,7 @@ const AddDeal = () => {
                     sale_price: exchangeForm.old_car_market_price ? parseFloat(exchangeForm.old_car_market_price) : 0,
                     car_number: exchangeForm.old_car_number || '',
                     images: JSON.stringify([]),
+                    created_at: new Date(dealDate + 'T' + new Date().toTimeString().split(' ')[0]).toISOString(), // Use deal date
                 };
 
                 const { data: newCarData, error: carError } = await supabase.from('cars').insert(oldCarData).select().single();
@@ -652,13 +653,14 @@ const AddDeal = () => {
                     throw new Error(`Failed to create car record: ${carError.message}`);
                 }
 
-                // Log the car received from client as a separate activity
+                // Log the car received from client as a separate activity with deal's date
                 await logActivity({
                     type: 'car_received_from_client',
                     car: {
                         ...newCarData,
                         customer: selectedCustomer,
                     },
+                    customTimestamp: new Date(dealDate + 'T' + new Date().toTimeString().split(' ')[0]).toISOString(),
                 });
 
                 // Calculate profit for exchange deal:
@@ -1272,6 +1274,10 @@ const AddDeal = () => {
                                 <div>
                                     <span className="text-green-600 dark:text-green-300 font-medium">{t('year')}:</span>
                                     <p className="text-green-800 dark:text-green-100">{selectedCar.year}</p>
+                                </div>
+                                <div>
+                                    <span className="text-green-600 dark:text-green-300 font-medium">{t('car_number')}:</span>
+                                    <p className="text-green-800 dark:text-green-100">{selectedCar.car_number || t('not_available')}</p>
                                 </div>
                                 <div>
                                     <span className="text-green-600 dark:text-green-300 font-medium">{t('kilometers')}:</span>

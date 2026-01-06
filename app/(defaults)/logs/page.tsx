@@ -551,6 +551,12 @@ const LogsPage = () => {
                         records={records}
                         columns={[
                             {
+                                accessor: 'id',
+                                title: t('id'),
+                                sortable: true,
+                                render: ({ id }) => <strong className="text-info">#{id}</strong>,
+                            },
+                            {
                                 accessor: 'created_at',
                                 title: t('log_date'),
                                 sortable: true,
