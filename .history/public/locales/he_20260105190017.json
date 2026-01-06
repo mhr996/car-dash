@@ -535,8 +535,6 @@
     "negative_bill_desc": "חשבונית זיכוי",
     "general_bill_details": "פרטי חשבונית כללי",
     "bill_description": "תיאור החשבונית",
-    "amount_from": "סכום מ",
-    "amount_to": "סכום עד",
     "enter_bill_description": "הזן תיאור החשבונית",
     "bill_amount": "סכום החשבונית",
     "enter_bill_amount": "הזן סכום החשבונית",

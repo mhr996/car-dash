@@ -1025,9 +1025,10 @@
     "manufacturer": "Manufacturer",
     "enter_deal_notes": "Enter deal notes",
     "car_name": "Car Name",
-    "birth_date": "Birth Date",
     "deal_details": "Deal Details",
-    "enter_deal_title": "Enter deal title",
+    
+enter_deal_title
+    
     "suggested_selling_price": "Suggested Selling Price",
     "hand": "Hand",
     "enter_manufacturer": "Enter manufacturer",
