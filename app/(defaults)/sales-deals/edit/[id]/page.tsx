@@ -553,6 +553,12 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             dealAmount -= carEvaluation;
         }
 
+        // Deduct register orders (أمر سجل)
+        if (registerOrders && registerOrders.length > 0) {
+            const totalDeductions = registerOrders.reduce((sum, order) => sum + order.amount, 0);
+            dealAmount += totalDeductions; // Add because dealAmount is the remaining debt, deductions increase it
+        }
+
         // Calculate total payments from bills
         let totalPaid = 0;
         bills.forEach((bill) => {

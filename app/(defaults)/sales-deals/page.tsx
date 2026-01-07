@@ -42,7 +42,7 @@ interface DealFilters {
 
 const DealsList = () => {
     const { t } = getTranslation();
-    const { hasPermission } = usePermissions();
+    const { hasPermission, loading: permissionsLoading } = usePermissions();
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -100,6 +100,11 @@ const DealsList = () => {
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        // Don't fetch until permissions are loaded
+        if (permissionsLoading) {
+            return;
+        }
+
         const fetchDeals = async () => {
             try {
                 const { data, error } = await supabase
@@ -180,7 +185,7 @@ const DealsList = () => {
             }
         };
         fetchDeals();
-    }, []);
+    }, [permissionsLoading]);
 
     useEffect(() => {
         setPage(1);
@@ -534,8 +539,9 @@ const DealsList = () => {
      * Calculates the deal balance following the business logic:
      * 1. Start with negative selling price (debt amount)
      * 2. For exchange deals, add customer car evaluation value as credit
-     * 3. Add receipt payments to move towards 0
-     * 4. Allow balance to exceed 0 (customer overpayment)
+     * 3. Deduct register orders (أمر سجل)
+     * 4. Add receipt payments to move towards 0
+     * 5. Allow balance to exceed 0 (customer overpayment)
      *
      * Example: Deal selling price = 350k, Customer car value = 100k
      * - Initial balance for exchange: -350k + 100k = -250k
@@ -551,6 +557,12 @@ const DealsList = () => {
         if (deal?.deal_type === 'exchange' && deal?.customer_car_eval_value) {
             const carEvaluationAmount = parseFloat(deal.customer_car_eval_value) || 0;
             totalBalance += carEvaluationAmount; // Add as credit (positive impact)
+        }
+
+        // Deduct register orders (أمر سجل)
+        if (deal?.register_orders && Array.isArray(deal.register_orders) && deal.register_orders.length > 0) {
+            const totalDeductions = deal.register_orders.reduce((sum: number, order: any) => sum + (order.amount || 0), 0);
+            totalBalance -= totalDeductions;
         }
 
         if (!bills || bills.length === 0) return totalBalance;

@@ -71,7 +71,7 @@ interface Bill {
 const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
     const router = useRouter();
-    const { hasPermission } = usePermissions();
+    const { hasPermission, loading: permissionsLoading } = usePermissions();
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'info' | 'attachments' | 'payments' | 'bills'>('info');
     const [deal, setDeal] = useState<Deal | null>(null);
@@ -79,6 +79,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [car, setCar] = useState<Car | null>(null);
     const [carTakenFromClient, setCarTakenFromClient] = useState<Car | null>(null);
     const [bills, setBills] = useState<Bill[]>([]);
+    const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
     const [carImageUrl, setCarImageUrl] = useState<string | null>(null);
     const [carTakenImageUrl, setCarTakenImageUrl] = useState<string | null>(null);
     const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
@@ -120,6 +121,11 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
         }
     };
     useEffect(() => {
+        // Don't fetch until permissions are loaded
+        if (permissionsLoading) {
+            return;
+        }
+
         const fetchDeal = async () => {
             try {
                 const { data, error } = await supabase.from('deals').select('*').eq('id', dealId).single();
@@ -137,6 +143,11 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     // Load payment notes if they exist
                     if (data.payment_notes) {
                         setPaymentNotes(data.payment_notes);
+                    }
+
+                    // Load register orders if they exist
+                    if (data.register_orders && Array.isArray(data.register_orders)) {
+                        setRegisterOrders(data.register_orders);
                     }
 
                     // Fetch customer details if customer_id exists
@@ -228,7 +239,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
         if (dealId) {
             fetchDeal();
         }
-    }, [dealId]);
+    }, [dealId, permissionsLoading]);
 
     // Load company information
     useEffect(() => {
@@ -1168,17 +1179,71 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
 
                 {/* Bills Tab */}
                 {hasPermission('view_bills') && activeTab === 'bills' && (
-                    <BillsTable
-                        bills={bills}
-                        loading={false}
-                        readOnly={true}
-                        deal={deal}
-                        car={car}
-                        carTakenFromClient={carTakenFromClient}
-                        selectedCustomer={customer}
-                        onDownloadPDF={handleDownloadPDF}
-                        downloadingPDF={downloadingPDF}
-                    />
+                    <>
+                        {/* Register Orders Display (Read-Only) */}
+                        {registerOrders.length > 0 && (
+                            <div className="mb-6 panel bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 border-2 border-orange-300 dark:border-orange-700">
+                                <div className="mb-4">
+                                    <h5 className="text-lg font-bold text-orange-800 dark:text-orange-300 flex items-center gap-2">
+                                        <IconDocument className="w-5 h-5" />
+                                        أمر سجل (Register Order)
+                                    </h5>
+                                    <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Amounts deducted from the deal balance'}</p>
+                                </div>
+
+                                {/* Register Orders Table */}
+                                <div className="table-responsive">
+                                    <table className="table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>{t('amount')}</th>
+                                                <th>{t('description')}</th>
+                                                <th>{t('date')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {registerOrders.map((order, index) => (
+                                                <tr key={index}>
+                                                    <td>
+                                                        <span className="text-danger font-semibold">-{formatCurrency(order.amount)}</span>
+                                                    </td>
+                                                    <td>{order.description}</td>
+                                                    <td className="text-sm text-gray-600 dark:text-gray-400">
+                                                        {new Date(order.created_at).toLocaleDateString('en-GB', {
+                                                            year: 'numeric',
+                                                            month: '2-digit',
+                                                            day: '2-digit',
+                                                        })}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="bg-gray-50 dark:bg-gray-800">
+                                                <td className="font-bold">{t('total_deductions') || 'Total Deductions'}:</td>
+                                                <td colSpan={2}>
+                                                    <span className="text-danger font-bold text-lg">-{formatCurrency(registerOrders.reduce((sum, order) => sum + order.amount, 0))}</span>
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Connected Bills Section */}
+                        <BillsTable
+                            bills={bills}
+                            loading={false}
+                            readOnly={true}
+                            deal={deal}
+                            car={car}
+                            carTakenFromClient={carTakenFromClient}
+                            selectedCustomer={customer}
+                            onDownloadPDF={handleDownloadPDF}
+                            downloadingPDF={downloadingPDF}
+                        />
+                    </>
                 )}
             </div>
 

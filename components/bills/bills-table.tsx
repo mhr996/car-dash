@@ -271,13 +271,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(bill.created_at)}</td>
                                     <td className="px-4 py-3 text-center">
                                         <div className="flex items-center justify-center gap-2">
-                                            <Link
-                                                href={`/bills/preview/${bill.id}`}
-                                                className="inline-flex items-center gap-1 px-3 py-1 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors duration-200 text-xs"
-                                            >
-                                                <IconEye className="w-3 h-3" />
-                                                {t('view')}
-                                            </Link>
+                                         
                                             {onDownloadPDF && (
                                                 <button
                                                     type="button"
