@@ -20,6 +20,7 @@ interface Customer {
     created_at: string;
     name: string;
     phone: string;
+    address: string;
     car_number: string;
     age: number;
     id_number: string;
@@ -299,7 +300,12 @@ const CustomersList = () => {
                                     title: t('phone'),
                                     sortable: true,
                                 },
-
+                                {
+                                    accessor: 'address',
+                                    title: t('address'),
+                                    sortable: true,
+                                    render: ({ address }) => <div className="text-sm">{address || '-'}</div>,
+                                },
                                 {
                                     accessor: 'customer_type',
                                     title: t('customer_type'),
@@ -387,6 +393,10 @@ const CustomersList = () => {
                                                 <div>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('phone')}</p>
                                                     <p className="font-semibold text-sm">{customer.phone}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('address')}</p>
+                                                    <p className="font-semibold text-sm">{customer.address}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('car_number')}</p>

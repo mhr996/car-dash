@@ -30,6 +30,7 @@ const EditCustomer = () => {
     const [form, setForm] = useState({
         name: '',
         phone: '',
+        address: '',
         car_number: '',
         age: '',
         id_number: '',
@@ -55,6 +56,7 @@ const EditCustomer = () => {
                     setForm({
                         name: data.name || '',
                         phone: data.phone || '',
+                        address: data.address || '',
                         car_number: data.car_number || '',
                         age: data.age?.toString() || '',
                         id_number: data.id_number || '',
@@ -114,6 +116,7 @@ const EditCustomer = () => {
             const customerData = {
                 name: form.name.trim(),
                 phone: form.phone.trim(),
+                address: form.address.trim() || null,
                 car_number: form.car_number.trim() || null,
                 age: form.age ? parseInt(form.age) : null,
                 id_number: form.id_number.trim() || null,
@@ -225,6 +228,13 @@ const EditCustomer = () => {
                                 {t('phone')} <span className="text-red-500">*</span>
                             </label>
                             <input type="tel" id="phone" name="phone" value={form.phone} onChange={handleInputChange} className="form-input" placeholder={t('enter_phone_number')} required />
+                        </div>
+                        {/* Address */}
+                        <div>
+                            <label htmlFor="address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                {t('address')}
+                            </label>
+                            <input type="text" id="address" name="address" value={form.address} onChange={handleInputChange} className="form-input" placeholder={t('enter_address')} />
                         </div>
                         {/* Car Number */}
                         <div>

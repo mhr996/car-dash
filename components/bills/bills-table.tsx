@@ -18,9 +18,22 @@ interface BillsTableProps {
     car?: any; // Car data for the deal
     carTakenFromClient?: any; // Car taken from client for exchange deals
     selectedCustomer?: any; // Selected customer for display
+    registerOrders?: Array<{ amount: number; description: string; created_at: string }>;
 }
 
-const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownloadPDF, downloadingPDF, readOnly = false, className = '', deal, car, carTakenFromClient, selectedCustomer }) => {
+const BillsTable: React.FC<BillsTableProps> = ({
+    bills,
+    loading = false,
+    onDownloadPDF,
+    downloadingPDF,
+    readOnly = false,
+    className = '',
+    deal,
+    car,
+    carTakenFromClient,
+    selectedCustomer,
+    registerOrders = [],
+}) => {
     const { t } = getTranslation();
 
     // Calculate deal balance using the same logic from sales-deals page
@@ -33,6 +46,12 @@ const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownl
         if (deal?.deal_type === 'exchange' && deal?.customer_car_eval_value) {
             const carEvaluationAmount = parseFloat(deal.customer_car_eval_value) || 0;
             totalBalance += carEvaluationAmount; // Add as credit (positive impact)
+        }
+
+        // Deduct register orders
+        if (registerOrders && registerOrders.length > 0) {
+            const totalDeductions = registerOrders.reduce((sum, order) => sum + order.amount, 0);
+            totalBalance -= totalDeductions;
         }
 
         if (!bills || bills.length === 0) return totalBalance;
@@ -174,6 +193,7 @@ const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownl
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('bill_type')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('customer_name')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('amount')}</th>
+                            <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('bank_transfer_details')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('created_date')}</th>
                             <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">{t('actions')}</th>
                         </tr>
@@ -192,6 +212,9 @@ const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownl
                                 </td>
                                 <td className="px-4 py-3 text-sm">
                                     <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(carTakenFromClient.buy_price || 0)}</span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(deal.created_at)}</td>
                                 <td className="px-4 py-3 text-center">
@@ -213,6 +236,9 @@ const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownl
                                 </td>
                                 <td className="px-4 py-3 text-sm">
                                     <span className="text-purple-600 dark:text-purple-400 font-medium">{formatCurrency((car?.sale_price || 0) - (deal?.amount || 0))}</span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(deal.created_at)}</td>
                                 <td className="px-4 py-3 text-center">
@@ -236,6 +262,11 @@ const BillsTable: React.FC<BillsTableProps> = ({ bills, loading = false, onDownl
                                         ) : (
                                             <span className="text-gray-900 dark:text-gray-100">{formatCurrency(billAmount)}</span>
                                         )}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                                        {(bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') && bill.bill_payments
+                                            ? bill.bill_payments.find((payment: any) => payment.payment_type === 'bank_transfer')?.transfer_bank_name || '-'
+                                            : '-'}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(bill.created_at)}</td>
                                     <td className="px-4 py-3 text-center">

@@ -418,6 +418,7 @@ import BillsTable from '@/components/bills/bills-table';
 import IconDocument from '@/components/icon/icon-document';
 import IconPaperclip from '@/components/icon/icon-paperclip';
 import IconCreditCard from '@/components/icon/icon-credit-card';
+import IconTrashLines from '@/components/icon/icon-trash-lines';
 
 const EditDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
@@ -612,6 +613,14 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const [showBillModal, setShowBillModal] = useState(false);
     const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
 
+    // Register Order states
+    const [registerOrderForm, setRegisterOrderForm] = useState({
+        amount: '',
+        description: '',
+    });
+    const [creatingRegisterOrder, setCreatingRegisterOrder] = useState(false);
+    const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
+
     // Cancel deal confirmation modal state
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
@@ -642,6 +651,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     // Load payment notes if they exist
                     if (data.payment_notes) {
                         setPaymentNotes(data.payment_notes);
+                    }
+
+                    // Load register orders if they exist
+                    if (data.register_orders && Array.isArray(data.register_orders)) {
+                        setRegisterOrders(data.register_orders);
                     }
 
                     setForm({
@@ -890,6 +904,78 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const closeBillModal = () => {
         setShowBillModal(false);
         setSelectedBill(null);
+    };
+
+    // Handle register order creation
+    const handleCreateRegisterOrder = async () => {
+        // Validate form
+        if (!registerOrderForm.amount || parseFloat(registerOrderForm.amount) <= 0) {
+            setAlert({ message: t('amount_required'), type: 'danger' });
+            return;
+        }
+        if (!registerOrderForm.description?.trim()) {
+            setAlert({ message: t('description_required'), type: 'danger' });
+            return;
+        }
+
+        setCreatingRegisterOrder(true);
+        try {
+            // Create new register order object
+            const newRegisterOrder = {
+                amount: parseFloat(registerOrderForm.amount),
+                description: registerOrderForm.description.trim(),
+                created_at: new Date().toISOString(),
+            };
+
+            // Add to existing register orders array
+            const updatedRegisterOrders = [...registerOrders, newRegisterOrder];
+
+            // Update deal with new register orders array
+            const { error } = await supabase.from('deals').update({ register_orders: updatedRegisterOrders }).eq('id', dealId);
+
+            if (error) throw error;
+
+            // Update local state
+            setRegisterOrders(updatedRegisterOrders);
+            setAlert({ message: t('register_order_created_successfully'), type: 'success' });
+
+            // Reset form
+            setRegisterOrderForm({
+                amount: '',
+                description: '',
+            });
+        } catch (error) {
+            console.error('Error creating register order:', error);
+            setAlert({
+                message: error instanceof Error ? error.message : t('error_creating_register_order'),
+                type: 'danger',
+            });
+        } finally {
+            setCreatingRegisterOrder(false);
+        }
+    };
+
+    // Handle register order deletion
+    const handleDeleteRegisterOrder = async (index: number) => {
+        try {
+            // Remove the register order at the specified index
+            const updatedRegisterOrders = registerOrders.filter((_, i) => i !== index);
+
+            // Update deal with new register orders array
+            const { error } = await supabase.from('deals').update({ register_orders: updatedRegisterOrders }).eq('id', dealId);
+
+            if (error) throw error;
+
+            // Update local state
+            setRegisterOrders(updatedRegisterOrders);
+            setAlert({ message: t('register_order_deleted_successfully') || 'Register order deleted successfully', type: 'success' });
+        } catch (error) {
+            console.error('Error deleting register order:', error);
+            setAlert({
+                message: error instanceof Error ? error.message : t('error_deleting_register_order') || 'Error deleting register order',
+                type: 'danger',
+            });
+        }
     };
 
     const handleDealTypeChange = (type: string) => {
@@ -3228,6 +3314,114 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     {/* Bills Tab */}
                     {hasPermission('view_bills') && activeTab === 'bills' && (
                         <>
+                            {/* Register Order Section */}
+                            <div className="mb-6 panel bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 border-2 border-orange-300 dark:border-orange-700">
+                                <div className="mb-4">
+                                    <h5 className="text-lg font-bold text-orange-800 dark:text-orange-300 flex items-center gap-2">
+                                        <IconDocument className="w-5 h-5" />
+                                        أمر سجل (Register Order)
+                                    </h5>
+                                    <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Add amounts to be deducted from the deal balance'}</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label htmlFor="register_order_amount" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('amount')} <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            id="register_order_amount"
+                                            value={registerOrderForm.amount}
+                                            onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, amount: e.target.value }))}
+                                            className="form-input"
+                                            placeholder="0"
+                                            step="0.01"
+                                            min="0"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label htmlFor="register_order_description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('description')} <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                id="register_order_description"
+                                                value={registerOrderForm.description}
+                                                onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, description: e.target.value }))}
+                                                className="form-input flex-1"
+                                                placeholder={t('enter_description')}
+                                            />
+                                            <button type="button" onClick={handleCreateRegisterOrder} className="btn btn-primary" disabled={creatingRegisterOrder}>
+                                                {creatingRegisterOrder ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-l-transparent"></div>
+                                                        {t('creating')}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <IconPlus className="w-4 h-4" />
+                                                        {t('add')}
+                                                    </div>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Register Orders List */}
+                            {registerOrders.length > 0 && (
+                                <div className="mb-6 panel">
+                                    <div className="mb-4">
+                                        <h5 className="text-lg font-semibold text-gray-800 dark:text-white">{t('register_orders') || 'Register Orders'}</h5>
+                                    </div>
+                                    <div className="table-responsive">
+                                        <table className="table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th className="text-sm font-medium">{t('amount')}</th>
+                                                    <th className="text-sm font-medium">{t('description')}</th>
+                                                    <th className="text-sm font-medium">{t('created_date')}</th>
+                                                    <th className="text-sm font-medium text-center">{t('actions')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {registerOrders.map((order, index) => (
+                                                    <tr key={index}>
+                                                        <td>
+                                                            <span className="text-danger font-semibold">-{formatCurrency(order.amount)}</span>
+                                                        </td>
+                                                        <td>{order.description}</td>
+                                                        <td className="text-sm text-gray-600 dark:text-gray-400">
+                                                            {new Date(order.created_at).toLocaleDateString('en-GB', {
+                                                                year: 'numeric',
+                                                                month: '2-digit',
+                                                                day: '2-digit',
+                                                            })}
+                                                        </td>
+                                                        <td className="text-center">
+                                                            <button type="button" onClick={() => handleDeleteRegisterOrder(index)} className="btn btn-sm btn-outline-danger" title={t('delete')}>
+                                                                <IconTrashLines className="w-4 h-4" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="bg-gray-50 dark:bg-gray-800">
+                                                    <td className="font-bold">{t('total_deductions') || 'Total Deductions'}:</td>
+                                                    <td colSpan={3}>
+                                                        <span className="text-danger font-bold text-lg">-{formatCurrency(registerOrders.reduce((sum, order) => sum + order.amount, 0))}</span>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Connected Bills Section */}
                             <BillsTable
                                 bills={bills}
@@ -3239,6 +3433,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 car={selectedCar}
                                 carTakenFromClient={carTakenFromClient}
                                 selectedCustomer={selectedCustomer}
+                                registerOrders={registerOrders}
                             />
                         </>
                     )}

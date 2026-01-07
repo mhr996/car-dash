@@ -7,7 +7,6 @@ import Cookies from 'universal-cookie';
 import { sortBy } from 'lodash';
 import { DataTable, DataTableSortStatus, DataTableColumn } from 'mantine-datatable';
 import IconPlus from '@/components/icon/icon-plus';
-import IconEye from '@/components/icon/icon-eye';
 import IconPdf from '@/components/icon/icon-pdf';
 import IconEdit from '@/components/icon/icon-edit';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
@@ -430,9 +429,6 @@ const Bills = () => {
             render: ({ id }) => (
                 <div className="flex items-center gap-2">
                     <strong className="text-info">#{id}</strong>
-                    <Link href={`/bills/preview/${id}`} className="flex hover:text-info" title={t('view')}>
-                        <IconEye className="h-4 w-4" />
-                    </Link>
                 </div>
             ),
         },
@@ -504,6 +500,18 @@ const Bills = () => {
             render: (bill: Bill) => (
                 <span className={`font-medium ${bill.bill_direction === 'negative' ? 'text-red-500' : ''}`}>
                     {bill.bill_type === 'general' ? '₪' + getBillAmount(bill).toFixed(0) : getPaymentAmount(bill)}
+                </span>
+            ),
+        },
+        {
+            accessor: 'bank_transfer_details',
+            title: t('bank_transfer_details'),
+            sortable: true,
+            render: (bill: Bill) => (
+                <span className="text-sm">
+                    {(bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') && bill.payments
+                        ? bill.payments.find((payment) => payment.payment_type === 'bank_transfer')?.transfer_bank_name || '-'
+                        : '-'}
                 </span>
             ),
         },

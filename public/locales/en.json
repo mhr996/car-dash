@@ -1280,6 +1280,10 @@
     "general": "General",
     "existing_attachments": "Existing Attachments",
     "bill_type_general": "General Bill",
+    "bill_type_register_order": "Register Order",
+    "register_order_description": "Add amounts to be deducted from the deal balance",
+    "register_order_created_successfully": "Register order created successfully",
+    "error_creating_register_order": "Error creating register order",
     "deal_fallback": "Deal",
     "unknown_type": "Unknown type",
     "back_to_deals": "Back to Deals",
@@ -1678,5 +1682,15 @@
     "category_created_successfully": "Category created successfully",
     "please_enter_valid_discount": "Please enter a valid discount value",
     "percentage_discount_cannot_exceed": "Percentage discount cannot exceed 100%",
-    "fixed_discount_cannot_be_equal": "Fixed discount cannot be equal to or greater than the product price"
+    "fixed_discount_cannot_be_equal": "Fixed discount cannot be equal to or greater than the product price",
+    "bank_transfer_details": "Bank Transfer Details",
+    "enter_bank_transfer_details": "Enter bank transfer details",
+    "bill_type_register_order": "Register Order",
+    "register_order_description": "Add amounts to be deducted from the deal balance",
+    "register_order_created_successfully": "Register order created successfully",
+    "error_creating_register_order": "Error creating register order",
+    "register_orders": "Register Orders",
+    "total_deductions": "Total Deductions",
+    "register_order_deleted_successfully": "Register order deleted successfully",
+    "error_deleting_register_order": "Error deleting register order"
 }

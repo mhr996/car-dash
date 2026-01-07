@@ -1779,5 +1779,15 @@
     "category_created_successfully": "تم إنشاء الفئة بنجاح",
     "please_enter_valid_discount": "يرجى إدخال قيمة خصم صالحة",
     "percentage_discount_cannot_exceed": "لا يمكن أن يتجاوز خصم النسبة المئوية 100%",
-    "fixed_discount_cannot_be_equal": "لا يمكن أن يكون الخصم الثابت مساوياً أو أكبر من سعر المنتج"
+    "fixed_discount_cannot_be_equal": "لا يمكن أن يكون الخصم الثابت مساوياً أو أكبر من سعر المنتج",
+    "bank_transfer_details": "تفاصيل التحويل البنكي",
+    "enter_bank_transfer_details": "أدخل تفاصيل التحويل البنكي",
+    "bill_type_register_order": "أمر سجل",
+    "register_order_description": "إضافة مبالغ سيتم خصمها من رصيد الصفقة",
+    "register_order_created_successfully": "تم إنشاء أمر السجل بنجاح",
+    "error_creating_register_order": "خطأ في إنشاء أمر السجل",
+    "register_orders": "أوامر السجل",
+    "total_deductions": "إجمالي الخصومات",
+    "register_order_deleted_successfully": "تم حذف أمر السجل بنجاح",
+    "error_deleting_register_order": "خطأ في حذف أمر السجل"
 }

@@ -440,11 +440,7 @@ const AddBill = () => {
                               } else if (payment.payment_type === 'bank_transfer') {
                                   return {
                                       ...basePayment,
-                                      transfer_number: payment.transfer_number || null,
                                       transfer_bank_name: payment.transfer_bank_name || null,
-                                      transfer_branch: payment.transfer_branch || null,
-                                      transfer_account_number: payment.transfer_account_number || null,
-                                      transfer_holder_name: payment.transfer_holder_name || null,
                                   };
                               }
 

@@ -199,63 +199,13 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ payment, onUpdate, onRemove, 
             {payment.payment_type === 'bank_transfer' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('bank_name')}</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('bank_transfer_details')}</label>
                         <input
                             type="text"
                             value={payment.transfer_bank_name || ''}
                             onChange={(e) => handleInputChange('transfer_bank_name', e.target.value)}
                             className="form-input"
-                            placeholder={t('enter_bank_name')}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('branch')}</label>
-                        <input
-                            type="text"
-                            value={payment.transfer_branch || ''}
-                            onChange={(e) => handleInputChange('transfer_branch', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_branch')}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('branch_number')}</label>
-                        <input
-                            type="text"
-                            value={payment.transfer_branch_number || ''}
-                            onChange={(e) => handleInputChange('transfer_branch_number', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_branch_number')}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('account_number')}</label>
-                        <input
-                            type="text"
-                            value={payment.transfer_account_number || ''}
-                            onChange={(e) => handleInputChange('transfer_account_number', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_account_number')}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('transfer_number')}</label>
-                        <input
-                            type="text"
-                            value={payment.transfer_number || ''}
-                            onChange={(e) => handleInputChange('transfer_number', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_transfer_number')}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('account_holder')}</label>
-                        <input
-                            type="text"
-                            value={payment.transfer_holder_name || ''}
-                            onChange={(e) => handleInputChange('transfer_holder_name', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_account_holder')}
+                            placeholder={t('enter_bank_transfer_details')}
                         />
                     </div>
                 </div>
