@@ -124,11 +124,11 @@ async function createDocument(data: any = {}) {
             action: data.action !== undefined ? data.action : 1,
 
             // Client information
-            client_company: data.client_company || data.customer_name || 'Test Company',
-            client_name: data.client_name || data.contact_person || 'Test Contact',
-            client_id: data.client_id || data.customer_id || '123456789',
-            client_email: data.client_email || data.email || 'test@example.com',
-            client_phone: data.client_phone || null,
+            client_company: data.client_company || data.customer_name || '',
+            client_name: data.client_name || data.contact_person || '',
+            client_id: data.client_id || data.id_number || data.customer_id_number || '',
+            client_email: data.client_email || data.email || '',
+            client_phone: data.client_phone || data.phone || '',
             client_address_line_1: data.client_address_line_1 || null,
             client_address_line_2: data.client_address_line_2 || null,
             client_city: data.client_city || null,
@@ -136,7 +136,7 @@ async function createDocument(data: any = {}) {
             client_country_code: data.client_country_code || 'IL',
 
             // Reference fields
-            created_by_user: data.created_by_user || 'car-dash-dev',
+            created_by_user: data.created_by_user || '',
             created_by_system: data.created_by_system || 'car-dash',
 
             // Items
@@ -144,9 +144,9 @@ async function createDocument(data: any = {}) {
                 {
                     type: 'I', // I = Item, S = Service
                     code: null,
-                    name: data.item_name || 'Test Item',
+                    name: data.item_name || '',
                     price_type: 'G', // G = Gross, N = Net
-                    unit_price: data.overrideAmount ? Number(data.overrideAmount) : 1, // SAFE TEST AMOUNT
+                    unit_price: data.overrideAmount ? Number(data.overrideAmount) : 0,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -159,7 +159,7 @@ async function createDocument(data: any = {}) {
                 {
                     payment_method: 1, // 1 = Credit Card
                     payment_date: data.payment_date || new Date().toISOString().split('T')[0], // yyyy-mm-dd
-                    amount: data.overrideAmount ? Number(data.overrideAmount) : 1, // SAFE TEST AMOUNT
+                    amount: data.overrideAmount ? Number(data.overrideAmount) : 0,
                     currency_code: 'ILS',
                     to_doc_currency_exchange_rate: 1,
                 },
