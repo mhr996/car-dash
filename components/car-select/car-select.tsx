@@ -43,8 +43,9 @@ const CarSelect = ({ selectedCar, onCarSelect, onCreateNew, className = 'form-se
             const title = car.title ? String(car.title).toLowerCase() : '';
             const brand = car.brand ? String(car.brand).toLowerCase() : '';
             const provider = car.provider ? String(car.provider).toLowerCase() : '';
+            const carNumber = car.car_number ? String(car.car_number).toLowerCase() : '';
 
-            return title.includes(searchLower) || brand.includes(searchLower) || provider.includes(searchLower);
+            return title.includes(searchLower) || brand.includes(searchLower) || provider.includes(searchLower) || carNumber.includes(searchLower);
         });
 
         setFilteredCars(filtered);
@@ -158,6 +159,7 @@ const CarSelect = ({ selectedCar, onCarSelect, onCreateNew, className = 'form-se
                             <div className="font-medium">{selectedCar.title}</div>
                             <div className="text-xs text-gray-500">
                                 {selectedCar.brand} • {selectedCar.year} • {selectedCar.provider || 'N/A'}
+                                {selectedCar.car_number && <span> • #{selectedCar.car_number}</span>}
                             </div>
                         </div>
                     </div>
@@ -225,6 +227,7 @@ const CarSelect = ({ selectedCar, onCarSelect, onCreateNew, className = 'form-se
                                             <div className="font-medium text-black dark:text-white truncate">{car.title}</div>
                                             <div className="text-sm text-gray-500 dark:text-gray-400">
                                                 {car.brand} • {car.year} • {car.provider || 'N/A'}
+                                                {car.car_number && <span> • #{car.car_number}</span>}
                                             </div>
                                             <div className="text-xs text-gray-400 dark:text-gray-500 flex gap-4">
                                                 <span>

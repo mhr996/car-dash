@@ -30,6 +30,7 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
         id_number: '',
         birth_date: '',
         customer_type: '',
+        address: '',
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -107,6 +108,7 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
                 birth_date: form.birth_date || null,
                 age: age,
                 customer_type: form.customer_type,
+                address: form.address.trim() || null,
                 balance: 0,
             };
 
@@ -131,6 +133,7 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
             id_number: '',
             birth_date: '',
             customer_type: '',
+            address: '',
         });
         setErrors({});
         onClose();
@@ -218,7 +221,15 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
                             />
                             {errors.birth_date && <p className="text-red-500 text-xs mt-1">{errors.birth_date}</p>}
                         </div>
+                        {/*Address */}
+                        <div className="md:col-span-2">
+                            <label htmlFor="address" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                {t('address')}
+                            </label>
+                            <input type="text" id="address" name="address" value={form.address} onChange={handleInputChange} className="form-input" placeholder={t('enter_address')} />
+                        </div>
 
+                        {/* 
                         {/* Customer Type */}
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">

@@ -86,6 +86,47 @@ export const handleDealDeleted = async (dealId: string, customerId: string, deal
 };
 
 /**
+ * Handles balance update when a deal is cancelled
+ * Reverses the deal amount and deletes the original transaction record
+ */
+export const handleDealCancelled = async (dealId: string, customerId: string, dealSellingPrice: number, dealTitle: string): Promise<boolean> => {
+    try {
+        // First, fetch the customer's current balance
+        const { data: customer, error: fetchError } = await supabase.from('customers').select('balance').eq('id', customerId).single();
+
+        if (fetchError) {
+            console.error('Error fetching customer balance:', fetchError);
+            return false;
+        }
+
+        const currentBalance = customer.balance || 0;
+        const newBalance = currentBalance + dealSellingPrice; // Add back the deal amount (reverse the deduction)
+
+        // Update customer balance
+        const { error: updateError } = await supabase.from('customers').update({ balance: newBalance }).eq('id', customerId);
+
+        if (updateError) {
+            console.error('Error updating customer balance:', updateError);
+            return false;
+        }
+
+        // Delete the original deal_created transaction from customer_transactions
+        const { error: deleteTransactionError } = await supabase.from('customer_transactions').delete().eq('customer_id', customerId).eq('reference_id', dealId).eq('type', 'deal_created');
+
+        if (deleteTransactionError) {
+            console.warn('Could not delete deal transaction record:', deleteTransactionError);
+            // Don't fail the cancellation if we can't delete the transaction record
+        }
+
+        console.log(`Deal cancelled - Balance updated for customer ${customerId}: ${currentBalance} -> ${newBalance}`);
+        return true;
+    } catch (error) {
+        console.error('Error in handleDealCancelled:', error);
+        return false;
+    }
+};
+
+/**
  * Calculates total payment amount from a bill's payment fields or payments array
  */
 export const calculateTotalPaymentAmount = (bill: any, payments?: any[]): number => {

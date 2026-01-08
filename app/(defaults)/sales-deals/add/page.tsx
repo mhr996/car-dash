@@ -11,6 +11,7 @@ import CarSelect from '@/components/car-select/car-select';
 import SingleFileUpload from '@/components/file-upload/single-file-upload';
 import CreateCustomerModal from '@/components/modals/create-customer-modal';
 import CreateCarModal from '@/components/modals/create-car-modal';
+import ConfirmModal from '@/components/modals/confirm-modal';
 import IconUser from '@/components/icon/icon-user';
 import IconMenuWidgets from '@/components/icon/menu/icon-menu-widgets';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
@@ -35,6 +36,7 @@ const AddDeal = () => {
     const [saving, setSaving] = useState(false);
     const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false);
     const [showCreateCarModal, setShowCreateCarModal] = useState(false);
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [customerCreationContext, setCustomerCreationContext] = useState<'customer' | 'seller' | 'buyer'>('customer'); // Track which customer we're creating
     const [dealType, setDealType] = useState('');
     const [dealStatus, setDealStatus] = useState('active'); // Default to active - automatically managed
@@ -539,7 +541,7 @@ const AddDeal = () => {
         return true;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!dealType) {
@@ -562,6 +564,12 @@ const AddDeal = () => {
             return;
         }
 
+        // Show confirmation modal instead of proceeding directly
+        setShowConfirmModal(true);
+    };
+
+    const confirmDealCreation = async () => {
+        setShowConfirmModal(false);
         setSaving(true);
         try {
             // Update car's sale_price if it has changed for any deal type with a selected car
@@ -1072,7 +1080,8 @@ const AddDeal = () => {
                                                 min="0"
                                                 value={saleForm.selling_price}
                                                 onChange={handleSaleFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                 placeholder="0.00"
                                             />
@@ -1094,7 +1103,8 @@ const AddDeal = () => {
                                                 min="0"
                                                 value={saleForm.loss_amount}
                                                 onChange={handleSaleFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                 placeholder="0.00"
                                             />
@@ -1347,7 +1357,8 @@ const AddDeal = () => {
                             name="old_car_year"
                             value={exchangeForm.old_car_year}
                             onChange={handleExchangeFormChange}
-                            className="form-input"
+                            onWheel={(e) => e.currentTarget.blur()}
+                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             placeholder={t('enter_year')}
                             min="1900"
                             max="2030"
@@ -1363,7 +1374,8 @@ const AddDeal = () => {
                             name="old_car_kilometers"
                             value={exchangeForm.old_car_kilometers}
                             onChange={handleExchangeFormChange}
-                            className="form-input"
+                            onWheel={(e) => e.currentTarget.blur()}
+                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             placeholder={t('enter_kilometers')}
                         />
                     </div>{' '}
@@ -1405,7 +1417,8 @@ const AddDeal = () => {
                             name="old_car_market_price"
                             value={exchangeForm.old_car_market_price}
                             onChange={handleExchangeFormChange}
-                            className="form-input"
+                            onWheel={(e) => e.currentTarget.blur()}
+                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             placeholder="0.00"
                             step="0.01"
                         />
@@ -1420,7 +1433,8 @@ const AddDeal = () => {
                             name="old_car_purchase_price"
                             value={exchangeForm.old_car_purchase_price}
                             onChange={handleExchangeFormChange}
-                            className="form-input"
+                            onWheel={(e) => e.currentTarget.blur()}
+                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             placeholder="0.00"
                             step="0.01"
                         />
@@ -1509,7 +1523,8 @@ const AddDeal = () => {
                                                 min="0"
                                                 value={exchangeForm.selling_price || ''}
                                                 onChange={handleExchangeFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                 placeholder="0.00"
                                             />
@@ -1562,7 +1577,8 @@ const AddDeal = () => {
                                                 min="0"
                                                 value={exchangeForm.loss_amount}
                                                 onChange={handleExchangeFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                 placeholder="0.00"
                                             />
@@ -1719,7 +1735,8 @@ const AddDeal = () => {
                                 min="0"
                                 value={companyCommissionForm.amount}
                                 onChange={handleCompanyCommissionFormChange}
-                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                onWheel={(e) => e.currentTarget.blur()}
+                                className="form-input ltr:rounded-l-none rtl:rounded-r-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 placeholder="0.00"
                             />
                         </div>
@@ -1742,7 +1759,8 @@ const AddDeal = () => {
                                 min="0"
                                 value={companyCommissionForm.selling_price || ''}
                                 onChange={handleCompanyCommissionFormChange}
-                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                onWheel={(e) => e.currentTarget.blur()}
+                                className="form-input ltr:rounded-l-none rtl:rounded-r-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 placeholder="0.00"
                             />
                         </div>
@@ -2050,7 +2068,8 @@ const AddDeal = () => {
                                                 min="0"
                                                 value={intermediaryForm.selling_price || ''}
                                                 onChange={handleIntermediaryFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                 placeholder="0.00"
                                             />
@@ -2073,7 +2092,8 @@ const AddDeal = () => {
                                                     min="0"
                                                     value={intermediaryForm.profit_commission}
                                                     onChange={handleIntermediaryFormChange}
-                                                    className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                    onWheel={(e) => e.currentTarget.blur()}
+                                                    className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                     style={{ direction: 'ltr', textAlign: 'center' }}
                                                     placeholder="0.00"
                                                 />
@@ -2332,7 +2352,8 @@ const AddDeal = () => {
                                                 min="0"
                                                 value={financingAssistanceForm.selling_price || ''}
                                                 onChange={handleFinancingAssistanceFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                 placeholder="0.00"
                                             />
@@ -2354,7 +2375,8 @@ const AddDeal = () => {
                                                 min="0"
                                                 value={financingAssistanceForm.commission}
                                                 onChange={handleFinancingAssistanceFormChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                 placeholder="0.00"
                                             />
@@ -2456,7 +2478,7 @@ const AddDeal = () => {
                     <Alert type={alert.type} title={alert.type === 'success' ? t('success') : t('error')} message={alert.message} onClose={() => setAlert(null)} />
                 </div>
             )}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleFormSubmit} className="space-y-6">
                 {/* Deal Type Selector - Prominent at the top */}
                 <div className="panel bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-primary/20">
                     <div className="mb-5">
@@ -2528,6 +2550,17 @@ const AddDeal = () => {
             <CreateCustomerModal isOpen={showCreateCustomerModal} onClose={() => setShowCreateCustomerModal(false)} onCustomerCreated={handleCustomerCreated} />
             {/* Create Car Modal */}
             <CreateCarModal isOpen={showCreateCarModal} onClose={() => setShowCreateCarModal(false)} onCarCreated={handleCarCreated} />
+            {/* Confirm Deal Creation Modal */}
+            <ConfirmModal
+                isOpen={showConfirmModal}
+                title={t('confirm_deal_creation')}
+                message={t('confirm_create_deal_message')}
+                onCancel={() => setShowConfirmModal(false)}
+                onConfirm={confirmDealCreation}
+                confirmLabel={t('create_deal')}
+                cancelLabel={t('cancel')}
+                size="md"
+            />
         </div>
     );
 };

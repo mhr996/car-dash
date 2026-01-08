@@ -2,20 +2,18 @@
 import IconEdit from '@/components/icon/icon-edit';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
-import IconTrashLines from '@/components/icon/icon-trash-lines';
 import { sortBy } from 'lodash';
 import { DataTableSortStatus, DataTable } from 'mantine-datatable';
 import Link from 'next/link';
 import React, { useEffect, useState, useRef } from 'react';
 import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
-import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
 import { deleteFolder } from '@/utils/file-upload';
 import { Deal } from '@/types';
 import { logActivity } from '@/utils/activity-logger';
 import DealFilters from '@/components/deal-filters/deal-filters';
-import { handleDealDeleted, getCustomerIdFromDeal } from '@/utils/balance-manager';
+import { getCustomerIdFromDeal } from '@/utils/balance-manager';
 import ViewToggle from '@/components/view-toggle/view-toggle';
 import { ContractPDFGenerator } from '@/utils/contract-pdf-generator-new';
 import { PermissionGuard } from '@/components/auth/permission-guard';
@@ -89,9 +87,6 @@ const DealsList = () => {
             setSortStatus({ columnAccessor: 'id', direction: 'desc' });
         }
     }, []);
-    const [showConfirmModal, setShowConfirmModal] = useState(false);
-    const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
-    const [dealToDelete, setDealToDelete] = useState<Deal | null>(null);
     const [alert, setAlert] = useState<{ message: string; type: 'success' | 'danger' } | null>(null);
     const [generatingContractPDF, setGeneratingContractPDF] = useState<string | null>(null);
     const [downloadingBillPDF, setDownloadingBillPDF] = useState<string | null>(null);
@@ -209,11 +204,17 @@ const DealsList = () => {
                     item.deal_type?.toLowerCase().includes(matchesSearch) ||
                     item.status?.toLowerCase().includes(matchesSearch) ||
                     item.customers?.name?.toLowerCase().includes(matchesSearch) ||
-                    item.customers?.id_number?.toLowerCase().includes(matchesSearch) ||
+                    String(item.customers?.id_number || '')
+                        .toLowerCase()
+                        .includes(matchesSearch) ||
                     item.seller?.name?.toLowerCase().includes(matchesSearch) ||
-                    item.seller?.id_number?.toLowerCase().includes(matchesSearch) ||
+                    String(item.seller?.id_number || '')
+                        .toLowerCase()
+                        .includes(matchesSearch) ||
                     item.buyer?.name?.toLowerCase().includes(matchesSearch) ||
-                    item.buyer?.id_number?.toLowerCase().includes(matchesSearch);
+                    String(item.buyer?.id_number || '')
+                        .toLowerCase()
+                        .includes(matchesSearch);
 
                 // Deal filters
                 const dealTypeMatch = !activeFilters.dealType || item.deal_type === activeFilters.dealType;
@@ -237,139 +238,6 @@ const DealsList = () => {
         setRecords(sortStatus.direction === 'desc' ? sorted.reverse() : sorted);
         setPage(1);
     }, [sortStatus, initialRecords]);
-
-    const deleteRow = (id: string | null = null) => {
-        if (id) {
-            const deal = items.find((d) => d.id === id);
-            if (deal) {
-                setDealToDelete(deal);
-                setShowConfirmModal(true);
-            }
-        }
-    };
-    const confirmDeletion = async () => {
-        if (!dealToDelete) return;
-        try {
-            // Remove deal from car log instead of creating new log entry
-            if (dealToDelete.car_id) {
-                console.log('🔍 Finding car log to remove deal from car_id:', dealToDelete.car_id);
-
-                const { data: existingLogs, error: findError } = await supabase
-                    .from('logs')
-                    .select('*')
-                    .in('type', ['car_added', 'car_received_from_client'])
-                    .order('created_at', { ascending: false });
-
-                if (!findError && existingLogs && existingLogs.length > 0) {
-                    const carLog = existingLogs.find((log) => log.car && String(log.car.id) === String(dealToDelete.car_id));
-
-                    if (carLog && carLog.deal) {
-                        console.log('✅ Found car log with deal, removing deal data');
-
-                        const { error: updateError } = await supabase.from('logs').update({ deal: null }).eq('id', carLog.id);
-
-                        if (updateError) {
-                            console.error('❌ Error removing deal from car log:', updateError);
-                        } else {
-                            console.log('✅ Successfully removed deal from car log');
-                        }
-                    }
-                }
-            }
-
-            // Update customer balance before deleting the deal
-            const customerId = getCustomerIdFromDeal(dealToDelete);
-            if (customerId && dealToDelete.amount) {
-                const balanceUpdateSuccess = await handleDealDeleted(dealToDelete.id, customerId, dealToDelete.amount, dealToDelete.title || 'Deal');
-
-                if (!balanceUpdateSuccess) {
-                    console.warn('Failed to update customer balance for deleted deal:', dealToDelete.id);
-                    // Don't fail the deletion, just log the warning
-                }
-            }
-
-            // Delete the deal from database
-            const { error } = await supabase.from('deals').delete().eq('id', dealToDelete.id);
-            if (error) throw error;
-
-            // Delete associated files from storage
-            try {
-                await deleteFolder('deals', dealToDelete.id);
-            } catch (fileError) {
-                console.warn('Warning: Could not delete deal files:', fileError);
-                // Don't fail the deletion if file cleanup fails
-            }
-
-            const updatedItems = items.filter((d) => d.id !== dealToDelete.id);
-            setItems(updatedItems);
-            setAlert({ message: t('deal_deleted_successfully'), type: 'success' });
-        } catch (error) {
-            console.error('Deletion error:', error);
-            setAlert({ message: t('error_deleting_deal'), type: 'danger' });
-        } finally {
-            setShowConfirmModal(false);
-            setDealToDelete(null);
-        }
-    };
-    const handleBulkDelete = () => {
-        if (selectedRecords.length === 0) return;
-        setShowBulkDeleteModal(true);
-    };
-    const confirmBulkDeletion = async () => {
-        const ids = selectedRecords.map((d) => d.id);
-        try {
-            // Remove deals from car logs before deletion
-            for (const deal of selectedRecords) {
-                if (deal.car_id) {
-                    const { data: existingLogs } = await supabase.from('logs').select('*').in('type', ['car_added', 'car_received_from_client']).order('created_at', { ascending: false });
-
-                    if (existingLogs && existingLogs.length > 0) {
-                        const carLog = existingLogs.find((log) => log.car && String(log.car.id) === String(deal.car_id));
-
-                        if (carLog && carLog.deal) {
-                            await supabase.from('logs').update({ deal: null }).eq('id', carLog.id);
-                        }
-                    }
-                }
-            }
-
-            // Update customer balances for each deal before deletion
-            for (const deal of selectedRecords) {
-                const customerId = getCustomerIdFromDeal(deal);
-                if (customerId && deal.amount) {
-                    const balanceUpdateSuccess = await handleDealDeleted(deal.id, customerId, deal.amount, deal.title || 'Deal');
-
-                    if (!balanceUpdateSuccess) {
-                        console.warn('Failed to update customer balance for deleted deal:', deal.id);
-                        // Don't fail the deletion, just log the warning
-                    }
-                }
-            }
-
-            // Delete deals from database
-            const { error } = await supabase.from('deals').delete().in('id', ids);
-            if (error) throw error;
-
-            // Delete associated files from storage for each deal
-            for (const dealId of ids) {
-                try {
-                    await deleteFolder('deals', dealId);
-                } catch (fileError) {
-                    console.warn(`Warning: Could not delete files for deal ${dealId}:`, fileError);
-                    // Don't fail the deletion if file cleanup fails
-                }
-            }
-
-            setItems(items.filter((d) => !ids.includes(d.id)));
-            setSelectedRecords([]);
-            setAlert({ message: t('deals_deleted_successfully'), type: 'success' });
-        } catch (error) {
-            console.error('Error deleting deals:', error);
-            setAlert({ message: t('error_deleting_deal'), type: 'danger' });
-        } finally {
-            setShowBulkDeleteModal(false);
-        }
-    };
 
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('he-IL', {
@@ -685,10 +553,6 @@ const DealsList = () => {
                         <ViewToggle view={viewMode} onViewChange={handleViewChange} />
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
-                        <button type="button" className="btn btn-danger gap-2" onClick={handleBulkDelete} disabled={selectedRecords.length === 0}>
-                            <IconTrashLines />
-                            {t('delete')}
-                        </button>
                         <Link href="/sales-deals/add" className="btn btn-primary gap-2">
                             <IconPlus />
                             {t('add_new')}
@@ -941,16 +805,6 @@ const DealsList = () => {
                                                 >
                                                     <IconEdit className="h-4.5 w-4.5" />
                                                 </Link>
-
-                                                {/* Delete Button */}
-                                                <button
-                                                    type="button"
-                                                    className={`flex hover:text-danger ${status === 'completed' || status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
-                                                    onClick={() => status !== 'completed' && status !== 'cancelled' && deleteRow(id)}
-                                                    title={status === 'completed' ? t('deal_completed_no_delete') : status === 'cancelled' ? t('deal_cancelled_no_delete') : t('delete')}
-                                                >
-                                                    <IconTrashLines />
-                                                </button>
                                             </div>
                                         );
                                     },
@@ -1140,14 +994,6 @@ const DealsList = () => {
                                                     >
                                                         <IconEdit className="w-4 h-4" />
                                                     </Link>
-                                                    <button
-                                                        type="button"
-                                                        className={`btn btn-danger btn-sm ${deal.status === 'completed' || deal.status === 'cancelled' ? 'opacity-50 pointer-events-none' : ''}`}
-                                                        onClick={() => deal.status !== 'completed' && deal.status !== 'cancelled' && deleteRow(deal.id)}
-                                                        title={deal.status === 'completed' ? t('deal_completed_no_delete') : deal.status === 'cancelled' ? t('deal_cancelled_no_delete') : t('delete')}
-                                                    >
-                                                        <IconTrashLines className="w-4 h-4" />
-                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -1185,31 +1031,7 @@ const DealsList = () => {
                         )}
                     </div>
                 )}
-            </div>{' '}
-            <ConfirmModal
-                isOpen={showConfirmModal}
-                title={t('confirm_deletion')}
-                message={t('confirm_delete_deal')}
-                onCancel={() => {
-                    setShowConfirmModal(false);
-                    setDealToDelete(null);
-                }}
-                onConfirm={confirmDeletion}
-                confirmLabel={t('delete')}
-                cancelLabel={t('cancel')}
-                size="sm"
-            />
-            {/* Bulk Delete Confirmation Modal */}
-            <ConfirmModal
-                isOpen={showBulkDeleteModal}
-                title={t('confirm_bulk_deletion')}
-                message={`${t('confirm_delete_selected_deals')}`}
-                onCancel={() => setShowBulkDeleteModal(false)}
-                onConfirm={confirmBulkDeletion}
-                confirmLabel={t('delete')}
-                cancelLabel={t('cancel')}
-                size="sm"
-            />
+            </div>
         </div>
     );
 };

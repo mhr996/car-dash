@@ -772,7 +772,8 @@ const EditCar = () => {
                                         max={new Date().getFullYear() + 1}
                                         value={form.year}
                                         onChange={handleInputChange}
-                                        className="form-input"
+                                        onWheel={(e) => e.currentTarget.blur()}
+                                        className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         placeholder={t('enter_year')}
                                         required
                                     />
@@ -826,7 +827,8 @@ const EditCar = () => {
                                         min="0"
                                         value={form.kilometers}
                                         onChange={handleInputChange}
-                                        className="form-input"
+                                        onWheel={(e) => e.currentTarget.blur()}
+                                        className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         placeholder={t('enter_kilometers')}
                                     />
                                 </div>
@@ -847,7 +849,8 @@ const EditCar = () => {
                                             min="0"
                                             value={form.market_price}
                                             onChange={handleInputChange}
-                                            className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                            onWheel={(e) => e.currentTarget.blur()}
+                                            className="form-input ltr:rounded-l-none rtl:rounded-r-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             placeholder="0.00"
                                         />
                                     </div>
@@ -870,7 +873,8 @@ const EditCar = () => {
                                                 min="0"
                                                 value={form.buy_price}
                                                 onChange={handleInputChange}
-                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                                onWheel={(e) => e.currentTarget.blur()}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                 placeholder="0.00"
                                             />
                                         </div>
@@ -893,7 +897,8 @@ const EditCar = () => {
                                             min="0"
                                             value={form.sale_price}
                                             onChange={handleInputChange}
-                                            className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                            onWheel={(e) => e.currentTarget.blur()}
+                                            className="form-input ltr:rounded-l-none rtl:rounded-r-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             placeholder="0.00"
                                         />
                                     </div>

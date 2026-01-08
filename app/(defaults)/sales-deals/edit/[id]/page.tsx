@@ -2186,7 +2186,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={form.selling_price || ''}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2238,7 +2239,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={form.loss_amount || ''}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2306,7 +2308,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={selectedCar.sale_price || ''}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2330,7 +2333,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={form.amount}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2374,7 +2378,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={selectedCar.sale_price || ''}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2398,7 +2403,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={form.amount}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2429,7 +2435,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={form.amount}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2456,7 +2463,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 min="0"
                                                                 value={form.selling_price || ''}
                                                                 onChange={handleInputChange}
-                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none w-24 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 style={{ direction: 'ltr', textAlign: 'center' }}
                                                                 placeholder="0.00"
                                                                 disabled={deal?.status === 'completed' || deal?.status === 'cancelled'}
@@ -2789,7 +2797,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                 step="0.01"
                                                                 value={billForm.bill_amount || ''}
                                                                 onChange={handleBillFormChange}
-                                                                className="form-input rounded-l-none"
+                                                                onWheel={(e) => e.currentTarget.blur()}
+                                                                className="form-input rounded-l-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                                                 placeholder={t('enter_bill_amount')}
                                                                 required
                                                             />
@@ -3340,7 +3349,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                             id="register_order_amount"
                                             value={registerOrderForm.amount}
                                             onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, amount: e.target.value }))}
-                                            className="form-input"
+                                            onWheel={(e) => e.currentTarget.blur()}
+                                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             placeholder="0"
                                             step="0.01"
                                             min="0"
