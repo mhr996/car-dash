@@ -316,6 +316,10 @@ const AddBill = () => {
             // Prepare items array from deal data
             const items = [];
 
+            // Determine if this is a receipt type (RE or IR) - receipts should use payment amounts, not deal amounts
+            const isReceiptType = documentType === 'RE' || documentType === 'IR';
+            const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+
             // If we have deal data with car, create detailed line items
             if (deal && deal.car) {
                 // Row 1: Car Details
@@ -376,14 +380,18 @@ const AddBill = () => {
                     });
                 }
 
-                // Row 5: Profit Commission
-                if (deal.amount) {
+                // Row 5: Amount - FOR RECEIPTS, use payment total instead of deal.amount
+                // This is critical: Tranzila calculates total_charge_amount from items array
+                const amountToUse = isReceiptType ? totalPaymentAmount : deal.amount;
+                const itemLabel = isReceiptType ? 'סכום תשלום' : 'עמלת רווח';
+
+                if (amountToUse > 0) {
                     items.push({
                         type: 'I',
                         code: null,
-                        name: 'עמלת רווח',
+                        name: itemLabel,
                         price_type: 'G',
-                        unit_price: deal.amount,
+                        unit_price: amountToUse,
                         units_number: 1,
                         unit_type: 1,
                         currency_code: 'ILS',
@@ -392,12 +400,15 @@ const AddBill = () => {
                 }
             } else {
                 // Fallback: Single item if no deal data
+                // For receipts, use payment total; for other bill types, use billData amount
+                const itemAmount = isReceiptType ? totalPaymentAmount : parseFloat(billData.total_with_tax) || 0;
+
                 items.push({
                     type: 'I',
                     code: null,
                     name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית',
                     price_type: 'G', // Gross (includes VAT)
-                    unit_price: parseFloat(billData.total_with_tax) || 0,
+                    unit_price: itemAmount,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -493,30 +504,55 @@ const AddBill = () => {
                 }
             }
 
+            // Prepare request data
+            const tranzilaRequestData = {
+                action: 'create_document',
+                data: {
+                    document_type: documentType,
+                    document_date: billData.date || new Date().toISOString().split('T')[0],
+                    document_currency_code: 'ILS',
+                    vat_percent: 18,
+                    client_company: billData.customer_name || 'Customer',
+                    client_name: billData.customer_name || 'Customer',
+                    client_id: customerId,
+                    client_email: customerEmail,
+                    client_phone: customerPhone || undefined,
+                    items,
+                    payments: tranzilaPayments,
+                    created_by_user: 'car-dash',
+                    created_by_system: 'car-dash',
+                },
+            };
+
+            // Log Tranzila API request data for receipts
+            if (documentType === 'RE' || documentType === 'IR') {
+                console.log('🧾 ============ TRANZILA RECEIPT REQUEST ============');
+                console.log('📋 Document Type:', documentType);
+                console.log('📝 Bill Type:', billData.bill_type);
+                console.log('💰 Bill Data total_with_tax:', billData.total_with_tax);
+                console.log('📦 Items being sent:');
+                items.forEach((item, idx) => {
+                    console.log(`   Item ${idx + 1}: ${item.name} - Amount: ₪${item.unit_price}`);
+                });
+                console.log('💳 Payments being sent:');
+                tranzilaPayments.forEach((payment, idx) => {
+                    console.log(`   Payment ${idx + 1}: Method ${payment.payment_method} - Amount: ₪${payment.amount}`);
+                });
+                console.log(
+                    '💵 Total Payment Amount:',
+                    tranzilaPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
+                );
+                console.log('📄 Full Request Data:', JSON.stringify(tranzilaRequestData, null, 2));
+                console.log('==================================================');
+            }
+
             // Call Tranzila API
             const response = await fetch('/api/tranzila', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    action: 'create_document',
-                    data: {
-                        document_type: documentType,
-                        document_date: billData.date || new Date().toISOString().split('T')[0],
-                        document_currency_code: 'ILS',
-                        vat_percent: 18,
-                        client_company: billData.customer_name || 'Customer',
-                        client_name: billData.customer_name || 'Customer',
-                        client_id: customerId,
-                        client_email: customerEmail,
-                        client_phone: customerPhone || undefined,
-                        items,
-                        payments: tranzilaPayments,
-                        created_by_user: 'car-dash',
-                        created_by_system: 'car-dash',
-                    },
-                }),
+                body: JSON.stringify(tranzilaRequestData),
             });
 
             const result = await response.json();
