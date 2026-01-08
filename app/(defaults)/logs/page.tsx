@@ -316,7 +316,7 @@ const LogsPage = () => {
 
         return (
             <div className="text-sm">
-                <div className="font-medium">#{bill.id || t('not_available')}</div>
+                <div className="font-medium">#{bill.tranzila_document_number || bill.id || t('not_available')}</div>
                 <div className="text-gray-500 dark:text-gray-400">{getLocalizedBillType(bill.bill_type)}</div>
                 <div className="text-gray-500 dark:text-gray-400">₪{totalAmount.toLocaleString()}</div>
                 {receiptBills.length > 1 && <div className="text-xs text-gray-400">+{receiptBills.length - 1} more</div>}
@@ -344,7 +344,7 @@ const LogsPage = () => {
 
         return (
             <div className="text-sm">
-                <div className="font-medium">#{bill.id || t('not_available')}</div>
+                <div className="font-medium">#{bill.tranzila_document_number || bill.id || t('not_available')}</div>
                 <div className="text-gray-500 dark:text-gray-400">{getLocalizedBillType(bill.bill_type)}</div>
                 <div className="text-gray-500 dark:text-gray-400">₪{displayAmount.toLocaleString()}</div>
                 {invoiceBills.length > 1 && <div className="text-xs text-gray-400">+{invoiceBills.length - 1} more</div>}
