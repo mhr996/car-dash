@@ -314,15 +314,27 @@ const AddBill = () => {
             const documentType = documentTypeMap[billData.bill_type] || 'IR';
 
             // Prepare items array from deal data
-            // IMPORTANT: Receipts (RE) should NOT have items, only payments
             const items = [];
 
             // Determine if this is a receipt type (RE or IR) - receipts should use payment amounts, not deal amounts
             const isReceiptType = documentType === 'RE' || documentType === 'IR';
             const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
-            // Only build items for invoices (IN, IR), NOT for receipts (RE)
-            if (documentType !== 'RE') {
+            // For receipts (RE), add a simple placeholder item (required by Tranzila API)
+            if (documentType === 'RE') {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: billData.car_details || billData.customer_name || 'קבלה',
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            } else {
+                // Build items for invoices (IN, IR)
                 // If we have deal data with car, create detailed line items
                 if (deal && deal.car) {
                     // Row 1: Car Details
@@ -418,7 +430,7 @@ const AddBill = () => {
                         to_doc_currency_exchange_rate: 1,
                     });
                 }
-            } // End of if (documentType !== 'RE')
+            } // End of items building
 
             // Prepare payments array with all payment details
             const tranzilaPayments =
