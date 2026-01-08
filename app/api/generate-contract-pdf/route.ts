@@ -426,7 +426,7 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                             </svg>
                             ${contract.dealType === 'trade-in' ? 'Exchange Details' : 'Payment Details'}
                         </h2>
-                        <p class="text-xs font-bold text-emerald-700 bg-white rounded px-2 py-0.5 border border-emerald-300">Total: ${formatCurrency(contract.dealAmount)}</p>
+                        ${contract.dealType !== 'trade-in' ? `<p class="text-xs font-bold text-emerald-700 bg-white rounded px-2 py-0.5 border border-emerald-300">Total: ${formatCurrency(contract.dealAmount)}</p>` : ''}
                     </div>
                     
                     ${
@@ -434,7 +434,7 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                             ? `
                     <!-- Exchange Deal Breakdown - Compact -->
                     <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
-                        <p class="text-xs"><span class="font-semibold text-gray-600">Trade-in:</span> <span class="text-emerald-700">${formatCurrency(contract.tradeInCar.estimatedValue)}</span>${
+                        <p class="text-xs"><span class="font-semibold text-gray-600">Exchanged for ${contract.tradeInCar.model} ${contract.tradeInCar.make} ${contract.tradeInCar.year} ${contract.tradeInCar.plateNumber}</span>${
                             contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
                                 ? `<p><span class="font-semibold text-gray-600">Additional from Customer:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
                                 : ''
@@ -493,19 +493,20 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                         </svg>
                         Terms and Conditions
                     </h2>
-                    <div class="grid grid-cols-2 gap-1 text-xs">
+                    <div class="grid grid-cols-2 gap-2 text-xs">
                         <div class="space-y-0.5">
-                            <div class="bg-white rounded p-1 border border-red-200">• Vehicle sold "as is" with no warranties</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• Ownership transfer within ${contract.ownershipTransferDays} days</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• Agreement binding upon both parties once signed</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• Vehicle possession transfers to buyer on ${formatDate(contract.dealDate)} and from transfer date, vehicle belongs to buyer exclusively</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• Seller bears all parking, traffic fines until delivery date</div>
+                            <!-- Original Terms -->
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Vehicle sold "as is" with no warranties</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Ownership transfer within ${contract.ownershipTransferDays} days</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Agreement binding upon both parties once signed</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Vehicle possession transfers to buyer on (${formatDate(contract.dealDate)}) and parties agree that from transfer date, vehicle belongs to buyer exclusively, even if formal ownership transfer hasn't been completed at DMV</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Seller commits to bear all parking, traffic fines or other payments related to vehicle use until delivery date</div>
                         </div>
                         <div class="space-y-0.5">
-                            <div class="bg-white rounded p-1 border border-red-200">• Ownership transfer expenses borne by buyer</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• Breach penalty: 2000 NIS compensation</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• Auto Market has no knowledge of depreciation or insurance history, buyer must verify</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• Buyer declares inspection of vehicle condition</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Parties agree that ownership transfer expenses will be borne by the buyer</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Party breaching this contract materially shall pay other party 2000 NIS as predetermined compensation without proof of damage</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Parties agree that Auto Market purchases vehicles from both organized suppliers and private clients and has no knowledge of depreciation or insurance history, buyer must verify this information</div>
+                            <div class="bg-white rounded p-1.5 border border-red-200">• Buyer declares having inspected the vehicle's external, internal and mechanical condition and found it in good working order to their satisfaction</div>
                         </div>
                     </div>
                 </div>
@@ -584,7 +585,7 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
  */
 function generateArabicContractHTML(contract: CarContract, companyInfo: any): string {
     const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('ar-SA', {
+        return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'ILS',
             minimumFractionDigits: 0,
@@ -909,7 +910,7 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                                 <path d="M14 6a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h10zM4 8a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
                             </svg>
                         </h2>
-                        <p class="text-xs font-bold text-emerald-700 bg-white rounded px-2 py-0.5 border border-emerald-300">المبلغ الإجمالي: ${formatCurrency(contract.dealAmount)}</p>
+                        ${contract.dealType !== 'trade-in' ? `<p class="text-xs font-bold text-emerald-700 bg-white rounded px-2 py-0.5 border border-emerald-300">المبلغ الإجمالي: ${formatCurrency(contract.dealAmount)}</p>` : ''}
                     </div>
                     
                     ${
@@ -917,7 +918,7 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                             ? `
                     <!-- Exchange Deal Breakdown - Compact -->
                     <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
-                        <p class="text-xs text-right"><span class="font-semibold text-gray-600">قيمة التبديل:</span> <span class="text-emerald-700">${formatCurrency(contract.tradeInCar.estimatedValue)}</span>${
+                        <p class="text-xs text-right"><span class="font-semibold text-gray-600">تم التبديل على سيارة ${contract.tradeInCar.model} ${contract.tradeInCar.make} ${contract.tradeInCar.year} ${contract.tradeInCar.plateNumber}</span>${
                             contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
                                 ? `<p><span class="font-semibold text-gray-600">المبلغ الإضافي من الزبون:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
                                 : ''
@@ -977,15 +978,19 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                         </svg>
                     </h2>
                     <div class="grid grid-cols-2 gap-2 text-xs text-right">
-                        <div class="space-y-1">
-                            <div class="bg-white rounded p-1 border border-red-200">• ضمان خلو من رهون</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• تباع كما هي</div>
+                        <div class="space-y-0.5">
+                            <!-- Original Terms -->
+                            <div class="bg-white rounded p-1 border border-red-200">• المركبة تباع "كما هي" بدون ضمانات</div>
                             <div class="bg-white rounded p-1 border border-red-200">• نقل ملكية خلال ${contract.ownershipTransferDays} أيام</div>
+                            <div class="bg-white rounded p-1 border border-red-200">• الاتفاقية ملزمة للطرفين عند التوقيع</div>
+                            <div class="bg-white rounded p-1 border border-red-200">• حيازة المركبة تنتقل للمشتري بتاريخ (${formatDate(contract.dealDate)}) ويتفق الطرفان أنه من تاريخ التسليم تكون المركبة للمشتري حصرياً، حتى لو لم يتم نقل الملكية الرسمي لدى مكتب الترخيص</div>
+                            <div class="bg-white rounded p-1 border border-red-200">• البائع يتعهد بتحمل جميع غرامات الوقوف والسير أو أي مدفوعات أخرى تتعلق باستخدام المركبة حتى تاريخ التسليم</div>
                         </div>
-                        <div class="space-y-1">
-                            <div class="bg-white rounded p-1 border border-red-200">• تكاليف النقل على المشتري</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• إخلال: 2000 شيكل تعويض</div>
-                            <div class="bg-white rounded p-1 border border-red-200">• فحص المشتري مسؤوليته</div>
+                        <div class="space-y-0.5">
+                            <div class="bg-white rounded p-1 border border-red-200">• يتفق الطرفان أن مصاريف نقل الملكية تكون على عاتق المشتري</div>
+                            <div class="bg-white rounded p-1 border border-red-200">• الطرف الذي يخل بهذا العقد بشكل جوهري سيدفع للطرف الآخر 2000 شيكل كتعويض متفق عليه مسبقاً بدون إثبات ضرر</div>
+                            <div class="bg-white rounded p-1 border border-red-200">• يتفق الطرفان أن أوتو ماركت تشتري المركبات من موردين منظمين ومن زبائن أفراد، وليس لديها معرفة بتاريخ الاستهلاك أو التأمين، على المشتري التحقق من هذه المعلومات</div>
+                            <div class="bg-white rounded p-1 border border-red-200">• المشتري يعلن أنه قام بفحص حالة المركبة الخارجية والداخلية والميكانيكية ووجدها بحالة عمل جيدة ومرضية له</div>
                         </div>
                     </div>
                 </div>
@@ -1392,7 +1397,7 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                                     <path d="M14 6a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h10zM4 8a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" />
                                 </svg>
                             </h2>
-                            <p class="text-xs font-bold text-emerald-700 bg-white rounded px-2 py-0.5 border border-emerald-300">סכום כולל: ${formatCurrency(contract.dealAmount)}</p>
+                            ${contract.dealType !== 'trade-in' ? `<p class="text-xs font-bold text-emerald-700 bg-white rounded px-2 py-0.5 border border-emerald-300">סכום כולל: ${formatCurrency(contract.dealAmount)}</p>` : ''}
                         </div>
                         
                         ${
@@ -1400,7 +1405,7 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                                 ? `
                         <!-- Exchange Deal Breakdown - Compact -->
                         <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
-                            <p class="text-xs text-right"><span class="font-semibold text-gray-600">ערך החלפה:</span> <span class="text-emerald-700">${formatCurrency(contract.tradeInCar.estimatedValue)}</span>${
+                            <p class="text-xs text-right"><span class="font-semibold text-gray-600">הוחלף עבור ${contract.tradeInCar.model} ${contract.tradeInCar.make} ${contract.tradeInCar.year} ${contract.tradeInCar.plateNumber}</span>${
                                 contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
                                     ? `<p><span class="font-semibold text-gray-600">סכום נוסף מהלקוח:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
                                     : ''
@@ -1462,15 +1467,19 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                             </svg>
                         </h2>
                         <div class="grid grid-cols-2 gap-2 text-xs text-right">
-                            <div class="space-y-1">
-                                <div class="bg-white rounded p-1 border border-red-200">• נקי משעבודים</div>
-                                <div class="bg-white rounded p-1 border border-red-200">• נמכר כפי שהוא</div>
-                                <div class="bg-white rounded p-1 border border-red-200">• העברת בעלות ${contract.ownershipTransferDays} ימים</div>
+                            <div class="space-y-0.5">
+                                <!-- Original Terms -->
+                                <div class="bg-white rounded p-1 border border-red-200">• הרכב נמכר "כפי שהוא" ללא אחריות</div>
+                                <div class="bg-white rounded p-1 border border-red-200">• העברת בעלות תוך ${contract.ownershipTransferDays} ימים</div>
+                                <div class="bg-white rounded p-1 border border-red-200">• ההסכם מחייב את שני הצדדים מרגע החתימה</div>
+                                <div class="bg-white rounded p-1 border border-red-200">• חזקת הרכב עוברת לקונה בתאריך (${formatDate(contract.dealDate)}) והצדדים מסכימים כי מתאריך המסירה הרכב שייך לקונה באופן בלעדי, גם אם העברת הבעלות הרשמית לא בוצעה במשרד הרישוי</div>
+                                <div class="bg-white rounded p-1 border border-red-200">• המוכר מתחייב לשאת בכל קנסות החניה והתנועה או כל תשלום אחר הקשור לשימוש ברכב עד ליום המסירה</div>
                             </div>
-                            <div class="space-y-1">
-                                <div class="bg-white rounded p-1 border border-red-200">• הוצאות על הקונה</div>
-                                <div class="bg-white rounded p-1 border border-red-200">• הפרה: 2000 ש"ח פיצוי</div>
-                                <div class="bg-white rounded p-1 border border-red-200">• בדיקת רוכש חובה</div>
+                            <div class="space-y-0.5">
+                                <div class="bg-white rounded p-1 border border-red-200">• הצדדים מסכימים כי הוצאות העברת הבעלות יחולו על הקונה</div>
+                                <div class="bg-white rounded p-1 border border-red-200">• צד המפר הסכם זה באופן מהותי ישלם לצד השני 2000 ₪ כפיצוי מוסכם מראש ללא צורך בהוכחת נזק</div>
+                                <div class="bg-white rounded p-1 border border-red-200">• הצדדים מסכימים כי אוטו מרקט רוכשת רכבים מספקים מאורגנים ומלקוחות פרטיים ואין לה ידיעה על היסטוריית פחת או ביטוח, על הקונה לבדוק מידע זה</div>
+                                <div class="bg-white rounded p-1 border border-red-200">• הקונה מצהיר שבדק את מצב הרכב החיצוני, הפנימי והמכני ומצא אותו במצב תקין ומשביע רצון</div>
                             </div>
                         </div>
                     </div>

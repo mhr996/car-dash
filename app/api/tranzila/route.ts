@@ -141,15 +141,12 @@ async function createDocument(data: any = {}) {
             created_by_user: data.created_by_user || '',
             created_by_system: data.created_by_system || 'car-dash',
 
+            // Items - always include (frontend sends placeholder for receipts)
+            items: data.items || [],
+
             // Payments - use explicitly provided payments
             payments: data.payments || [],
         };
-
-        // Only include items for invoices (not receipts)
-        // RE = Receipt only, should not have items
-        if (data.document_type !== 'RE') {
-            payload.items = data.items || [];
-        }
 
         console.log('📋 ============ TRANZILA API REQUEST ============');
         console.log('📦 Incoming data parameter:', JSON.stringify(data, null, 2));
@@ -157,7 +154,7 @@ async function createDocument(data: any = {}) {
         console.log('🔑 Client ID field:', payload.client_id);
         console.log('📧 Client Email field:', payload.client_email);
         console.log('📞 Client Phone field:', payload.client_phone);
-        console.log('💰 Items count:', payload.items.length);
+        console.log('💰 Items count:', payload.items ? payload.items.length : 0);
         console.log('💳 Payments count:', payload.payments.length);
         console.log('==================================================');
 
