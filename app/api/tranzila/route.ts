@@ -104,16 +104,18 @@ export async function POST(request: NextRequest) {
  *
  * Payment Methods:
  * - 1 = Credit Card
- * - 2 = Cash
- * - 3 = Check
+ * - 3 = Check (Cheque)
  * - 4 = Bank Transfer
+ * - 5 = Cash
+ * - 6 = PayPal
+ * - 10 = Other
  */
 async function createDocument(data: any = {}) {
     try {
         const headers = generateTranzilaAuthHeaders();
 
         // Build document payload based on Tranzila invoice/document schema
-        const payload = {
+        const payload: any = {
             terminal_name: TRANZILA_CONFIG.terminal,
             document_type: data.document_type || '320', // 305=Invoice, 320=Invoice+Receipt, 400=Receipt
             document_date: data.document_date || null, // Format: yyyy-mm-dd
@@ -139,34 +141,25 @@ async function createDocument(data: any = {}) {
             created_by_user: data.created_by_user || '',
             created_by_system: data.created_by_system || 'car-dash',
 
-            // Items
-            items: data.items || [
-                {
-                    type: 'I', // I = Item, S = Service
-                    code: null,
-                    name: data.item_name || '',
-                    price_type: 'G', // G = Gross, N = Net
-                    unit_price: data.overrideAmount ? Number(data.overrideAmount) : 0,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                },
-            ],
-
-            // Payments - mandatory field
-            payments: data.payments || [
-                {
-                    payment_method: 1, // 1 = Credit Card
-                    payment_date: data.payment_date || new Date().toISOString().split('T')[0], // yyyy-mm-dd
-                    amount: data.overrideAmount ? Number(data.overrideAmount) : 0,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                },
-            ],
+            // Payments - use explicitly provided payments
+            payments: data.payments || [],
         };
 
-        console.log('Creating Tranzila document/invoice...');
+        // Only include items for invoices (not receipts)
+        // RE = Receipt only, should not have items
+        if (data.document_type !== 'RE') {
+            payload.items = data.items || [];
+        }
+
+        console.log('📋 ============ TRANZILA API REQUEST ============');
+        console.log('📦 Incoming data parameter:', JSON.stringify(data, null, 2));
+        console.log('📤 Full payload being sent to Tranzila:', JSON.stringify(payload, null, 2));
+        console.log('🔑 Client ID field:', payload.client_id);
+        console.log('📧 Client Email field:', payload.client_email);
+        console.log('📞 Client Phone field:', payload.client_phone);
+        console.log('💰 Items count:', payload.items.length);
+        console.log('💳 Payments count:', payload.payments.length);
+        console.log('==================================================');
 
         // Use the billing API endpoint for document creation
         const url = `${TRANZILA_CONFIG.billingApiUrl}/create_document`;

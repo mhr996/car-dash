@@ -314,107 +314,111 @@ const AddBill = () => {
             const documentType = documentTypeMap[billData.bill_type] || 'IR';
 
             // Prepare items array from deal data
+            // IMPORTANT: Receipts (RE) should NOT have items, only payments
             const items = [];
 
             // Determine if this is a receipt type (RE or IR) - receipts should use payment amounts, not deal amounts
             const isReceiptType = documentType === 'RE' || documentType === 'IR';
             const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
-            // If we have deal data with car, create detailed line items
-            if (deal && deal.car) {
-                // Row 1: Car Details
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}${deal.car.car_number ? ` - ${deal.car.car_number}` : ''}` || billData.car_details || 'פרטי רכב',
-                    price_type: 'G', // Gross (includes VAT)
-                    unit_price: 0, // No price for this row
-                    units_number: 1,
-                    unit_type: 1, // Unit
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-
-                // Row 2: Buy Price (informational only)
-                if (deal.car.buy_price) {
+            // Only build items for invoices (IN, IR), NOT for receipts (RE)
+            if (documentType !== 'RE') {
+                // If we have deal data with car, create detailed line items
+                if (deal && deal.car) {
+                    // Row 1: Car Details
                     items.push({
                         type: 'I',
                         code: null,
-                        name: `מחיר קנייה (${deal.car.buy_price.toLocaleString()})`,
-                        price_type: 'G',
-                        unit_price: 0,
+                        name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}${deal.car.car_number ? ` - ${deal.car.car_number}` : ''}` || billData.car_details || 'פרטי רכב',
+                        price_type: 'G', // Gross (includes VAT)
+                        unit_price: 0, // No price for this row
+                        units_number: 1,
+                        unit_type: 1, // Unit
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+
+                    // Row 2: Buy Price (informational only)
+                    if (deal.car.buy_price) {
+                        items.push({
+                            type: 'I',
+                            code: null,
+                            name: `מחיר קנייה (${deal.car.buy_price.toLocaleString()})`,
+                            price_type: 'G',
+                            unit_price: 0,
+                            units_number: 1,
+                            unit_type: 1,
+                            currency_code: 'ILS',
+                            to_doc_currency_exchange_rate: 1,
+                        });
+                    }
+
+                    // Row 3: Selling Price (informational only)
+                    if (deal.selling_price) {
+                        items.push({
+                            type: 'I',
+                            code: null,
+                            name: `מחיר מכירה (${deal.selling_price.toLocaleString()})`,
+                            price_type: 'G',
+                            unit_price: 0,
+                            units_number: 1,
+                            unit_type: 1,
+                            currency_code: 'ILS',
+                            to_doc_currency_exchange_rate: 1,
+                        });
+                    }
+
+                    // Row 4: Loss Amount (if applicable)
+                    if (deal.loss_amount && deal.loss_amount > 0) {
+                        items.push({
+                            type: 'I',
+                            code: null,
+                            name: 'סכום הפסד',
+                            price_type: 'G',
+                            unit_price: -deal.loss_amount,
+                            units_number: 1,
+                            unit_type: 1,
+                            currency_code: 'ILS',
+                            to_doc_currency_exchange_rate: 1,
+                        });
+                    }
+
+                    // Row 5: Amount - FOR RECEIPTS, use payment total instead of deal.amount
+                    // This is critical: Tranzila calculates total_charge_amount from items array
+                    const amountToUse = isReceiptType ? totalPaymentAmount : deal.amount;
+                    const itemLabel = isReceiptType ? 'סכום תשלום' : 'עמלת רווח';
+
+                    if (amountToUse > 0) {
+                        items.push({
+                            type: 'I',
+                            code: null,
+                            name: itemLabel,
+                            price_type: 'G',
+                            unit_price: amountToUse,
+                            units_number: 1,
+                            unit_type: 1,
+                            currency_code: 'ILS',
+                            to_doc_currency_exchange_rate: 1,
+                        });
+                    }
+                } else {
+                    // Fallback: Single item if no deal data
+                    // For receipts, use payment total; for other bill types, use billData amount
+                    const itemAmount = isReceiptType ? totalPaymentAmount : parseFloat(billData.total_with_tax) || 0;
+
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית',
+                        price_type: 'G', // Gross (includes VAT)
+                        unit_price: itemAmount,
                         units_number: 1,
                         unit_type: 1,
                         currency_code: 'ILS',
                         to_doc_currency_exchange_rate: 1,
                     });
                 }
-
-                // Row 3: Selling Price (informational only)
-                if (deal.selling_price) {
-                    items.push({
-                        type: 'I',
-                        code: null,
-                        name: `מחיר מכירה (${deal.selling_price.toLocaleString()})`,
-                        price_type: 'G',
-                        unit_price: 0,
-                        units_number: 1,
-                        unit_type: 1,
-                        currency_code: 'ILS',
-                        to_doc_currency_exchange_rate: 1,
-                    });
-                }
-
-                // Row 4: Loss Amount (if applicable)
-                if (deal.loss_amount && deal.loss_amount > 0) {
-                    items.push({
-                        type: 'I',
-                        code: null,
-                        name: 'סכום הפסד',
-                        price_type: 'G',
-                        unit_price: -deal.loss_amount,
-                        units_number: 1,
-                        unit_type: 1,
-                        currency_code: 'ILS',
-                        to_doc_currency_exchange_rate: 1,
-                    });
-                }
-
-                // Row 5: Amount - FOR RECEIPTS, use payment total instead of deal.amount
-                // This is critical: Tranzila calculates total_charge_amount from items array
-                const amountToUse = isReceiptType ? totalPaymentAmount : deal.amount;
-                const itemLabel = isReceiptType ? 'סכום תשלום' : 'עמלת רווח';
-
-                if (amountToUse > 0) {
-                    items.push({
-                        type: 'I',
-                        code: null,
-                        name: itemLabel,
-                        price_type: 'G',
-                        unit_price: amountToUse,
-                        units_number: 1,
-                        unit_type: 1,
-                        currency_code: 'ILS',
-                        to_doc_currency_exchange_rate: 1,
-                    });
-                }
-            } else {
-                // Fallback: Single item if no deal data
-                // For receipts, use payment total; for other bill types, use billData amount
-                const itemAmount = isReceiptType ? totalPaymentAmount : parseFloat(billData.total_with_tax) || 0;
-
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית',
-                    price_type: 'G', // Gross (includes VAT)
-                    unit_price: itemAmount,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-            }
+            } // End of if (documentType !== 'RE')
 
             // Prepare payments array with all payment details
             const tranzilaPayments =
@@ -490,6 +494,8 @@ const AddBill = () => {
                     // For intermediary deals, prefer seller, then buyer
                     const customer = deal.seller || deal.buyer || deal.customer;
                     if (customer) {
+                        console.log('🔍 Customer data for intermediary deal:', customer);
+                        console.log('🆔 id_number value:', customer.id_number, 'type:', typeof customer.id_number);
                         customerId = customer.id_number?.toString() || customerId;
                         customerEmail = customer.email || customerEmail;
                         customerPhone = customer.phone || '';
@@ -497,11 +503,14 @@ const AddBill = () => {
                 } else {
                     // For regular deals, use customer
                     if (deal.customer) {
+                        console.log('🔍 Customer data for regular deal:', deal.customer);
+                        console.log('🆔 id_number value:', deal.customer.id_number, 'type:', typeof deal.customer.id_number);
                         customerId = deal.customer.id_number?.toString() || customerId;
                         customerEmail = deal.customer.email || customerEmail;
                         customerPhone = deal.customer.phone || '';
                     }
                 }
+                console.log('✅ Final customer ID being sent to Tranzila:', customerId);
             }
 
             // Prepare request data
