@@ -250,11 +250,32 @@ const DealsList = () => {
     const confirmDeletion = async () => {
         if (!dealToDelete) return;
         try {
-            // Log the activity before deletion (to preserve deal data)
-            await logActivity({
-                type: 'deal_deleted',
-                deal: dealToDelete,
-            });
+            // Remove deal from car log instead of creating new log entry
+            if (dealToDelete.car_id) {
+                console.log('🔍 Finding car log to remove deal from car_id:', dealToDelete.car_id);
+
+                const { data: existingLogs, error: findError } = await supabase
+                    .from('logs')
+                    .select('*')
+                    .in('type', ['car_added', 'car_received_from_client'])
+                    .order('created_at', { ascending: false });
+
+                if (!findError && existingLogs && existingLogs.length > 0) {
+                    const carLog = existingLogs.find((log) => log.car && String(log.car.id) === String(dealToDelete.car_id));
+
+                    if (carLog && carLog.deal) {
+                        console.log('✅ Found car log with deal, removing deal data');
+
+                        const { error: updateError } = await supabase.from('logs').update({ deal: null }).eq('id', carLog.id);
+
+                        if (updateError) {
+                            console.error('❌ Error removing deal from car log:', updateError);
+                        } else {
+                            console.log('✅ Successfully removed deal from car log');
+                        }
+                    }
+                }
+            }
 
             // Update customer balance before deleting the deal
             const customerId = getCustomerIdFromDeal(dealToDelete);
@@ -297,6 +318,21 @@ const DealsList = () => {
     const confirmBulkDeletion = async () => {
         const ids = selectedRecords.map((d) => d.id);
         try {
+            // Remove deals from car logs before deletion
+            for (const deal of selectedRecords) {
+                if (deal.car_id) {
+                    const { data: existingLogs } = await supabase.from('logs').select('*').in('type', ['car_added', 'car_received_from_client']).order('created_at', { ascending: false });
+
+                    if (existingLogs && existingLogs.length > 0) {
+                        const carLog = existingLogs.find((log) => log.car && String(log.car.id) === String(deal.car_id));
+
+                        if (carLog && carLog.deal) {
+                            await supabase.from('logs').update({ deal: null }).eq('id', carLog.id);
+                        }
+                    }
+                }
+            }
+
             // Update customer balances for each deal before deletion
             for (const deal of selectedRecords) {
                 const customerId = getCustomerIdFromDeal(deal);

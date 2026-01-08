@@ -422,16 +422,7 @@ const Bills = () => {
     };
 
     const columns: DataTableColumn<Bill>[] = [
-        {
-            accessor: 'id',
-            title: t('id'),
-            sortable: true,
-            render: ({ id }) => (
-                <div className="flex items-center gap-2">
-                    <strong className="text-info">#{id}</strong>
-                </div>
-            ),
-        },
+       
         {
             accessor: 'bill_number',
             title: t('bill_number'),
