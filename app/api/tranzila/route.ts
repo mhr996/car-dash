@@ -126,9 +126,9 @@ async function createDocument(data: any = {}) {
             // Client information
             client_company: data.client_company || data.customer_name || '',
             client_name: data.client_name || data.contact_person || '',
-            client_id: data.client_id || data.id_number || data.customer_id_number || '',
-            client_email: data.client_email || data.email || '',
-            client_phone: data.client_phone || data.phone || '',
+            client_id: data.client_id || data.id_number || data.customer_id_number || '123456789',
+            client_email: data.client_email || data.email || 'email@email.com',
+            client_phone: data.client_phone || data.phone || '123456789',
             client_address_line_1: data.client_address_line_1 || null,
             client_address_line_2: data.client_address_line_2 || null,
             client_city: data.client_city || null,
