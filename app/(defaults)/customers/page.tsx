@@ -14,6 +14,7 @@ import { getTranslation } from '@/i18n';
 import CustomerFilters from '@/components/customer-filters/customer-filters';
 import ViewToggle from '@/components/view-toggle/view-toggle';
 import { PermissionGuard } from '@/components/auth/permission-guard';
+import { getCustomerBalances } from '@/utils/balance-manager';
 
 interface Customer {
     id: string;
@@ -25,7 +26,7 @@ interface Customer {
     age: number;
     id_number: string;
     customer_type: 'new' | 'existing';
-    balance: number;
+    balance?: number; // Optional now, will be calculated dynamically
 }
 
 const CustomersList = () => {
@@ -33,6 +34,7 @@ const CustomersList = () => {
     const [items, setItems] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(true);
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [customerBalances, setCustomerBalances] = useState<Map<string, number>>(new Map());
 
     const [page, setPage] = useState(1);
     const PAGE_SIZES = [10, 20, 30, 50, 100];
@@ -90,7 +92,13 @@ const CustomersList = () => {
                 const { data, error } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
                 if (error) throw error;
 
-                setItems(data as Customer[]);
+                const customers = data as Customer[];
+                setItems(customers);
+
+                // Fetch balances for all customers
+                const customerIds = customers.map((c) => String(c.id));
+                const balances = await getCustomerBalances(customerIds);
+                setCustomerBalances(balances);
             } catch (error) {
                 console.error('Error fetching customers:', error);
                 setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
@@ -132,8 +140,8 @@ const CustomersList = () => {
                 // Age range filter
                 const age = item.age || 0;
 
-                // Balance range filter
-                const balance = item.balance || 0;
+                // Balance range filter - use calculated balance
+                const balance = customerBalances.get(String(item.id)) || 0;
                 const matchesBalanceFrom = !filters.balanceFrom || balance >= parseFloat(filters.balanceFrom);
                 const matchesBalanceTo = !filters.balanceTo || balance <= parseFloat(filters.balanceTo);
 
@@ -145,7 +153,7 @@ const CustomersList = () => {
                 return matchesSearch && matchesCountry && matchesCustomerType && matchesBalanceFrom && matchesBalanceTo && matchesDateFrom && matchesDateTo;
             }),
         );
-    }, [items, filters]);
+    }, [items, filters, customerBalances]);
 
     useEffect(() => {
         const sorted = sortBy(initialRecords, sortStatus.columnAccessor);
@@ -214,8 +222,8 @@ const CustomersList = () => {
         return type === 'new' ? 'badge-outline-success' : 'badge-outline-primary';
     };
 
-    // Calculate total balance
-    const totalBalance = items.reduce((sum, customer) => sum + (customer.balance || 0), 0);
+    // Calculate total balance using the calculated balances
+    const totalBalance = Array.from(customerBalances.values()).reduce((sum, balance) => sum + balance, 0);
 
     return (
         <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
@@ -320,7 +328,10 @@ const CustomersList = () => {
                                     accessor: 'balance',
                                     title: t('balance'),
                                     sortable: true,
-                                    render: ({ balance }) => <span className={balance >= 0 ? 'text-success' : 'text-danger'}>{formatCurrency(balance)}</span>,
+                                    render: ({ id }) => {
+                                        const balance = customerBalances.get(String(id)) || 0;
+                                        return <span className={balance >= 0 ? 'text-success' : 'text-danger'}>{formatCurrency(balance)}</span>;
+                                    },
                                 },
                                 {
                                     accessor: 'created_at',
@@ -379,69 +390,74 @@ const CustomersList = () => {
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                {records.map((customer) => (
-                                    <div key={customer.id} className="panel p-0 overflow-hidden hover:shadow-lg transition-shadow border border-gray-200 dark:border-blue-400/30">
-                                        <div className="p-5">
-                                            <div className="flex items-start justify-between mb-3">
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">{customer.name}</h3>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">#{customer.id}</p>
+                                {records.map((customer) => {
+                                    const balance = customerBalances.get(String(customer.id)) || 0;
+                                    return (
+                                        <div key={customer.id} className="panel p-0 overflow-hidden hover:shadow-lg transition-shadow border border-gray-200 dark:border-blue-400/30">
+                                            <div className="p-5">
+                                                <div className="flex items-start justify-between mb-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1 truncate">{customer.name}</h3>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400">#{customer.id}</p>
+                                                    </div>
+                                                    <span className={`badge ${getCustomerTypeBadgeClass(customer.customer_type)} flex-shrink-0 ml-2`}>
+                                                        {t(`customer_type_${customer.customer_type}`)}
+                                                    </span>
                                                 </div>
-                                                <span className={`badge ${getCustomerTypeBadgeClass(customer.customer_type)} flex-shrink-0 ml-2`}>{t(`customer_type_${customer.customer_type}`)}</span>
-                                            </div>
-                                            <div className="space-y-3 mb-4">
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('phone')}</p>
-                                                    <p className="font-semibold text-sm">{customer.phone}</p>
+                                                <div className="space-y-3 mb-4">
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('phone')}</p>
+                                                        <p className="font-semibold text-sm">{customer.phone}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('address')}</p>
+                                                        <p className="font-semibold text-sm">{customer.address}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('car_number')}</p>
+                                                        <p className="font-semibold text-sm">{customer.car_number || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('age')}</p>
+                                                        <p className="font-semibold text-sm">{customer.age || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('id_number')}</p>
+                                                        <p className="font-semibold text-sm">{customer.id_number || 'N/A'}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('address')}</p>
-                                                    <p className="font-semibold text-sm">{customer.address}</p>
+                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('balance')}</p>
+                                                        <p className={`font-bold text-lg ${balance >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(balance)}</p>
+                                                    </div>
+                                                    <div className="mt-2">
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('created_date')}</p>
+                                                        <p className="text-sm">
+                                                            {new Date(customer.created_at).toLocaleDateString('en-GB', {
+                                                                year: 'numeric',
+                                                                month: '2-digit',
+                                                                day: '2-digit',
+                                                            })}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('car_number')}</p>
-                                                    <p className="font-semibold text-sm">{customer.car_number || 'N/A'}</p>
+                                                <div className="flex gap-2">
+                                                    <Link href={`/customers/preview/${customer.id}`} className="btn btn-primary btn-sm flex-1 justify-center">
+                                                        <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
+                                                        {t('view')}
+                                                    </Link>
+                                                    <Link href={`/customers/edit/${customer.id}`} className="btn btn-info btn-sm">
+                                                        <IconEdit className="w-4 h-4" />
+                                                    </Link>
+                                                    <button type="button" className="btn btn-danger btn-sm" onClick={() => deleteRow(customer.id)}>
+                                                        <IconTrashLines className="w-4 h-4" />
+                                                    </button>
                                                 </div>
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('age')}</p>
-                                                    <p className="font-semibold text-sm">{customer.age || 'N/A'}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('id_number')}</p>
-                                                    <p className="font-semibold text-sm">{customer.id_number || 'N/A'}</p>
-                                                </div>
-                                            </div>
-                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">
-                                                <div>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('balance')}</p>
-                                                    <p className={`font-bold text-lg ${customer.balance >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(customer.balance)}</p>
-                                                </div>
-                                                <div className="mt-2">
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('created_date')}</p>
-                                                    <p className="text-sm">
-                                                        {new Date(customer.created_at).toLocaleDateString('en-GB', {
-                                                            year: 'numeric',
-                                                            month: '2-digit',
-                                                            day: '2-digit',
-                                                        })}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Link href={`/customers/preview/${customer.id}`} className="btn btn-primary btn-sm flex-1 justify-center">
-                                                    <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
-                                                    {t('view')}
-                                                </Link>
-                                                <Link href={`/customers/edit/${customer.id}`} className="btn btn-info btn-sm">
-                                                    <IconEdit className="w-4 h-4" />
-                                                </Link>
-                                                <button type="button" className="btn btn-danger btn-sm" onClick={() => deleteRow(customer.id)}>
-                                                    <IconTrashLines className="w-4 h-4" />
-                                                </button>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                         {!loading && records.length === 0 && (

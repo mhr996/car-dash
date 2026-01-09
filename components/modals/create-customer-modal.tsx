@@ -109,7 +109,6 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
                 age: age,
                 customer_type: form.customer_type,
                 address: form.address.trim() || null,
-                balance: 0,
             };
 
             const { data, error } = await supabase.from('customers').insert([customerData]).select().single();

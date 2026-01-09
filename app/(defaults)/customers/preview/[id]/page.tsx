@@ -14,6 +14,7 @@ import supabase from '@/lib/supabase';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import { DataTable } from 'mantine-datatable';
+import { getCustomerBalance } from '@/utils/balance-manager';
 
 interface Customer {
     id: string;
@@ -24,7 +25,7 @@ interface Customer {
     age: number;
     id_number: string;
     customer_type: string;
-    balance: number;
+    balance?: number; // Optional, will be calculated dynamically
 }
 
 interface Transaction {
@@ -45,6 +46,7 @@ const CustomerPreview = () => {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [transactionsLoading, setTransactionsLoading] = useState(true);
+    const [customerBalance, setCustomerBalance] = useState<number>(0);
 
     useEffect(() => {
         const fetchCustomer = async () => {
@@ -59,6 +61,10 @@ const CustomerPreview = () => {
                 }
 
                 setCustomer(data);
+
+                // Fetch calculated balance
+                const balance = await getCustomerBalance(params.id as string);
+                setCustomerBalance(balance);
             } catch (error) {
                 console.error('Error:', error);
             } finally {
@@ -291,7 +297,7 @@ const CustomerPreview = () => {
                             </div>
 
                             <div className="text-center">
-                                <div className={`text-3xl font-bold mb-2 ${customer.balance >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(customer.balance)}</div>
+                                <div className={`text-3xl font-bold mb-2 ${customerBalance >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(customerBalance)}</div>
                                 <p className="text-gray-500 text-sm">{t('current_balance')}</p>
 
                                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">

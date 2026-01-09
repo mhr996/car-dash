@@ -9,44 +9,103 @@ interface BalanceTransaction {
 }
 
 /**
+ * Calculates customer balance from customer_transactions table
+ * Balance is always calculated dynamically from transaction history
+ */
+export const getCustomerBalance = async (customerId: string): Promise<number> => {
+    try {
+        // Get the most recent transaction to get the latest balance_after value
+        const { data, error } = await supabase.from('customer_transactions').select('balance_after').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(1).single();
+
+        if (error) {
+            // If no transactions found, balance is 0
+            if (error.code === 'PGRST116') {
+                return 0;
+            }
+            console.error('Error fetching customer balance:', error);
+            return 0;
+        }
+
+        return data?.balance_after || 0;
+    } catch (error) {
+        console.error('Error in getCustomerBalance:', error);
+        return 0;
+    }
+};
+
+/**
+ * Calculates balances for multiple customers efficiently
+ * Returns a map of customerId -> balance
+ */
+export const getCustomerBalances = async (customerIds: string[]): Promise<Map<string, number>> => {
+    const balanceMap = new Map<string, number>();
+
+    if (customerIds.length === 0) {
+        return balanceMap;
+    }
+
+    try {
+        // Get the most recent transaction for each customer
+        const { data, error } = await supabase.from('customer_transactions').select('customer_id, balance_after, created_at').in('customer_id', customerIds).order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching customer balances:', error);
+            // Initialize all customers with 0 balance
+            customerIds.forEach((id) => balanceMap.set(id, 0));
+            return balanceMap;
+        }
+
+        // Group by customer_id and get the most recent balance_after for each
+        const latestBalances = new Map<string, number>();
+
+        if (data && data.length > 0) {
+            data.forEach((transaction: any) => {
+                const customerId = transaction.customer_id.toString();
+                if (!latestBalances.has(customerId)) {
+                    latestBalances.set(customerId, transaction.balance_after || 0);
+                }
+            });
+        }
+
+        // Ensure all requested customers have an entry (even if 0)
+        customerIds.forEach((id) => {
+            balanceMap.set(id, latestBalances.get(id) || 0);
+        });
+
+        return balanceMap;
+    } catch (error) {
+        console.error('Error in getCustomerBalances:', error);
+        // Initialize all customers with 0 balance on error
+        customerIds.forEach((id) => balanceMap.set(id, 0));
+        return balanceMap;
+    }
+};
+
+/**
  * Updates customer balance and logs the transaction
+ * Note: Balance is now only stored in customer_transactions, not in the customers table
  */
 export const updateCustomerBalance = async (transaction: BalanceTransaction): Promise<boolean> => {
     try {
-        // Start a transaction to ensure data consistency
-        const { data: customer, error: fetchError } = await supabase.from('customers').select('balance').eq('id', transaction.customerId).single();
-
-        if (fetchError) {
-            console.error('Error fetching customer balance:', fetchError);
-            return false;
-        }
-
-        const currentBalance = customer.balance || 0;
+        // Get current balance from transactions
+        const currentBalance = await getCustomerBalance(transaction.customerId);
         const newBalance = currentBalance + transaction.amount;
 
-        // Update customer balance
-        const { error: updateError } = await supabase.from('customers').update({ balance: newBalance }).eq('id', transaction.customerId);
+        // Log the transaction
+        const { error: insertError } = await supabase.from('customer_transactions').insert({
+            customer_id: transaction.customerId,
+            type: transaction.type,
+            amount: transaction.amount,
+            balance_before: currentBalance,
+            balance_after: newBalance,
+            reference_id: transaction.referenceId,
+            description: transaction.description,
+            created_at: new Date().toISOString(),
+        });
 
-        if (updateError) {
-            console.error('Error updating customer balance:', updateError);
+        if (insertError) {
+            console.error('Error inserting transaction:', insertError);
             return false;
-        }
-
-        // Log the transaction (we'll create this table if it doesn't exist)
-        try {
-            await supabase.from('customer_transactions').insert({
-                customer_id: transaction.customerId,
-                type: transaction.type,
-                amount: transaction.amount,
-                balance_before: currentBalance,
-                balance_after: newBalance,
-                reference_id: transaction.referenceId,
-                description: transaction.description,
-                created_at: new Date().toISOString(),
-            });
-        } catch (logError) {
-            console.warn('Could not log transaction (table may not exist):', logError);
-            // Don't fail the balance update if logging fails
         }
 
         console.log(`Balance updated for customer ${transaction.customerId}: ${currentBalance} -> ${newBalance}`);
@@ -91,24 +150,9 @@ export const handleDealDeleted = async (dealId: string, customerId: string, deal
  */
 export const handleDealCancelled = async (dealId: string, customerId: string, dealSellingPrice: number, dealTitle: string): Promise<boolean> => {
     try {
-        // First, fetch the customer's current balance
-        const { data: customer, error: fetchError } = await supabase.from('customers').select('balance').eq('id', customerId).single();
-
-        if (fetchError) {
-            console.error('Error fetching customer balance:', fetchError);
-            return false;
-        }
-
-        const currentBalance = customer.balance || 0;
+        // Get current balance from transactions
+        const currentBalance = await getCustomerBalance(customerId);
         const newBalance = currentBalance + dealSellingPrice; // Add back the deal amount (reverse the deduction)
-
-        // Update customer balance
-        const { error: updateError } = await supabase.from('customers').update({ balance: newBalance }).eq('id', customerId);
-
-        if (updateError) {
-            console.error('Error updating customer balance:', updateError);
-            return false;
-        }
 
         // Delete the original deal_created transaction from customer_transactions
         const { error: deleteTransactionError } = await supabase.from('customer_transactions').delete().eq('customer_id', customerId).eq('reference_id', dealId).eq('type', 'deal_created');

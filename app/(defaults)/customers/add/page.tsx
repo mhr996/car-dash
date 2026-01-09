@@ -20,7 +20,6 @@ const AddCustomer = () => {
         age: '',
         id_number: '',
         customer_type: '',
-        balance: '0',
     });
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -50,10 +49,6 @@ const AddCustomer = () => {
             setAlert({ visible: true, message: t('age_must_be_valid'), type: 'danger' });
             return false;
         }
-        if (form.balance && parseFloat(form.balance) < 0) {
-            setAlert({ visible: true, message: t('balance_cannot_be_negative'), type: 'danger' });
-            return false;
-        }
         return true;
     };
 
@@ -72,7 +67,6 @@ const AddCustomer = () => {
                 age: form.age ? parseInt(form.age) : null,
                 id_number: form.id_number.trim() || null,
                 customer_type: form.customer_type,
-                balance: form.balance ? parseFloat(form.balance) : 0,
             };
 
             const { error } = await supabase.from('customers').insert([customerData]);
@@ -203,27 +197,6 @@ const AddCustomer = () => {
                                 {t('id_number')}
                             </label>
                             <input type="text" id="id_number" name="id_number" value={form.id_number} onChange={handleInputChange} className="form-input" placeholder={t('enter_id_number')} />
-                        </div>
-                        {/* Initial Balance */}
-                        <div>
-                            <label htmlFor="balance" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('initial_balance')}
-                            </label>
-                            <div className="flex">
-                                <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border ltr:border-r-0 rtl:border-l-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
-                                    $
-                                </span>
-                                <input
-                                    type="number"
-                                    id="balance"
-                                    name="balance"
-                                    step="0.01"
-                                    value={form.balance}
-                                    onChange={handleInputChange}
-                                    className="form-input ltr:rounded-l-none rtl:rounded-r-none"
-                                    placeholder="0.00"
-                                />
-                            </div>
                         </div>
                     </div>
 
