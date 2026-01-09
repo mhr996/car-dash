@@ -422,7 +422,6 @@ const Bills = () => {
     };
 
     const columns: DataTableColumn<Bill>[] = [
-       
         {
             accessor: 'bill_number',
             title: t('bill_number'),
@@ -527,12 +526,6 @@ const Bills = () => {
             textAlignment: 'center',
             render: (bill: Bill) => (
                 <div className="mx-auto flex w-max items-center gap-4">
-                    {/* Edit payments button for receipts */}
-                    {(bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') && (
-                        <Link href={`/bills/edit/${bill.id}`} className="flex hover:text-primary" title={t('edit_payments')}>
-                            <IconEdit className="h-4.5 w-4.5" />
-                        </Link>
-                    )}
                     <button type="button" className="flex hover:text-success" onClick={() => handleDownloadPDF(bill)} title={t('download_pdf')} disabled={downloadingPDF === bill.id}>
                         {downloadingPDF === bill.id ? <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div> : <IconPdf className="h-4.5 w-4.5" />}
                     </button>

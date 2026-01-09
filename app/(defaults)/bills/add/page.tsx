@@ -527,6 +527,17 @@ const AddBill = () => {
             const totalPaid = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
             const expectedTotal = parseFloat(billForm.total_with_tax) || 0;
 
+            // For tax_invoice_receipt, payment must match exactly
+            if (billForm.bill_type === 'tax_invoice_receipt') {
+                if (Math.abs(totalPaid - expectedTotal) > 0.01) {
+                    setAlert({
+                        message: `${t('tax_invoice_receipt_exact_match_required')}: ${t('invoice_amount')}: ₪${expectedTotal.toFixed(0)}, ${t('payment_total')}: ₪${totalPaid.toFixed(0)}`,
+                        type: 'danger',
+                    });
+                    return;
+                }
+            }
+
             // Allow payments to exceed the expected total (extra goes to customer balance)
             // Only validate that we have some payment amount
             if (totalPaid <= 0) {
@@ -537,8 +548,8 @@ const AddBill = () => {
                 return;
             }
 
-            // Show info message if payment exceeds selling price
-            if (totalPaid > expectedTotal + 0.01) {
+            // Show info message if payment exceeds selling price (only for receipt_only)
+            if (billForm.bill_type === 'receipt_only' && totalPaid > expectedTotal + 0.01) {
                 const excessAmount = totalPaid - expectedTotal;
                 setAlert({
                     message: `${t('payment_exceeds_selling_price')}: ₪${excessAmount.toFixed(0)} ${t('will_be_added_to_customer_balance')}`,
@@ -547,8 +558,8 @@ const AddBill = () => {
                 // Don't return - allow the payment to proceed
             }
 
-            // If this is a partial payment, show a success message but allow it
-            if (totalPaid < expectedTotal - 0.01) {
+            // If this is a partial payment, show a success message but allow it (only for receipt_only)
+            if (billForm.bill_type === 'receipt_only' && totalPaid < expectedTotal - 0.01) {
                 const remainingAmount = expectedTotal - totalPaid;
                 setAlert({
                     message: `${t('partial_payment_notice')}: ${t('paid')} ₪${totalPaid.toFixed(0)}, ${t('remaining')} ₪${remainingAmount.toFixed(0)}`,
