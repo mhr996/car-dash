@@ -1292,7 +1292,7 @@ const AddDeal = () => {
                                 <div>
                                     <span className="text-green-600 dark:text-green-300 font-medium">{t('kilometers')}:</span>
                                     <p className="text-green-800 dark:text-green-100">
-                                        {selectedCar.kilometers.toLocaleString()} {t('km')}
+                                        {selectedCar.kilometers ? selectedCar.kilometers.toLocaleString() : '0'} {t('km')}
                                     </p>
                                 </div>
                                 <div>
@@ -1938,7 +1938,7 @@ const AddDeal = () => {
                                 <div>
                                     <span className="text-green-600 dark:text-green-300 font-medium">{t('kilometers')}:</span>
                                     <p className="text-green-800 dark:text-green-100">
-                                        {selectedCar.kilometers.toLocaleString()} {t('km')}
+                                        {selectedCar.kilometers ? selectedCar.kilometers.toLocaleString() : '0'} {t('km')}
                                     </p>
                                 </div>
                                 <div>
@@ -2270,7 +2270,7 @@ const AddDeal = () => {
                                 <div>
                                     <span className="text-green-600 dark:text-green-300 font-medium">{t('kilometers')}:</span>
                                     <p className="text-green-800 dark:text-green-100">
-                                        {selectedCar.kilometers.toLocaleString()} {t('km')}
+                                        {selectedCar.kilometers ? selectedCar.kilometers.toLocaleString() : '0'} {t('km')}
                                     </p>
                                 </div>
                                 <div>

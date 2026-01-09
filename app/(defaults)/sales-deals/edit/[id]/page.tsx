@@ -158,97 +158,34 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
 
         const documentType = documentTypeMap[billData.bill_type] || 'IR';
 
-        // Prepare items array from deal data
-        const items = [];
+        // Calculate total payment amount
+        const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
-        // If we have deal data with car, create detailed line items
+        // Create single item with total payment amount as unit_price
+        // Build a descriptive name for the item
+        let itemName = 'קבלה'; // Default: Receipt
         if (deal && selectedCar) {
-            // Row 1: Car Details
-            items.push({
+            // Include car details in name
+            itemName = `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}`;
+        } else if (billData.car_details) {
+            itemName = billData.car_details;
+        } else if (billData.customer_name) {
+            itemName = billData.customer_name;
+        }
+
+        const items = [
+            {
                 type: 'I',
                 code: null,
-                name: `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}` || billData.car_details || 'פרטי רכב',
+                name: itemName,
                 price_type: 'G', // Gross (includes VAT)
-                unit_price: 0, // No price for this row
-                units_number: 1,
-                unit_type: 1, // Unit
-                currency_code: 'ILS',
-                to_doc_currency_exchange_rate: 1,
-            });
-
-            // Row 2: Buy Price (informational only)
-            if (selectedCar.buy_price) {
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: `מחיר קנייה (${selectedCar.buy_price.toLocaleString()})`,
-                    price_type: 'G',
-                    unit_price: 0,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-            }
-
-            // Row 3: Selling Price (informational only)
-            if (deal.selling_price) {
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: `מחיר מכירה (${deal.selling_price.toLocaleString()})`,
-                    price_type: 'G',
-                    unit_price: 0,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-            }
-
-            // Row 4: Loss Amount (if applicable)
-            if (deal.loss_amount && deal.loss_amount > 0) {
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: 'סכום הפסד',
-                    price_type: 'G',
-                    unit_price: -deal.loss_amount,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-            }
-
-            // Row 5: Profit Commission
-            if (deal.amount) {
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: 'עמלת רווח',
-                    price_type: 'G',
-                    unit_price: deal.amount,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-            }
-        } else {
-            // Fallback: Single item if no deal data
-            items.push({
-                type: 'I',
-                code: null,
-                name: billData.car_details || billData.bill_description || billData.customer_name || 'פריט חשבונית',
-                price_type: 'G', // Gross (includes VAT)
-                unit_price: parseFloat(billData.total_with_tax) || 0,
+                unit_price: totalPaymentAmount,
                 units_number: 1,
                 unit_type: 1,
                 currency_code: 'ILS',
                 to_doc_currency_exchange_rate: 1,
-            });
-        }
+            },
+        ];
 
         // Prepare payments array with all payment details
         const tranzilaPayments =
@@ -285,8 +222,8 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                           } else if (payment.payment_type === 'bank_transfer') {
                               return {
                                   ...basePayment,
+                                  bank: payment.transfer_bank_name || null,
                                   transfer_number: payment.transfer_number || null,
-                                  transfer_bank_name: payment.transfer_bank_name || null,
                                   transfer_branch: payment.transfer_branch || null,
                                   transfer_account_number: payment.transfer_account_number || null,
                                   transfer_holder_name: payment.transfer_holder_name || null,
@@ -354,11 +291,11 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     document_type: documentType,
                     document_date: billData.date || new Date().toISOString().split('T')[0],
                     document_currency_code: 'ILS',
-                    vat_percent: 18,
+                    vat_percent: documentType === 'RE' ? 0 : 18,
                     client_company: billData.customer_name || t('unknown_customer'),
                     client_name: billData.customer_name || t('unknown_customer'),
                     client_id: customerId,
-                    client_email: customerEmail,
+                    client_email: customerEmail || 'no-reply@car-dash.com',
                     client_phone: customerPhone || undefined,
                     items,
                     payments: tranzilaPayments,
@@ -384,7 +321,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 tranzila_document_id: result.response.document.id,
                 tranzila_document_number: result.response.document.number,
                 tranzila_retrieval_key: result.response.document.retrieval_key,
-                tranzila_created_at: result.response.document.created_at,
+                tranzila_created_at: billData.date ? new Date(billData.date + 'T00:00:00').toISOString() : result.response.document.created_at,
             })
             .eq('id', billId);
 
@@ -1592,6 +1529,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     bill_id: billResult.id,
                     payment_type: payment.payment_type,
                     amount: payment.amount,
+                    created_at: billForm.date ? new Date(billForm.date + 'T00:00:00').toISOString() : new Date().toISOString(),
                     visa_installments: payment.visa_installments || null,
                     visa_card_type: payment.visa_card_type || null,
                     visa_last_four: payment.visa_last_four || null,
