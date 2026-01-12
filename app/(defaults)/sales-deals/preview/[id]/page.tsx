@@ -960,7 +960,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                             </p>
                                             <div className="flex flex-wrap items-center gap-4">
                                                 <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                                    {car.kilometers.toLocaleString()} {t('km')}
+                                                    {car.kilometers?.toLocaleString()} {t('km')}
                                                 </span>
                                                 <span className="text-gray-600 dark:text-gray-400 font-medium">
                                                     {t('provider')}: {car.provider}
@@ -1022,7 +1022,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                             </p>
                                             <div className="flex flex-wrap items-center gap-4">
                                                 <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                                    {carTakenFromClient.kilometers.toLocaleString()} {t('km')}
+                                                    {carTakenFromClient.kilometers?.toLocaleString()} {t('km')}
                                                 </span>
                                                 <span className="text-gray-600 dark:text-gray-400 font-medium">
                                                     {t('provider')}: {carTakenFromClient.provider}

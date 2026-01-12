@@ -297,6 +297,10 @@ const AddCar = () => {
             setAlert({ visible: true, message: t('car_number_required'), type: 'danger' });
             return false;
         }
+        if (!form.kilometers.trim()) {
+            setAlert({ visible: true, message: t('kilometers_required'), type: 'danger' });
+            return false;
+        }
         // Validate car source selection
         if (carSource === 'provider' && !form.provider) {
             setAlert({ visible: true, message: t('provider_required'), type: 'danger' });
@@ -663,7 +667,7 @@ const AddCar = () => {
                                 {/* Kilometers */}
                                 <div>
                                     <label htmlFor="kilometers" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                        {t('kilometers')}
+                                        {t('kilometers')} <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="number"
@@ -675,6 +679,7 @@ const AddCar = () => {
                                         onWheel={(e) => e.currentTarget.blur()}
                                         className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                         placeholder={t('enter_kilometers')}
+                                        required
                                     />
                                 </div>
                                 {/* Market Price */}
