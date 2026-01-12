@@ -316,31 +316,147 @@ const AddBill = () => {
             // Calculate total payment amount
             const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
-            // Create single item with total payment amount as unit_price
-            // Build a descriptive name for the item
-            let itemName = 'קבלה'; // Default: Receipt
-            if (deal && deal.car) {
-                // Include car details in name
-                itemName = `${deal.car.brand} ${deal.car.title} ${deal.car.year}${deal.car.car_number ? ` - ${deal.car.car_number}` : ''}`;
-            } else if (billData.car_details) {
-                itemName = billData.car_details;
-            } else if (billData.customer_name) {
-                itemName = billData.customer_name;
-            }
+            // Build items array - STRICT VALIDATION, NO FALLBACKS
+            let items: any[] = [];
 
-            const items = [
-                {
+            if (documentType === 'IN') {
+                // TAX INVOICE - requires deal with car
+                if (!deal || !deal.car) {
+                    throw new Error('Tax Invoice requires a deal with a car');
+                }
+                if (!deal.amount || deal.amount <= 0) {
+                    throw new Error('Tax Invoice requires a valid deal amount');
+                }
+
+                const buyPrice = deal.car.buy_price || 0;
+                const salePrice = deal.selling_price || 0;
+                const lossAmount = deal.loss_amount || 0;
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}${deal.car.car_number ? ` - ${deal.car.car_number}` : ''}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `מחיר קנייה: ₪${buyPrice.toLocaleString()}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+
+                if (lossAmount > 0) {
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: `סכום הפסד: ₪${lossAmount.toLocaleString()}`,
+                        price_type: 'G',
+                        unit_price: 0,
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                }
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: 'עמלה',
+                    price_type: 'G',
+                    unit_price: deal.amount,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            } else if (documentType === 'IR') {
+                // INVOICE+RECEIPT - requires deal with car AND payments
+                if (!deal || !deal.car) {
+                    throw new Error('Invoice+Receipt requires a deal with a car');
+                }
+                if (!deal.amount || deal.amount <= 0) {
+                    throw new Error('Invoice+Receipt requires a valid deal amount');
+                }
+                if (!payments.length || totalPaymentAmount <= 0) {
+                    throw new Error('Invoice+Receipt requires at least one payment');
+                }
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `${deal.car.brand} ${deal.car.title} ${deal.car.year}${deal.car.car_number ? ` - ${deal.car.car_number}` : ''}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: 'עמלה',
+                    price_type: 'G',
+                    unit_price: deal.amount,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            } else if (documentType === 'RE') {
+                // RECEIPT ONLY - requires payments
+                if (!payments.length || totalPaymentAmount <= 0) {
+                    throw new Error('Receipt requires at least one payment');
+                }
+
+                let itemName = 'קבלה';
+                if (deal && deal.car) {
+                    itemName = `${deal.car.brand} ${deal.car.title} ${deal.car.year}${deal.car.car_number ? ` - ${deal.car.car_number}` : ''}`;
+                } else if (billData.car_details) {
+                    itemName = billData.car_details;
+                } else if (billData.customer_name) {
+                    itemName = billData.customer_name;
+                }
+
+                items.push({
                     type: 'I',
                     code: null,
                     name: itemName,
-                    price_type: 'G', // Gross (includes VAT)
+                    price_type: 'G',
                     unit_price: totalPaymentAmount,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
                     to_doc_currency_exchange_rate: 1,
-                },
-            ];
+                });
+            } else {
+                throw new Error(`Unsupported document type: ${documentType}`);
+            }
 
             // Prepare payments array with all payment details
             const tranzilaPayments =

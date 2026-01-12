@@ -161,31 +161,147 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         // Calculate total payment amount
         const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
-        // Create single item with total payment amount as unit_price
-        // Build a descriptive name for the item
-        let itemName = 'קבלה'; // Default: Receipt
-        if (deal && selectedCar) {
-            // Include car details in name
-            itemName = `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}`;
-        } else if (billData.car_details) {
-            itemName = billData.car_details;
-        } else if (billData.customer_name) {
-            itemName = billData.customer_name;
-        }
+        // Build items array - STRICT VALIDATION, NO FALLBACKS
+        let items: any[] = [];
 
-        const items = [
-            {
+        if (documentType === 'IN') {
+            // TAX INVOICE - requires deal with car
+            if (!deal || !selectedCar) {
+                throw new Error('Tax Invoice requires a deal with a car');
+            }
+            if (!deal.amount || deal.amount <= 0) {
+                throw new Error('Tax Invoice requires a valid deal amount');
+            }
+
+            const buyPrice = selectedCar.buy_price || 0;
+            const salePrice = deal.selling_price || 0;
+            const lossAmount = deal.loss_amount || 0;
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}`,
+                price_type: 'G',
+                unit_price: 0,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: `מחיר קנייה: ₪${buyPrice.toLocaleString()}`,
+                price_type: 'G',
+                unit_price: 0,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
+                price_type: 'G',
+                unit_price: 0,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+
+            if (lossAmount > 0) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `סכום הפסד: ₪${lossAmount.toLocaleString()}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: 'עמלה',
+                price_type: 'G',
+                unit_price: deal.amount,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+        } else if (documentType === 'IR') {
+            // INVOICE+RECEIPT - requires deal with car AND payments
+            if (!deal || !selectedCar) {
+                throw new Error('Invoice+Receipt requires a deal with a car');
+            }
+            if (!deal.amount || deal.amount <= 0) {
+                throw new Error('Invoice+Receipt requires a valid deal amount');
+            }
+            if (!payments.length || totalPaymentAmount <= 0) {
+                throw new Error('Invoice+Receipt requires at least one payment');
+            }
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}`,
+                price_type: 'G',
+                unit_price: 0,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: 'עמלה',
+                price_type: 'G',
+                unit_price: deal.amount,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+        } else if (documentType === 'RE') {
+            // RECEIPT ONLY - requires payments
+            if (!payments.length || totalPaymentAmount <= 0) {
+                throw new Error('Receipt requires at least one payment');
+            }
+
+            let itemName = 'קבלה';
+            if (deal && selectedCar) {
+                itemName = `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}`;
+            } else if (billData.car_details) {
+                itemName = billData.car_details;
+            } else if (billData.customer_name) {
+                itemName = billData.customer_name;
+            }
+
+            items.push({
                 type: 'I',
                 code: null,
                 name: itemName,
-                price_type: 'G', // Gross (includes VAT)
+                price_type: 'G',
                 unit_price: totalPaymentAmount,
                 units_number: 1,
                 unit_type: 1,
                 currency_code: 'ILS',
                 to_doc_currency_exchange_rate: 1,
-            },
-        ];
+            });
+        } else {
+            throw new Error(`Unsupported document type: ${documentType}`);
+        }
 
         // Prepare payments array with all payment details
         const tranzilaPayments =
@@ -1032,7 +1148,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     bill_description: `${t('refund_bill_for_deal')}: ${deal.title}`,
                     bill_amount: parseFloat(deal.amount?.toString() || '0'),
                     free_text: `${t('deal_cancelled_refund')} - ${cancelReason.trim()}`,
-                    created_at: new Date().toISOString(),
+                    created_at: new Date().toISOString().split('T')[0] + 'T00:00:00.000Z',
                 };
 
                 const { data: refundBillResult, error: billError } = await supabase.from('bills').insert([refundBillData]).select().single();
@@ -1482,7 +1598,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                           payment_type: null,
                           bill_description: billForm.bill_description || null,
                           bill_amount: parseFloat(billForm.bill_amount) || null,
-                          created_at: new Date().toISOString(),
+                          created_at: billForm.date ? new Date(billForm.date + 'T00:00:00').toISOString() : new Date().toISOString(),
                       }
                     : {
                           deal_id: parseInt(dealId),
@@ -1526,7 +1642,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                           check_holder_name: billForm.check_holder_name || null,
                           check_branch: billForm.check_branch || null,
                           cash_amount: parseFloat(billForm.cash_amount) || null,
-                          created_at: new Date().toISOString(),
+                          created_at: billForm.date ? new Date(billForm.date + 'T00:00:00').toISOString() : new Date().toISOString(),
                       };
 
             const { data: billResult, error } = await supabase.from('bills').insert([billData]).select().single();
@@ -2638,6 +2754,31 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 className="w-full"
                                             />
                                         </div>
+                                        {/* Bill Date Selection */}
+                                        {billForm.bill_type && (
+                                            <div>
+                                                <div className="mb-4 flex items-center gap-3">
+                                                    <IconCalendar className="w-5 h-5 text-primary" />
+                                                    <div>
+                                                        <h6 className="text-md font-semibold dark:text-white-light">{t('bill_date')}</h6>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_bill_date_desc')}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="relative">
+                                                    <input
+                                                        type="date"
+                                                        name="date"
+                                                        value={billForm.date}
+                                                        onChange={handleBillFormChange}
+                                                        className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                                                        style={{ colorScheme: 'light' }}
+                                                    />
+                                                    <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                                                        <IconCalendar className="w-5 h-5 text-gray-400" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                         {/* Bill Direction Selector for All Bills except tax_invoice and tax_invoice_receipt */}
                                         {billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && (
                                             <div>
