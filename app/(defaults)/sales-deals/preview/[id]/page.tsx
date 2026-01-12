@@ -215,10 +215,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                             .from('bills')
                             .select(
                                 `id, bill_type, status, customer_name, date, total_with_tax, total, created_at, bill_amount, payment_type, visa_amount, cash_amount, bank_amount, transfer_amount, check_amount, bill_direction, tranzila_retrieval_key, tranzila_document_id, tranzila_document_number,
-                                bill_payments (
-                                    amount,
-                                    payment_type
-                                )`,
+                                bill_payments (*)
+                                `,
                             )
                             .eq('deal_id', dealId)
                             .order('created_at', { ascending: false });

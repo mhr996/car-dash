@@ -264,14 +264,13 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                         )}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                                        {(bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') && bill.bill_payments
-                                            ? bill.bill_payments.find((payment: any) => payment.payment_type === 'bank_transfer')?.transfer_bank_name || '-'
+                                        {(bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') && (bill.bill_payments || bill.payments)
+                                            ? (bill.bill_payments || bill.payments).find((payment: any) => payment.payment_type === 'bank_transfer')?.transfer_bank_name || '-'
                                             : '-'}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(bill.created_at)}</td>
                                     <td className="px-4 py-3 text-center">
                                         <div className="flex items-center justify-center gap-2">
-                                         
                                             {onDownloadPDF && (
                                                 <button
                                                     type="button"
