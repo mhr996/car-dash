@@ -174,8 +174,11 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             }
 
             const buyPrice = selectedCar.buy_price || 0;
-            const salePrice = deal.selling_price || 0;
             const lossAmount = deal.loss_amount || 0;
+
+            // For Financing Assistance Intermediary deals, skip the buy price item and use car's sale price
+            const isFinancingAssistanceIntermediary = deal.deal_type === 'financing_assistance_intermediary';
+            const salePrice = isFinancingAssistanceIntermediary ? selectedCar.sale_price || 0 : deal.selling_price || 0;
 
             items.push({
                 type: 'I',
@@ -189,17 +192,20 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 to_doc_currency_exchange_rate: 1,
             });
 
-            items.push({
-                type: 'I',
-                code: null,
-                name: `מחיר קנייה: ₪${buyPrice.toLocaleString()}`,
-                price_type: 'G',
-                unit_price: 0,
-                units_number: 1,
-                unit_type: 1,
-                currency_code: 'ILS',
-                to_doc_currency_exchange_rate: 1,
-            });
+            // Only add buy price for non-financing assistance intermediary deals
+            if (!isFinancingAssistanceIntermediary) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `מחיר קנייה: ₪${buyPrice.toLocaleString()}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
 
             items.push({
                 type: 'I',
