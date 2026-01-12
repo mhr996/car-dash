@@ -59,6 +59,7 @@ const AddCar = () => {
         car_number: '', // Car number field
         desc: '', // New description field
         public: false, // Public visibility field with default false
+        created_date: new Date().toISOString().split('T')[0], // Date field with today as default
     });
 
     // Separate states for thumbnail and gallery images
@@ -432,6 +433,7 @@ const AddCar = () => {
                 features: features.filter((f) => f.label.trim() && f.value.trim()).map((f) => ({ label: f.label.trim(), value: f.value.trim() })), // New features field
                 images: [], // Initially empty
                 colors: [], // Initially empty, will be updated after upload
+                created_at: new Date(form.created_date + 'T00:00:00').toISOString(), // Custom creation date
             };
 
             const { data, error } = await supabase.from('cars').insert([carData]).select();
@@ -629,6 +631,13 @@ const AddCar = () => {
                                         placeholder={t('enter_car_number')}
                                         required
                                     />
+                                </div>
+                                {/* Creation Date */}
+                                <div>
+                                    <label htmlFor="created_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('created_date')}
+                                    </label>
+                                    <input type="date" id="created_date" name="created_date" value={form.created_date} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 {/* Brand */}
                                 <div>
