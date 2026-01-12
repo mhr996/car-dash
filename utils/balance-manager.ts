@@ -3,7 +3,7 @@ import supabase from '@/lib/supabase';
 interface BalanceTransaction {
     customerId: string;
     amount: number; // Positive for credits, negative for debits
-    type: 'deal_created' | 'deal_deleted' | 'receipt_created' | 'receipt_deleted';
+    type: 'deal_created' | 'deal_deleted' | 'receipt_created' | 'receipt_deleted' | 'bank_transfer_order_created' | 'bank_transfer_order_deleted';
     referenceId: string; // Deal ID or Bill ID
     description: string;
 }

@@ -19,6 +19,7 @@ interface BillsTableProps {
     carTakenFromClient?: any; // Car taken from client for exchange deals
     selectedCustomer?: any; // Selected customer for display
     registerOrders?: Array<{ amount: number; description: string; created_at: string }>;
+    bankTransferOrders?: Array<{ amount: number; description: string; created_at: string }>;
 }
 
 const BillsTable: React.FC<BillsTableProps> = ({
@@ -33,6 +34,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
     carTakenFromClient,
     selectedCustomer,
     registerOrders = [],
+    bankTransferOrders = [],
 }) => {
     const { t } = getTranslation();
 
@@ -52,6 +54,12 @@ const BillsTable: React.FC<BillsTableProps> = ({
         if (registerOrders && registerOrders.length > 0) {
             const totalDeductions = registerOrders.reduce((sum, order) => sum + order.amount, 0);
             totalBalance -= totalDeductions;
+        }
+
+        // Add bank transfer orders (for financing assistance intermediary)
+        if (bankTransferOrders && bankTransferOrders.length > 0) {
+            const totalTransfers = bankTransferOrders.reduce((sum, order) => sum + order.amount, 0);
+            totalBalance += totalTransfers;
         }
 
         if (!bills || bills.length === 0) return totalBalance;
@@ -223,29 +231,30 @@ const BillsTable: React.FC<BillsTableProps> = ({
                             </tr>
                         )}
 
-                        {/* Add special row for financing assistance intermediary deals showing bank transfer order */}
-                        {deal?.deal_type === 'financing_assistance_intermediary' && car && (
-                            <tr className="bg-purple-50 dark:bg-purple-900/20 border-b-2 border-purple-200 dark:border-purple-700">
-                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
-                                        {t('bank_transfer_order_customer')}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                                    {deal?.customers?.name || deal?.customer?.name || selectedCustomer?.name || t('unknown_customer')}
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                    <span className="text-purple-600 dark:text-purple-400 font-medium">{formatCurrency((car?.sale_price || 0) - (deal?.amount || 0))}</span>
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(deal.created_at)}</td>
-                                <td className="px-4 py-3 text-center">
-                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
-                                </td>
-                            </tr>
-                        )}
+                        {/* Add special row for financing assistance intermediary deals showing manual bank transfer orders */}
+                        {deal?.deal_type === 'financing_assistance_intermediary' &&
+                            bankTransferOrders &&
+                            bankTransferOrders.length > 0 &&
+                            bankTransferOrders.map((order, index) => (
+                                <tr key={`bank-transfer-${index}`} className="bg-purple-50 dark:bg-purple-900/20 border-b-2 border-purple-200 dark:border-purple-700">
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                                            {t('bank_transfer_order_customer')}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{order.description}</td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className="text-purple-600 dark:text-purple-400 font-medium">{formatCurrency(order.amount)}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(order.created_at)}</td>
+                                    <td className="px-4 py-3 text-center">
+                                        <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
+                                    </td>
+                                </tr>
+                            ))}
                         {bills.map((bill) => {
                             const billAmount = getBillAmount(bill);
                             return (

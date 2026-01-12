@@ -80,6 +80,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [carTakenFromClient, setCarTakenFromClient] = useState<Car | null>(null);
     const [bills, setBills] = useState<Bill[]>([]);
     const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
+    const [bankTransferOrders, setBankTransferOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
     const [carImageUrl, setCarImageUrl] = useState<string | null>(null);
     const [carTakenImageUrl, setCarTakenImageUrl] = useState<string | null>(null);
     const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
@@ -148,6 +149,11 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     // Load register orders if they exist
                     if (data.register_orders && Array.isArray(data.register_orders)) {
                         setRegisterOrders(data.register_orders);
+                    }
+
+                    // Load bank transfer orders if they exist
+                    if (data.bank_transfer_orders && Array.isArray(data.bank_transfer_orders)) {
+                        setBankTransferOrders(data.bank_transfer_orders);
                     }
 
                     // Fetch customer details if customer_id exists
@@ -1240,6 +1246,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                             selectedCustomer={customer}
                             onDownloadPDF={handleDownloadPDF}
                             downloadingPDF={downloadingPDF}
+                            registerOrders={registerOrders}
+                            bankTransferOrders={bankTransferOrders}
                         />
                     </>
                 )}

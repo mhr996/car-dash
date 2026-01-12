@@ -466,7 +466,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
 import { uploadMultipleFiles, deleteFile, uploadFile } from '@/utils/file-upload';
 import { formatCurrency } from '@/utils/number-formatter';
 import AttachmentsDisplay from '@/components/attachments/attachments-display';
-import { handleReceiptCreated, getCustomerIdFromDeal, getCustomerIdByName } from '@/utils/balance-manager';
+import { handleReceiptCreated, getCustomerIdFromDeal, getCustomerIdByName, updateCustomerBalance } from '@/utils/balance-manager';
 import { MultiplePaymentForm } from '@/components/forms/multiple-payment-form';
 import IconNotes from '@/components/icon/icon-notes';
 import IconCar from '@/components/icon/icon-car';
@@ -691,6 +691,14 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const [creatingRegisterOrder, setCreatingRegisterOrder] = useState(false);
     const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
 
+    // Bank Transfer Order states (for financing assistance intermediary)
+    const [bankTransferOrderForm, setBankTransferOrderForm] = useState({
+        amount: '',
+        description: '',
+    });
+    const [creatingBankTransferOrder, setCreatingBankTransferOrder] = useState(false);
+    const [bankTransferOrders, setBankTransferOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
+
     // Cancel deal confirmation modal state
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
@@ -737,6 +745,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     // Load register orders if they exist
                     if (data.register_orders && Array.isArray(data.register_orders)) {
                         setRegisterOrders(data.register_orders);
+                    }
+
+                    // Load bank transfer orders if they exist
+                    if (data.bank_transfer_orders && Array.isArray(data.bank_transfer_orders)) {
+                        setBankTransferOrders(data.bank_transfer_orders);
                     }
 
                     setForm({
@@ -1033,6 +1046,105 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             });
         } finally {
             setCreatingRegisterOrder(false);
+        }
+    };
+
+    // Handle bank transfer order creation
+    const handleCreateBankTransferOrder = async () => {
+        // Validate form
+        if (!bankTransferOrderForm.amount || parseFloat(bankTransferOrderForm.amount) <= 0) {
+            setAlert({ message: t('amount_required'), type: 'danger' });
+            return;
+        }
+        if (!bankTransferOrderForm.description?.trim()) {
+            setAlert({ message: t('description_required'), type: 'danger' });
+            return;
+        }
+
+        setCreatingBankTransferOrder(true);
+        try {
+            // Create new bank transfer order object
+            const newBankTransferOrder = {
+                amount: parseFloat(bankTransferOrderForm.amount),
+                description: bankTransferOrderForm.description.trim(),
+                created_at: new Date().toISOString(),
+            };
+
+            // Add to existing bank transfer orders array
+            const updatedBankTransferOrders = [...bankTransferOrders, newBankTransferOrder];
+
+            // Update deal with new bank transfer orders array
+            const { error } = await supabase.from('deals').update({ bank_transfer_orders: updatedBankTransferOrders }).eq('id', dealId);
+
+            if (error) throw error;
+
+            // Update local state
+            setBankTransferOrders(updatedBankTransferOrders);
+
+            // Update customer balance
+            const customerId = deal?.buyer_id || deal?.seller_id || deal?.customer_id;
+            if (customerId) {
+                await updateCustomerBalance({
+                    customerId: customerId,
+                    amount: parseFloat(bankTransferOrderForm.amount), // Positive amount (credit to customer)
+                    type: 'bank_transfer_order_created',
+                    referenceId: dealId,
+                    description: `Bank Transfer Order: ${bankTransferOrderForm.description.trim()}`,
+                });
+            }
+
+            setAlert({ message: t('bank_transfer_order_created_successfully'), type: 'success' });
+
+            // Reset form
+            setBankTransferOrderForm({
+                amount: '',
+                description: '',
+            });
+        } catch (error) {
+            console.error('Error creating bank transfer order:', error);
+            setAlert({
+                message: error instanceof Error ? error.message : t('error_creating_bank_transfer_order'),
+                type: 'danger',
+            });
+        } finally {
+            setCreatingBankTransferOrder(false);
+        }
+    };
+
+    // Handle bank transfer order deletion
+    const handleDeleteBankTransferOrder = async (index: number) => {
+        try {
+            // Remove the bank transfer order at the specified index
+            const updatedBankTransferOrders = bankTransferOrders.filter((_, i) => i !== index);
+
+            // Update deal with new bank transfer orders array
+            const { error } = await supabase.from('deals').update({ bank_transfer_orders: updatedBankTransferOrders }).eq('id', dealId);
+
+            if (error) throw error;
+
+            // Update local state
+            const deletedOrder = bankTransferOrders[index];
+            setBankTransferOrders(updatedBankTransferOrders);
+
+            // Update customer balance (reversal - negative amount)
+            const customerId = deal?.buyer_id || deal?.seller_id || deal?.customer_id;
+            if (customerId) {
+                await updateCustomerBalance({
+                    customerId: customerId,
+                    amount: -deletedOrder.amount, // Negative amount (debit from customer)
+                    type: 'bank_transfer_order_deleted',
+                    referenceId: dealId,
+                    description: `Bank Transfer Order Deleted: ${deletedOrder.description}`,
+                });
+            }
+
+            setAlert({ message: t('bank_transfer_order_deleted_successfully'), type: 'success' });
+        } catch (error) {
+            console.error('Error deleting bank transfer order:', error);
+            setAlert({
+                message: error instanceof Error ? error.message : t('error_deleting_bank_transfer_order'),
+                type: 'danger',
+            });
         }
     };
 
@@ -3456,113 +3568,243 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     {/* Bills Tab */}
                     {hasPermission('view_bills') && activeTab === 'bills' && (
                         <>
-                            {/* Register Order Section */}
-                            <div className="mb-6 panel bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 border-2 border-orange-300 dark:border-orange-700">
-                                <div className="mb-4">
-                                    <h5 className="text-lg font-bold text-orange-800 dark:text-orange-300 flex items-center gap-2">
-                                        <IconDocument className="w-5 h-5" />
-                                        أمر سجل (Register Order)
-                                    </h5>
-                                    <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Add amounts to be deducted from the deal balance'}</p>
-                                </div>
+                            {deal?.deal_type === 'exchange' && (
+                                <>
+                                    {/* Register Order Section */}
+                                    <div className="mb-6 panel bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 border-2 border-orange-300 dark:border-orange-700">
+                                        <div className="mb-4">
+                                            <h5 className="text-lg font-bold text-orange-800 dark:text-orange-300 flex items-center gap-2">
+                                                <IconDocument className="w-5 h-5" />
+                                                أمر سجل (Register Order)
+                                            </h5>
+                                            <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Add amounts to be deducted from the deal balance'}</p>
+                                        </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label htmlFor="register_order_amount" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('amount')} <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            type="number"
-                                            id="register_order_amount"
-                                            value={registerOrderForm.amount}
-                                            onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, amount: e.target.value }))}
-                                            onWheel={(e) => e.currentTarget.blur()}
-                                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            placeholder="0"
-                                            step="0.01"
-                                            min="0"
-                                        />
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <label htmlFor="register_order_description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                            {t('description')} <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                id="register_order_description"
-                                                value={registerOrderForm.description}
-                                                onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, description: e.target.value }))}
-                                                className="form-input flex-1"
-                                                placeholder={t('enter_description')}
-                                            />
-                                            <button type="button" onClick={handleCreateRegisterOrder} className="btn btn-primary" disabled={creatingRegisterOrder}>
-                                                {creatingRegisterOrder ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-l-transparent"></div>
-                                                        {t('creating')}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        <IconPlus className="w-4 h-4" />
-                                                        {t('add')}
-                                                    </div>
-                                                )}
-                                            </button>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label htmlFor="register_order_amount" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                    {t('amount')} <span className="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    id="register_order_amount"
+                                                    value={registerOrderForm.amount}
+                                                    onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, amount: e.target.value }))}
+                                                    onWheel={(e) => e.currentTarget.blur()}
+                                                    className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                    placeholder="0"
+                                                    step="0.01"
+                                                    min="0"
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label htmlFor="register_order_description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                    {t('description')} <span className="text-red-500">*</span>
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        id="register_order_description"
+                                                        value={registerOrderForm.description}
+                                                        onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, description: e.target.value }))}
+                                                        className="form-input flex-1"
+                                                        placeholder={t('enter_description')}
+                                                    />
+                                                    <button type="button" onClick={handleCreateRegisterOrder} className="btn btn-primary" disabled={creatingRegisterOrder}>
+                                                        {creatingRegisterOrder ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-l-transparent"></div>
+                                                                {t('creating')}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2">
+                                                                <IconPlus className="w-4 h-4" />
+                                                                {t('add')}
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
+                                    {/* Register Orders List */}
+                                    {registerOrders.length > 0 && (
+                                        <div className="mb-6 panel">
+                                            <div className="mb-4">
+                                                <h5 className="text-lg font-semibold text-gray-800 dark:text-white">{t('register_orders') || 'Register Orders'}</h5>
+                                            </div>
+                                            <div className="table-responsive">
+                                                <table className="table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th className="text-sm font-medium">{t('amount')}</th>
+                                                            <th className="text-sm font-medium">{t('description')}</th>
+                                                            <th className="text-sm font-medium">{t('created_date')}</th>
+                                                            <th className="text-sm font-medium text-center">{t('actions')}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {registerOrders.map((order, index) => (
+                                                            <tr key={index}>
+                                                                <td>
+                                                                    <span className="text-danger font-semibold">-{formatCurrency(order.amount)}</span>
+                                                                </td>
+                                                                <td>{order.description}</td>
+                                                                <td className="text-sm text-gray-600 dark:text-gray-400">
+                                                                    {new Date(order.created_at).toLocaleDateString('en-GB', {
+                                                                        year: 'numeric',
+                                                                        month: '2-digit',
+                                                                        day: '2-digit',
+                                                                    })}
+                                                                </td>
+                                                                <td className="text-center">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteRegisterOrder(index)}
+                                                                        className="btn btn-sm btn-outline-danger"
+                                                                        title={t('delete')}
+                                                                    >
+                                                                        <IconTrashLines className="w-4 h-4" />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr className="bg-gray-50 dark:bg-gray-800">
+                                                            <td className="font-bold">{t('total_deductions') || 'Total Deductions'}:</td>
+                                                            <td colSpan={3}>
+                                                                <span className="text-danger font-bold text-lg">-{formatCurrency(registerOrders.reduce((sum, order) => sum + order.amount, 0))}</span>
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
 
-                            {/* Register Orders List */}
-                            {registerOrders.length > 0 && (
-                                <div className="mb-6 panel">
-                                    <div className="mb-4">
-                                        <h5 className="text-lg font-semibold text-gray-800 dark:text-white">{t('register_orders') || 'Register Orders'}</h5>
+                            {/* Bank Transfer Order Section (for financing assistance intermediary deals) */}
+                            {deal?.deal_type === 'financing_assistance_intermediary' && (
+                                <>
+                                    <div className="mb-6 panel bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-2 border-purple-300 dark:border-purple-700">
+                                        <div className="mb-4">
+                                            <h5 className="text-lg font-bold text-purple-800 dark:text-purple-300 flex items-center gap-2">
+                                                <IconDocument className="w-5 h-5" />
+                                                {t('bank_transfer_order_customer')}
+                                            </h5>
+                                            <p className="text-sm text-purple-600 dark:text-purple-400 mt-1">
+                                                {t('bank_transfer_order_description') || 'Add bank transfer orders for customer payments'}
+                                            </p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label htmlFor="bank_transfer_order_amount" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                    {t('amount')} <span className="text-red-500">*</span>
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    id="bank_transfer_order_amount"
+                                                    value={bankTransferOrderForm.amount}
+                                                    onChange={(e) => setBankTransferOrderForm((prev) => ({ ...prev, amount: e.target.value }))}
+                                                    onWheel={(e) => e.currentTarget.blur()}
+                                                    className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                    placeholder="0"
+                                                    step="0.01"
+                                                    min="0"
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label htmlFor="bank_transfer_order_description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                                    {t('description')} <span className="text-red-500">*</span>
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        id="bank_transfer_order_description"
+                                                        value={bankTransferOrderForm.description}
+                                                        onChange={(e) => setBankTransferOrderForm((prev) => ({ ...prev, description: e.target.value }))}
+                                                        className="form-input flex-1"
+                                                        placeholder={t('enter_description')}
+                                                    />
+                                                    <button type="button" onClick={handleCreateBankTransferOrder} className="btn btn-primary" disabled={creatingBankTransferOrder}>
+                                                        {creatingBankTransferOrder ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-l-transparent"></div>
+                                                                {t('creating')}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-2">
+                                                                <IconPlus className="w-4 h-4" />
+                                                                {t('add')}
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="table-responsive">
-                                        <table className="table-hover">
-                                            <thead>
-                                                <tr>
-                                                    <th className="text-sm font-medium">{t('amount')}</th>
-                                                    <th className="text-sm font-medium">{t('description')}</th>
-                                                    <th className="text-sm font-medium">{t('created_date')}</th>
-                                                    <th className="text-sm font-medium text-center">{t('actions')}</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {registerOrders.map((order, index) => (
-                                                    <tr key={index}>
-                                                        <td>
-                                                            <span className="text-danger font-semibold">-{formatCurrency(order.amount)}</span>
-                                                        </td>
-                                                        <td>{order.description}</td>
-                                                        <td className="text-sm text-gray-600 dark:text-gray-400">
-                                                            {new Date(order.created_at).toLocaleDateString('en-GB', {
-                                                                year: 'numeric',
-                                                                month: '2-digit',
-                                                                day: '2-digit',
-                                                            })}
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <button type="button" onClick={() => handleDeleteRegisterOrder(index)} className="btn btn-sm btn-outline-danger" title={t('delete')}>
-                                                                <IconTrashLines className="w-4 h-4" />
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                            <tfoot>
-                                                <tr className="bg-gray-50 dark:bg-gray-800">
-                                                    <td className="font-bold">{t('total_deductions') || 'Total Deductions'}:</td>
-                                                    <td colSpan={3}>
-                                                        <span className="text-danger font-bold text-lg">-{formatCurrency(registerOrders.reduce((sum, order) => sum + order.amount, 0))}</span>
-                                                    </td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-                                </div>
+
+                                    {/* Bank Transfer Orders List */}
+                                    {bankTransferOrders.length > 0 && (
+                                        <div className="mb-6 panel">
+                                            <div className="mb-4">
+                                                <h5 className="text-lg font-semibold text-gray-800 dark:text-white">{t('bank_transfer_orders') || 'Bank Transfer Orders'}</h5>
+                                            </div>
+                                            <div className="table-responsive">
+                                                <table className="table-hover">
+                                                    <thead>
+                                                        <tr>
+                                                            <th className="text-sm font-medium">{t('amount')}</th>
+                                                            <th className="text-sm font-medium">{t('description')}</th>
+                                                            <th className="text-sm font-medium">{t('created_date')}</th>
+                                                            <th className="text-sm font-medium text-center">{t('actions')}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {bankTransferOrders.map((order, index) => (
+                                                            <tr key={index}>
+                                                                <td>
+                                                                    <span className="text-purple-600 dark:text-purple-400 font-semibold">{formatCurrency(order.amount)}</span>
+                                                                </td>
+                                                                <td>{order.description}</td>
+                                                                <td className="text-sm text-gray-600 dark:text-gray-400">
+                                                                    {new Date(order.created_at).toLocaleDateString('en-GB', {
+                                                                        year: 'numeric',
+                                                                        month: '2-digit',
+                                                                        day: '2-digit',
+                                                                    })}
+                                                                </td>
+                                                                <td className="text-center">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteBankTransferOrder(index)}
+                                                                        className="btn btn-sm btn-outline-danger"
+                                                                        title={t('delete')}
+                                                                    >
+                                                                        <IconTrashLines className="w-4 h-4" />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr className="bg-gray-50 dark:bg-gray-800">
+                                                            <td className="font-bold">{t('total_transfers') || 'Total Transfers'}:</td>
+                                                            <td colSpan={3}>
+                                                                <span className="text-purple-600 dark:text-purple-400 font-bold text-lg">
+                                                                    {formatCurrency(bankTransferOrders.reduce((sum, order) => sum + order.amount, 0))}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
                             )}
 
                             {/* Connected Bills Section */}
@@ -3577,6 +3819,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 carTakenFromClient={carTakenFromClient}
                                 selectedCustomer={selectedCustomer}
                                 registerOrders={registerOrders}
+                                bankTransferOrders={bankTransferOrders}
                             />
                         </>
                     )}
