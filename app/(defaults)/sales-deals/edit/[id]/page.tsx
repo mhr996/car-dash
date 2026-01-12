@@ -378,21 +378,26 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         if (deal) {
             // Get customer based on deal type
             if (deal.deal_type === 'intermediary') {
-                // For intermediary deals, prefer seller, then buyer
-                const customer = deal.seller || deal.buyer || deal.customers;
+                // For intermediary deals, use seller as client_id
+                const customer = deal.seller || deal.buyer || (deal as any).customer;
                 if (customer) {
+                    console.log('🔍 Customer data for intermediary deal:', customer);
+                    console.log('🆔 id_number value:', customer.id_number, 'type:', typeof customer.id_number);
                     customerId = customer.id_number?.toString() || customerId;
                     customerEmail = (customer as any).email || customerEmail;
                     customerPhone = (customer as any).phone || '';
                 }
             } else {
-                // For regular deals, use customer
-                if (deal.customers) {
-                    customerId = deal.customers.id_number?.toString() || customerId;
-                    customerEmail = (deal.customers as any).email || customerEmail;
-                    customerPhone = (deal.customers as any).phone || '';
+                // For regular deals, use customer (note: fetched as 'customer' not 'customers')
+                if ((deal as any).customer) {
+                    console.log('🔍 Customer data for regular deal:', (deal as any).customer);
+                    console.log('🆔 id_number value:', (deal as any).customer.id_number, 'type:', typeof (deal as any).customer.id_number);
+                    customerId = (deal as any).customer.id_number?.toString() || customerId;
+                    customerEmail = ((deal as any).customer as any).email || customerEmail;
+                    customerPhone = ((deal as any).customer as any).phone || '';
                 }
             }
+            console.log('✅ Final customer ID being sent to Tranzila:', customerId);
         }
 
         // Call Tranzila API
@@ -688,7 +693,18 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     useEffect(() => {
         const fetchDeal = async () => {
             try {
-                const { data, error } = await supabase.from('deals').select('*').eq('id', dealId).single();
+                const { data, error } = await supabase
+                    .from('deals')
+                    .select(
+                        `
+                        *,
+                        customer:customers!deals_customer_id_fkey(*),
+                        seller:customers!deals_seller_id_fkey(*),
+                        buyer:customers!deals_buyer_id_fkey(*)
+                    `,
+                    )
+                    .eq('id', dealId)
+                    .single();
 
                 if (error) throw error;
                 if (data) {
@@ -2555,6 +2571,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 onCreateNew={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : () => handleCreateNewCustomer('seller')}
                                                 className="form-input"
                                             />
+                                            {selectedSeller && (
+                                                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm">
+                                                    <strong>ID Number:</strong> {selectedSeller.id_number || 'NOT SET'}
+                                                </div>
+                                            )}
                                         </div>
                                         {/* Buyer Selector for Intermediary Deals */}
                                         <div>
@@ -2565,6 +2586,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 onCreateNew={deal?.status === 'completed' || deal?.status === 'cancelled' ? () => {} : () => handleCreateNewCustomer('buyer')}
                                                 className="form-input"
                                             />
+                                            {selectedBuyer && (
+                                                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm">
+                                                    <strong>ID Number:</strong> {selectedBuyer.id_number || 'NOT SET'}
+                                                </div>
+                                            )}
                                         </div>
                                     </>
                                 ) : (
@@ -2578,6 +2604,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 onCreateNew={deal?.status === 'completed' ? () => {} : () => handleCreateNewCustomer('customer')}
                                                 className="form-input"
                                             />
+                                            {selectedCustomer && (
+                                                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-sm">
+                                                    <strong>ID Number:</strong> {selectedCustomer.id_number || 'NOT SET'}
+                                                </div>
+                                            )}
                                         </div>
                                         {/* Car Selector */}
                                         <div>

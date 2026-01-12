@@ -37,19 +37,25 @@ export interface Deal {
     // Joined customer data from the customers table
     customers?: {
         name: string;
+        phone: string;
         id_number?: string;
+        email?: string;
     };
 
     // Joined seller data from the customers table (for intermediary deals)
     seller?: {
         name: string;
+        phone: string;
         id_number?: string;
+        email?: string;
     };
 
     // Joined buyer data from the customers table (for intermediary deals)
     buyer?: {
         name: string;
+        phone: string;
         id_number?: string;
+        email?: string;
     };
 
     // Joined bills data from the bills table
