@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Mark OTP as verified
+        // Mark OTP as verified (no hard delete). Cleanup handled by cron on expiry.
         const { error: verifyError } = await supabaseAdmin.from('otp_verifications').update({ verified: true }).eq('id', otpData.id);
 
         if (verifyError) {

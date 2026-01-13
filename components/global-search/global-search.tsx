@@ -160,10 +160,16 @@ const GlobalSearch = () => {
                         transfer_number,
                         check_number,
                         approval_number,
+                        transfer_bank_name,
+                        check_bank_name,
+                        check_holder_name,
+                        transfer_holder_name,
                         bills!inner(id, customer_name, bill_type, total_with_tax, total, status, car_details)
                     `,
                     )
-                    .or(`transfer_number.ilike.%${query}%, check_number.ilike.%${query}%, approval_number.ilike.%${query}%, bank_name.ilike.%${query}%, check_bank_name.ilike.%${query}%`)
+                    .or(
+                        `transfer_number.ilike.%${query}%, check_number.ilike.%${query}%, approval_number.ilike.%${query}%, transfer_bank_name.ilike.%${query}%, check_bank_name.ilike.%${query}%, check_holder_name.ilike.%${query}%, transfer_holder_name.ilike.%${query}%, transfer_account_number.ilike.%${query}%, check_account_number.ilike.%${query}%`,
+                    )
                     .limit(10),
             ]);
 
@@ -179,9 +185,10 @@ const GlobalSearch = () => {
             if (paymentBills.data) {
                 paymentBills.data.forEach((payment: any) => {
                     if (payment.bills) {
+                        const matchInfo = payment.transfer_number || payment.check_number || payment.approval_number || payment.transfer_bank_name || payment.check_bank_name;
                         allBills.push({
                             ...payment.bills,
-                            payment_match: payment.transfer_number || payment.check_number || payment.approval_number,
+                            payment_match: matchInfo,
                         });
                     }
                 });
