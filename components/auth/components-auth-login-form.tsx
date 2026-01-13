@@ -6,6 +6,8 @@ import React, { useState } from 'react';
 import { signIn } from '@/lib/auth';
 import Link from 'next/link';
 import { getTranslation } from '@/i18n';
+import ComponentsAuthOTPVerifyForm from './components-auth-otp-verify-form';
+import supabase from '@/lib/supabase';
 
 interface FormErrors {
     email?: string;
@@ -20,6 +22,7 @@ const ComponentsAuthLoginForm = () => {
     const [password, setPassword] = useState('');
     const [errors, setErrors] = useState<FormErrors>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showOTPVerification, setShowOTPVerification] = useState(false);
 
     const validateForm = () => {
         const newErrors: FormErrors = {};
@@ -53,22 +56,58 @@ const ComponentsAuthLoginForm = () => {
         }
 
         try {
+            // First verify credentials without logging in
             const { error } = await signIn(email, password);
+
             if (error) {
                 setErrors({ general: t('invalid_credentials') });
-            } else {
-                router.push('/');
+                setIsSubmitting(false);
+                return;
             }
+
+            // Credentials are valid, sign out immediately to prevent auto-login
+            await supabase.auth.signOut();
+
+            // Send OTP to user's email
+            const otpResponse = await fetch('/api/auth/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+
+            const otpData = await otpResponse.json();
+
+            if (!otpResponse.ok) {
+                setErrors({ general: otpData.error || t('otp_send_failed') || 'Failed to send verification code' });
+                setIsSubmitting(false);
+                return;
+            }
+
+            // Show OTP verification form
+            setShowOTPVerification(true);
         } catch (error) {
+            console.error('Login error:', error);
             setErrors({ general: t('unexpected_error') });
+            setIsSubmitting(false);
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    const handleBackToLogin = () => {
+        setShowOTPVerification(false);
+        setPassword('');
+        setErrors({});
+    };
+
+    // Show OTP verification form if credentials are validated
+    if (showOTPVerification) {
+        return <ComponentsAuthOTPVerifyForm email={email} onBack={handleBackToLogin} />;
+    }
+
     return (
         <form className="space-y-5 dark:text-white" onSubmit={submitForm}>
-            {errors.general && <div className="text-red-500 bg-red-100 p-3 rounded-md mb-4">{errors.general}</div>}
+            {errors.general && <div className="text-red-500 bg-red-100 dark:bg-red-900/20 p-3 rounded-md mb-4">{errors.general}</div>}
             <div>
                 <label htmlFor="Email">{t('email')}</label>
                 <div className="relative text-white-dark">
@@ -102,7 +141,7 @@ const ComponentsAuthLoginForm = () => {
                     </span>
                 </div>
                 {errors.password && <span className="text-red-500 text-sm mt-1">{errors.password}</span>}
-            </div> 
+            </div>
             <div className="flex justify-between">
                 <label className="flex cursor-pointer items-center">
                     <input type="checkbox" className="form-checkbox bg-white dark:bg-black" />
