@@ -553,8 +553,8 @@ const LogsPage = () => {
                             {
                                 accessor: 'id',
                                 title: t('id'),
-                                sortable: true,
-                                render: ({ id }) => <strong className="text-info">#{id}</strong>,
+                                sortable: false,
+                                render: ({ id }, index) => <strong className="text-info">#{initialRecords.length - ((page - 1) * pageSize + index)}</strong>,
                             },
                             {
                                 accessor: 'created_at',

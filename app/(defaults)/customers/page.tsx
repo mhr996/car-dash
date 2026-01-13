@@ -287,10 +287,10 @@ const CustomersList = () => {
                                 {
                                     accessor: 'id',
                                     title: t('id'),
-                                    sortable: true,
-                                    render: ({ id }) => (
+                                    sortable: false,
+                                    render: ({ id }, index) => (
                                         <div className="flex items-center gap-2">
-                                            <strong className="text-info">#{id}</strong>
+                                            <strong className="text-info">#{initialRecords.length - ((page - 1) * pageSize + index)}</strong>
                                             <Link href={`/customers/preview/${id}`} className="flex hover:text-info" title={t('view')}>
                                                 <IconEye className="h-4 w-4" />
                                             </Link>
