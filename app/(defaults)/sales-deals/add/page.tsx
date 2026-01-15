@@ -627,7 +627,7 @@ const AddDeal = () => {
                     ...dealData,
                     title: saleForm.title.trim(),
                     description: saleForm.notes.trim() || `${t('sale_deal_description')} ${selectedCar?.title}`,
-                    amount: profitCommission, // This is the profit commission (عمولة الربح)
+                    amount: Math.max(0, profitCommission), // This is the profit commission (عمولة الربح) - ensure it's never negative
                     car_id: selectedCar?.id,
                     selling_price: sellingPrice,
                     loss_amount: saleForm.loss_amount ? parseFloat(saleForm.loss_amount) : null,
@@ -690,7 +690,7 @@ const AddDeal = () => {
                     ...dealData,
                     title: exchangeForm.title.trim(),
                     description: exchangeForm.notes.trim() || `${t('exchange_deal_description')} ${selectedCar?.title}`,
-                    amount: exchangeProfit, // This is the actual profit from the exchange
+                    amount: Math.max(0, exchangeProfit), // This is the actual profit from the exchange - ensure it's never negative
                     car_id: selectedCar?.id,
                     car_taken_from_client: newCarData.id, // Link the newly created car
                     loss_amount: lossAmount || null,
@@ -706,7 +706,7 @@ const AddDeal = () => {
                     ...dealData,
                     title: companyCommissionForm.title.trim(),
                     description: companyCommissionForm.description.trim() || `${t('company_commission_deal_description')} ${companyCommissionForm.company_name}`,
-                    amount: parseFloat(companyCommissionForm.amount),
+                    amount: Math.max(0, parseFloat(companyCommissionForm.amount)),
                     selling_price: companyCommissionForm.selling_price ? parseFloat(companyCommissionForm.selling_price) : null,
                     // Company commission specific fields
                     company_name: companyCommissionForm.company_name.trim(),
@@ -719,7 +719,7 @@ const AddDeal = () => {
                     ...dealData,
                     title: intermediaryForm.title.trim(),
                     description: intermediaryForm.notes.trim() || `${t('intermediary_deal_description')} ${selectedCar?.title}`,
-                    amount: parseFloat(intermediaryForm.profit_commission),
+                    amount: Math.max(0, parseFloat(intermediaryForm.profit_commission)),
                     car_id: selectedCar?.id,
                     customer_id: null, // No single customer for intermediary deals
                     selling_price: parseFloat(intermediaryForm.profit_commission), // Intermediary specific fields
@@ -734,7 +734,7 @@ const AddDeal = () => {
                     ...dealData,
                     title: financingAssistanceForm.title.trim(),
                     description: financingAssistanceForm.notes.trim() || `${t('financing_assistance_commission')} ${selectedCar?.title}`,
-                    amount: parseFloat(financingAssistanceForm.commission),
+                    amount: Math.max(0, parseFloat(financingAssistanceForm.commission)),
                     car_id: selectedCar?.id,
                     customer_id: selectedCustomer?.id,
                     selling_price: parseFloat(financingAssistanceForm.commission),

@@ -1476,7 +1476,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 deal_type: dealType,
                 title: form.title.trim(),
                 description: form.description.trim(),
-                amount: form.amount ? parseFloat(form.amount) : 0,
+                amount: form.amount ? Math.max(0, parseFloat(form.amount)) : 0, // Ensure amount is never negative
                 loss_amount: form.loss_amount ? parseFloat(form.loss_amount) : 0,
                 selling_price: form.selling_price ? parseFloat(form.selling_price) : null,
                 customer_car_eval_value: form.customer_car_eval_value ? parseFloat(form.customer_car_eval_value) : null,
