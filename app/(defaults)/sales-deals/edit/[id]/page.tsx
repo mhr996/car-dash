@@ -3562,23 +3562,39 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                     </div>
                                                                 ) : (
                                                                     <div className="space-y-3">
-                                                                        {/* Price Before Tax */}
-                                                                        <div className="flex justify-between items-center">
-                                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('price_before_tax')}</span>
-                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(deal?.amount - deal?.amount * 0.18 || 0)}</span>
-                                                                        </div>
+                                                                        {(() => {
+                                                                            const dealAmount = deal?.amount || 0;
+                                                                            const sellPrice = parseFloat(form.selling_price || '0');
+                                                                            // When commission is 0, use sale price as total with 0 tax
+                                                                            const isZeroProfit = dealAmount === 0;
+                                                                            const displayTotal = isZeroProfit ? sellPrice : dealAmount;
+                                                                            const priceBeforeTax = isZeroProfit ? sellPrice : dealAmount - dealAmount * 0.18;
+                                                                            const taxAmount = isZeroProfit ? 0 : dealAmount * 0.18;
 
-                                                                        {/* Tax */}
-                                                                        <div className="flex justify-between items-center">
-                                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('deal_tax')} 18%</span>
-                                                                            <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency((deal?.amount || 0) * 0.18)}</span>
-                                                                        </div>
+                                                                            return (
+                                                                                <>
+                                                                                    {/* Price Before Tax */}
+                                                                                    <div className="flex justify-between items-center">
+                                                                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('price_before_tax')}</span>
+                                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(priceBeforeTax)}</span>
+                                                                                    </div>
 
-                                                                        {/* Total Including Tax */}
-                                                                        <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
-                                                                            <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_including_tax')}</span>
-                                                                            <span className="text-lg font-bold text-primary">{formatCurrency(deal?.amount || 0)}</span>
-                                                                        </div>
+                                                                                    {/* Tax */}
+                                                                                    <div className="flex justify-between items-center">
+                                                                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                                                            {t('deal_tax')} {isZeroProfit ? '0' : '18'}%
+                                                                                        </span>
+                                                                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(taxAmount)}</span>
+                                                                                    </div>
+
+                                                                                    {/* Total Including Tax */}
+                                                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
+                                                                                        <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_including_tax')}</span>
+                                                                                        <span className="text-lg font-bold text-primary">{formatCurrency(displayTotal)}</span>
+                                                                                    </div>
+                                                                                </>
+                                                                            );
+                                                                        })()}
                                                                     </div>
                                                                 )}
                                                             </div>
