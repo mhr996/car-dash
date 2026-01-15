@@ -224,6 +224,11 @@ const AddBill = () => {
             }
 
             // Auto-fill form with deal data and reset bill_type when deal changes
+            // If deal amount is 0, set all tax values to 0
+            const dealAmount = deal.amount || 0;
+            const total = dealAmount === 0 ? '0' : (dealAmount / 1.18)?.toFixed(0) || '';
+            const taxAmount = dealAmount === 0 ? '0' : ((dealAmount / 1.18) * 0.18)?.toFixed(0) || '';
+            const totalWithTax = dealAmount === 0 ? '0' : dealAmount?.toFixed(0) || '';
             setBillForm((prev) => ({
                 ...prev,
                 bill_type: '', // Reset bill type when deal changes as available options might change
@@ -232,9 +237,9 @@ const AddBill = () => {
                 car_details: deal.car ? `${deal.car.brand} ${deal.car.title} ${deal.car.year}` : '',
                 sale_price: deal.amount?.toString() || '',
                 // Calculate financials based on the deal amount (which already includes tax)
-                total: (deal.amount / 1.18)?.toFixed(0) || '', // Price before tax
-                tax_amount: ((deal.amount / 1.18) * 0.18)?.toFixed(0) || '', // Tax amount
-                total_with_tax: deal.amount?.toFixed(0) || '', // Deal amount already includes tax
+                total: total, // Price before tax
+                tax_amount: taxAmount, // Tax amount
+                total_with_tax: totalWithTax, // Deal amount already includes tax
             }));
         }
     };
@@ -324,16 +329,19 @@ const AddBill = () => {
                 if (!deal || !deal.car) {
                     throw new Error('Tax Invoice requires a deal with a car');
                 }
-                if (!deal.amount || deal.amount <= 0) {
-                    throw new Error('Tax Invoice requires a valid deal amount');
-                }
+                // Allow tax invoices with amount of 0 (when buy price >= sale price)
+                const dealAmount = deal.amount || 0;
 
                 const buyPrice = deal.car.buy_price || 0;
-                const lossAmount = deal.loss_amount || 0;
+                const formLossAmount = deal.loss_amount || 0;
 
                 // For Financing Assistance Intermediary deals, skip the buy price item and use car's sale price
                 const isFinancingAssistanceIntermediary = deal.deal_type === 'financing_assistance_intermediary';
                 const salePrice = isFinancingAssistanceIntermediary ? deal.car.sale_price || 0 : deal.selling_price || 0;
+
+                // Calculate the actual loss: if buy price > sale price, the difference is the loss
+                const rawProfit = salePrice - buyPrice - formLossAmount;
+                const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
 
                 items.push({
                     type: 'I',
@@ -374,11 +382,11 @@ const AddBill = () => {
                     to_doc_currency_exchange_rate: 1,
                 });
 
-                if (lossAmount > 0) {
+                if (calculatedLoss > 0) {
                     items.push({
                         type: 'I',
                         code: null,
-                        name: `סכום הפסד: ₪${lossAmount.toLocaleString()}`,
+                        name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
                         price_type: 'G',
                         unit_price: 0,
                         units_number: 1,
@@ -393,7 +401,7 @@ const AddBill = () => {
                     code: null,
                     name: 'עמלה',
                     price_type: 'G',
-                    unit_price: deal.amount,
+                    unit_price: dealAmount,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -404,12 +412,22 @@ const AddBill = () => {
                 if (!deal || !deal.car) {
                     throw new Error('Invoice+Receipt requires a deal with a car');
                 }
-                if (!deal.amount || deal.amount <= 0) {
-                    throw new Error('Invoice+Receipt requires a valid deal amount');
-                }
+                // Allow invoice+receipts with amount of 0 (when buy price >= sale price)
+                const dealAmount = deal.amount || 0;
                 if (!payments.length || totalPaymentAmount <= 0) {
                     throw new Error('Invoice+Receipt requires at least one payment');
                 }
+
+                const buyPrice = deal.car.buy_price || 0;
+                const formLossAmount = deal.loss_amount || 0;
+
+                // For Financing Assistance Intermediary deals, skip the buy price item and use car's sale price
+                const isFinancingAssistanceIntermediary = deal.deal_type === 'financing_assistance_intermediary';
+                const salePrice = isFinancingAssistanceIntermediary ? deal.car.sale_price || 0 : deal.selling_price || 0;
+
+                // Calculate the actual loss: if buy price > sale price, the difference is the loss
+                const rawProfit = salePrice - buyPrice - formLossAmount;
+                const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
 
                 items.push({
                     type: 'I',
@@ -423,12 +441,54 @@ const AddBill = () => {
                     to_doc_currency_exchange_rate: 1,
                 });
 
+                // Only add buy price for non-financing assistance intermediary deals
+                if (!isFinancingAssistanceIntermediary) {
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: `מחיר קנייה: ₪${buyPrice.toLocaleString()}`,
+                        price_type: 'G',
+                        unit_price: 0,
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                }
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+
+                // Add loss item if there's any loss (either from form or calculated from negative profit)
+                if (calculatedLoss > 0) {
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
+                        price_type: 'G',
+                        unit_price: 0,
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                }
+
                 items.push({
                     type: 'I',
                     code: null,
                     name: 'עמלה',
                     price_type: 'G',
-                    unit_price: deal.amount,
+                    unit_price: dealAmount,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -558,13 +618,17 @@ const AddBill = () => {
             }
 
             // Prepare request data
+            // Determine VAT percent: 0 for receipts OR when deal amount is 0
+            const commissionAmount = deal?.amount || 0;
+            const vatPercent = documentType === 'RE' ? 0 : commissionAmount === 0 ? 0 : 18;
+
             const tranzilaRequestData = {
                 action: 'create_document',
                 data: {
                     document_type: documentType,
                     document_date: billData.date || new Date().toISOString().split('T')[0],
                     document_currency_code: 'ILS',
-                    vat_percent: documentType === 'RE' ? 0 : 18,
+                    vat_percent: vatPercent,
                     client_company: billData.customer_name || 'Customer',
                     client_name: billData.customer_name || 'Customer',
                     client_id: customerId,
@@ -938,12 +1002,17 @@ const AddBill = () => {
 
         const dealSellingPrice = billType === 'receipt_only' ? deal.selling_price || 0 : deal.deal_type === 'new_used_sale_tax_inclusive' ? deal.selling_price || deal.amount : deal.amount;
 
+        // If deal amount is 0, set all tax values to 0
+        const total = dealSellingPrice === 0 ? '0' : (dealSellingPrice / 1.18).toFixed(0);
+        const taxAmount = dealSellingPrice === 0 ? '0' : ((dealSellingPrice / 1.18) * 0.18).toFixed(0);
+        const totalWithTax = dealSellingPrice === 0 ? '0' : dealSellingPrice?.toString() || '';
+
         setBillForm((prev) => ({
             ...prev,
             // Calculate financials based on the deal selling price (which already includes tax)
-            total: (dealSellingPrice / 1.18).toFixed(0), // Price before tax
-            tax_amount: ((dealSellingPrice / 1.18) * 0.18).toFixed(0), // 18% tax
-            total_with_tax: dealSellingPrice?.toString() || '', // Deal selling price already includes tax
+            total: total, // Price before tax
+            tax_amount: taxAmount, // 18% tax
+            total_with_tax: totalWithTax, // Deal selling price already includes tax
         }));
     };
     return (
@@ -1321,7 +1390,17 @@ const AddBill = () => {
                                                 <div className="text-center">-</div>
                                                 <div className="text-center">-</div>
                                                 <div className="text-center">
-                                                    <span className="text-sm text-red-600 dark:text-red-400">₪{selectedDeal?.loss_amount?.toFixed(0) ?? '0.00'}</span>
+                                                    <span className="text-sm text-red-600 dark:text-red-400">
+                                                        {(() => {
+                                                            const buyPrice = selectedDeal.car.buy_price || 0;
+                                                            const sellPrice = selectedDeal?.selling_price || 0;
+                                                            const formLoss = selectedDeal?.loss_amount || 0;
+                                                            const rawProfit = sellPrice - buyPrice - formLoss;
+                                                            // If profit is negative, the loss is the absolute value of the negative profit
+                                                            const displayLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLoss;
+                                                            return `₪${displayLoss.toFixed(0)}`;
+                                                        })()}
+                                                    </span>
                                                 </div>
                                             </div>
 
@@ -1331,7 +1410,17 @@ const AddBill = () => {
                                                 <div className="text-center">-</div>
                                                 <div className="text-center">-</div>
                                                 <div className="text-center">
-                                                    <span className="text-sm text-green-600 dark:text-green-400">₪{selectedDeal?.amount?.toFixed(0)}</span>
+                                                    <span className="text-sm text-green-600 dark:text-green-400">
+                                                        {(() => {
+                                                            const buyPrice = selectedDeal.car.buy_price || 0;
+                                                            const sellPrice = selectedDeal?.selling_price || 0;
+                                                            const formLoss = selectedDeal?.loss_amount || 0;
+                                                            const rawProfit = sellPrice - buyPrice - formLoss;
+                                                            // Commission is 0 when profit is negative, otherwise it's the profit
+                                                            const displayProfit = Math.max(0, rawProfit);
+                                                            return `₪${displayProfit.toFixed(0)}`;
+                                                        })()}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </>

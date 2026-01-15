@@ -169,16 +169,19 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             if (!deal || !selectedCar) {
                 throw new Error('Tax Invoice requires a deal with a car');
             }
-            if (!deal.amount || deal.amount <= 0) {
-                throw new Error('Tax Invoice requires a valid deal amount');
-            }
+            // Allow tax invoices with amount of 0 (when buy price >= sale price)
+            const dealAmount = deal.amount || 0;
 
             const buyPrice = selectedCar.buy_price || 0;
-            const lossAmount = deal.loss_amount || 0;
+            const formLossAmount = deal.loss_amount || 0;
 
             // For Financing Assistance Intermediary deals, skip the buy price item and use car's sale price
             const isFinancingAssistanceIntermediary = deal.deal_type === 'financing_assistance_intermediary';
             const salePrice = isFinancingAssistanceIntermediary ? selectedCar.sale_price || 0 : deal.selling_price || 0;
+
+            // Calculate the actual loss: if buy price > sale price, the difference is the loss
+            const rawProfit = salePrice - buyPrice - formLossAmount;
+            const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
 
             items.push({
                 type: 'I',
@@ -219,11 +222,12 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 to_doc_currency_exchange_rate: 1,
             });
 
-            if (lossAmount > 0) {
+            // Add loss item if there's any loss (either from form or calculated from negative profit)
+            if (calculatedLoss > 0) {
                 items.push({
                     type: 'I',
                     code: null,
-                    name: `סכום הפסד: ₪${lossAmount.toLocaleString()}`,
+                    name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
                     price_type: 'G',
                     unit_price: 0,
                     units_number: 1,
@@ -238,7 +242,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 code: null,
                 name: 'עמלה',
                 price_type: 'G',
-                unit_price: deal.amount,
+                unit_price: dealAmount,
                 units_number: 1,
                 unit_type: 1,
                 currency_code: 'ILS',
@@ -249,12 +253,22 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             if (!deal || !selectedCar) {
                 throw new Error('Invoice+Receipt requires a deal with a car');
             }
-            if (!deal.amount || deal.amount <= 0) {
-                throw new Error('Invoice+Receipt requires a valid deal amount');
-            }
+            // Allow invoice+receipts with amount of 0 (when buy price >= sale price)
+            const dealAmount = deal.amount || 0;
             if (!payments.length || totalPaymentAmount <= 0) {
                 throw new Error('Invoice+Receipt requires at least one payment');
             }
+
+            const buyPrice = selectedCar.buy_price || 0;
+            const formLossAmount = deal.loss_amount || 0;
+
+            // For Financing Assistance Intermediary deals, skip the buy price item and use car's sale price
+            const isFinancingAssistanceIntermediary = deal.deal_type === 'financing_assistance_intermediary';
+            const salePrice = isFinancingAssistanceIntermediary ? selectedCar.sale_price || 0 : deal.selling_price || 0;
+
+            // Calculate the actual loss: if buy price > sale price, the difference is the loss
+            const rawProfit = salePrice - buyPrice - formLossAmount;
+            const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
 
             items.push({
                 type: 'I',
@@ -268,12 +282,54 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 to_doc_currency_exchange_rate: 1,
             });
 
+            // Only add buy price for non-financing assistance intermediary deals
+            if (!isFinancingAssistanceIntermediary) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `מחיר קנייה: ₪${buyPrice.toLocaleString()}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
+                price_type: 'G',
+                unit_price: 0,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+
+            // Add loss item if there's any loss (either from form or calculated from negative profit)
+            if (calculatedLoss > 0) {
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
+                    price_type: 'G',
+                    unit_price: 0,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            }
+
             items.push({
                 type: 'I',
                 code: null,
                 name: 'עמלה',
                 price_type: 'G',
-                unit_price: deal.amount,
+                unit_price: dealAmount,
                 units_number: 1,
                 unit_type: 1,
                 currency_code: 'ILS',
@@ -407,6 +463,10 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         }
 
         // Call Tranzila API
+        // Determine VAT percent: 0 for receipts OR when deal amount is 0
+        const commissionAmount = deal?.amount || 0;
+        const vatPercent = documentType === 'RE' ? 0 : commissionAmount === 0 ? 0 : 18;
+
         const response = await fetch('/api/tranzila', {
             method: 'POST',
             headers: {
@@ -418,7 +478,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     document_type: documentType,
                     document_date: billData.date || new Date().toISOString().split('T')[0],
                     document_currency_code: 'ILS',
-                    vat_percent: documentType === 'RE' ? 0 : 18,
+                    vat_percent: vatPercent,
                     client_company: billData.customer_name || t('unknown_customer'),
                     client_name: billData.customer_name || t('unknown_customer'),
                     client_id: customerId,
@@ -833,26 +893,32 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             // For intermediary deals, use seller/buyer info
             if (deal.deal_type === 'intermediary' && (selectedSeller || selectedBuyer)) {
                 const customerInfo = selectedSeller || selectedBuyer;
+                // If deal amount is 0, set all tax values to 0
+                const total = dealSellingPrice === 0 ? '0' : (dealSellingPrice / 1.18).toFixed(0);
+                const taxAmount = dealSellingPrice === 0 ? '0' : ((dealSellingPrice / 1.18) * 0.18).toFixed(0);
                 setBillForm((prev) => ({
                     ...prev,
                     customer_name: customerInfo?.name || '',
                     phone: customerInfo?.phone || '',
                     car_details: selectedCar ? `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` : '',
-                    total: (dealSellingPrice / 1.18).toFixed(0), // Price before tax
-                    tax_amount: ((dealSellingPrice / 1.18) * 0.18).toFixed(0), // 18% tax
-                    total_with_tax: dealSellingPrice?.toString() || '', // Deal selling price already includes tax
+                    total: total, // Price before tax
+                    tax_amount: taxAmount, // 18% tax
+                    total_with_tax: dealSellingPrice?.toString() || '0', // Deal selling price already includes tax
                 }));
             }
             // For other deal types, use regular customer
             else if (selectedCustomer) {
+                // If deal amount is 0, set all tax values to 0
+                const total = dealSellingPrice === 0 ? '0' : (dealSellingPrice / 1.18).toFixed(0);
+                const taxAmount = dealSellingPrice === 0 ? '0' : ((dealSellingPrice / 1.18) * 0.18).toFixed(0);
                 setBillForm((prev) => ({
                     ...prev,
                     customer_name: selectedCustomer.name || '',
                     phone: selectedCustomer.phone || '',
                     car_details: selectedCar ? `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` : '',
-                    total: (dealSellingPrice / 1.18).toFixed(0), // Price before tax
-                    tax_amount: ((dealSellingPrice / 1.18) * 0.18).toFixed(0), // 18% tax
-                    total_with_tax: dealSellingPrice?.toString() || '', // Deal selling price already includes tax
+                    total: total, // Price before tax
+                    tax_amount: taxAmount, // 18% tax
+                    total_with_tax: dealSellingPrice?.toString() || '0', // Deal selling price already includes tax
                 }));
             }
         }
@@ -1597,13 +1663,20 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             // Auto-calculate tax when commission changes
             if (name === 'commission') {
                 const commission = parseFloat(value) || 0;
-                const totalWithTax = commission; // This total already includes tax
-                const preTaxAmount = totalWithTax / 1.18; // Remove 18% tax to get pre-tax amount
-                const taxAmount = preTaxAmount * 0.18; // Calculate 18% tax
+                // If commission is 0, set all tax values to 0
+                if (commission === 0) {
+                    updated.total = '0';
+                    updated.tax_amount = '0';
+                    updated.total_with_tax = '0';
+                } else {
+                    const totalWithTax = commission; // This total already includes tax
+                    const preTaxAmount = totalWithTax / 1.18; // Remove 18% tax to get pre-tax amount
+                    const taxAmount = preTaxAmount * 0.18; // Calculate 18% tax
 
-                updated.total = preTaxAmount.toFixed(0);
-                updated.tax_amount = taxAmount.toFixed(0);
-                updated.total_with_tax = totalWithTax.toFixed(0);
+                    updated.total = preTaxAmount.toFixed(0);
+                    updated.tax_amount = taxAmount.toFixed(0);
+                    updated.total_with_tax = totalWithTax.toFixed(0);
+                }
             }
 
             return updated;
@@ -3172,7 +3245,15 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                             <div className="text-center">-</div>{' '}
                                                                             <div className="text-center">
                                                                                 <span className="text-sm text-red-600 dark:text-red-400">
-                                                                                    {formatCurrency(parseFloat(String(form.loss_amount || '0')))}
+                                                                                    {(() => {
+                                                                                        const buyPrice = selectedCar.buy_price || 0;
+                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
+                                                                                        const formLoss = parseFloat(form.loss_amount || '0');
+                                                                                        const rawProfit = sellPrice - buyPrice - formLoss;
+                                                                                        // If profit is negative, the loss is the absolute value of the negative profit
+                                                                                        const displayLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLoss;
+                                                                                        return formatCurrency(displayLoss);
+                                                                                    })()}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
@@ -3182,22 +3263,15 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                             <div className="text-center">-</div>
                                                                             <div className="text-center">-</div>
                                                                             <div className="text-center">
-                                                                                <span
-                                                                                    className={`text-sm ${(() => {
-                                                                                        const buyPrice = selectedCar.buy_price || 0;
-                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                        const loss = parseFloat(form.loss_amount || '0');
-                                                                                        const profit = sellPrice - buyPrice - loss;
-                                                                                        return profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-                                                                                    })()}`}
-                                                                                >
-                                                                                    ${' '}
+                                                                                <span className="text-sm text-green-600 dark:text-green-400">
                                                                                     {(() => {
                                                                                         const buyPrice = selectedCar.buy_price || 0;
                                                                                         const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                        const loss = parseFloat(form.loss_amount || '0');
-                                                                                        const profit = sellPrice - buyPrice - loss;
-                                                                                        return profit >= 0 ? `+${formatCurrency(profit)}` : formatCurrency(profit);
+                                                                                        const formLoss = parseFloat(form.loss_amount || '0');
+                                                                                        const rawProfit = sellPrice - buyPrice - formLoss;
+                                                                                        // Commission is 0 when profit is negative, otherwise it's the profit
+                                                                                        const displayProfit = Math.max(0, rawProfit);
+                                                                                        return formatCurrency(displayProfit);
                                                                                     })()}
                                                                                 </span>
                                                                             </div>
@@ -3256,7 +3330,15 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                             <div className="text-center">-</div>{' '}
                                                                             <div className="text-center">
                                                                                 <span className="text-sm text-red-600 dark:text-red-400">
-                                                                                    {formatCurrency(parseFloat(String(form.loss_amount || '0')))}
+                                                                                    {(() => {
+                                                                                        const buyPrice = selectedCar.buy_price || 0;
+                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
+                                                                                        const formLoss = parseFloat(form.loss_amount || '0');
+                                                                                        const rawProfit = sellPrice - buyPrice - formLoss;
+                                                                                        // If profit is negative, the loss is the absolute value of the negative profit
+                                                                                        const displayLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLoss;
+                                                                                        return formatCurrency(displayLoss);
+                                                                                    })()}
                                                                                 </span>
                                                                             </div>
                                                                         </div>
@@ -3266,22 +3348,15 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                                             <div className="text-center">-</div>
                                                                             <div className="text-center">-</div>
                                                                             <div className="text-center">
-                                                                                <span
-                                                                                    className={`text-sm ${(() => {
-                                                                                        const buyPrice = selectedCar.buy_price || 0;
-                                                                                        const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                        const loss = parseFloat(form.loss_amount || '0');
-                                                                                        const profit = sellPrice - buyPrice - loss;
-                                                                                        return profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-                                                                                    })()}`}
-                                                                                >
-                                                                                    ${' '}
+                                                                                <span className="text-sm text-green-600 dark:text-green-400">
                                                                                     {(() => {
                                                                                         const buyPrice = selectedCar.buy_price || 0;
                                                                                         const sellPrice = parseFloat(form.selling_price || '0');
-                                                                                        const loss = parseFloat(form.loss_amount || '0');
-                                                                                        const profit = sellPrice - buyPrice - loss;
-                                                                                        return profit >= 0 ? `+${formatCurrency(profit)}` : formatCurrency(profit);
+                                                                                        const formLoss = parseFloat(form.loss_amount || '0');
+                                                                                        const rawProfit = sellPrice - buyPrice - formLoss;
+                                                                                        // Commission is 0 when profit is negative, otherwise it's the profit
+                                                                                        const displayProfit = Math.max(0, rawProfit);
+                                                                                        return formatCurrency(displayProfit);
                                                                                     })()}
                                                                                 </span>
                                                                             </div>
