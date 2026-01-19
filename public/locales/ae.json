@@ -1,4 +1,13 @@
 {
+    "contract_attachments": "مرفقات العقد",
+    "contract_attachments_description": "رفع المستندات المتعلقة بالعقد (صور أو ملفات PDF)",
+    "contract_attachment": "مرفق العقد",
+    "existing_attachment": "مرفق موجود",
+    "view_attachment": "عرض المرفق",
+    "upload_new_to_replace": "رفع ملف جديد لاستبدال الموجود",
+    "replace_attachment": "استبدال المرفق",
+    "upload_attachment": "رفع مرفق",
+    "supported_formats_image_pdf": "الصيغ المدعومة: صور وملفات PDF",
     "amount_from": "المبلغ من",
     "amount_to": "المبلغ إلى",
     "selling_price_from": "سعر البيع من",

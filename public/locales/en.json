@@ -1,4 +1,13 @@
 {
+    "contract_attachments": "Contract Attachments",
+    "contract_attachments_description": "Upload contract-related documents (images or PDFs)",
+    "contract_attachment": "Contract Attachment",
+    "existing_attachment": "Existing Attachment",
+    "view_attachment": "View Attachment",
+    "upload_new_to_replace": "Upload a new file to replace the existing one",
+    "replace_attachment": "Replace Attachment",
+    "upload_attachment": "Upload Attachment",
+    "supported_formats_image_pdf": "Supported formats: Images and PDF files",
     "amount_from": "Amount From",
     "phone_number": "Phone Number",
     "amount_to": "Amount To",

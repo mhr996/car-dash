@@ -8,6 +8,8 @@ import { getTranslation } from '@/i18n';
 import IconX from '@/components/icon/icon-x';
 import IconUpload from '@/components/icon/icon-camera';
 import IconPlus from '@/components/icon/icon-plus';
+import SingleFileUpload from '@/components/file-upload/single-file-upload';
+import IconFile from '@/components/icon/icon-file';
 import BrandSelect from '@/components/brand-select/brand-select';
 import StatusSelect from '@/components/status-select/status-select';
 import ProviderSelect from '@/components/provider-select/provider-select';
@@ -15,6 +17,12 @@ import TypeSelect from '@/components/type-select/type-select';
 import CustomerSelect from '@/components/customer-select/customer-select';
 import CreateCustomerModal from '@/components/modals/create-customer-modal';
 import { usePermissions } from '@/hooks/usePermissions';
+
+interface FileItem {
+    file: File;
+    preview?: string;
+    id: string;
+}
 
 interface ColorVariant {
     id: string;
@@ -131,6 +139,14 @@ const EditCar = () => {
     // Features state
     const [features, setFeatures] = useState<Feature[]>([]);
 
+    // Contract attachments state
+    const [contractAttachment1, setContractAttachment1] = useState<FileItem | null>(null);
+    const [contractAttachment2, setContractAttachment2] = useState<FileItem | null>(null);
+    const [existingContractAttachment1, setExistingContractAttachment1] = useState<string>('');
+    const [existingContractAttachment2, setExistingContractAttachment2] = useState<string>('');
+    const [existingContractAttachment1Path, setExistingContractAttachment1Path] = useState<string>('');
+    const [existingContractAttachment2Path, setExistingContractAttachment2Path] = useState<string>('');
+
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
         visible: false,
         message: '',
@@ -234,6 +250,18 @@ const EditCar = () => {
                             value: feature.value || '',
                         }));
                         setFeatures(existingFeatures);
+                    }
+
+                    // Load existing contract attachments
+                    if (data.contract_attachment_1) {
+                        setExistingContractAttachment1Path(data.contract_attachment_1);
+                        const { data: urlData } = supabase.storage.from('cars').getPublicUrl(data.contract_attachment_1);
+                        setExistingContractAttachment1(urlData.publicUrl);
+                    }
+                    if (data.contract_attachment_2) {
+                        setExistingContractAttachment2Path(data.contract_attachment_2);
+                        const { data: urlData } = supabase.storage.from('cars').getPublicUrl(data.contract_attachment_2);
+                        setExistingContractAttachment2(urlData.publicUrl);
                     }
                 }
             } catch (error) {
@@ -459,6 +487,44 @@ const EditCar = () => {
         return { imageUrls, contractImageUrl };
     };
 
+    // Upload contract attachments
+    const uploadContractAttachments = async (carId: string) => {
+        let attachment1Url: string | null = null;
+        let attachment2Url: string | null = null;
+
+        // Upload contract attachment 1 if provided
+        if (contractAttachment1) {
+            const fileExt = contractAttachment1.file.name.split('.').pop();
+            const fileName = `${carId}/contract_attachment_1_${Date.now()}.${fileExt}`;
+
+            const { error } = await supabase.storage.from('cars').upload(fileName, contractAttachment1.file);
+
+            if (error) {
+                console.error('Error uploading contract attachment 1:', error);
+                throw error;
+            }
+
+            attachment1Url = fileName;
+        }
+
+        // Upload contract attachment 2 if provided
+        if (contractAttachment2) {
+            const fileExt = contractAttachment2.file.name.split('.').pop();
+            const fileName = `${carId}/contract_attachment_2_${Date.now()}.${fileExt}`;
+
+            const { error } = await supabase.storage.from('cars').upload(fileName, contractAttachment2.file);
+
+            if (error) {
+                console.error('Error uploading contract attachment 2:', error);
+                throw error;
+            }
+
+            attachment2Url = fileName;
+        }
+
+        return { attachment1Url, attachment2Url };
+    };
+
     // Color management functions
     const addColor = () => {
         const newColor: ColorVariant = {
@@ -592,11 +658,18 @@ const EditCar = () => {
             // Upload color images if any
             const colorData = await uploadColorImages(carId);
 
+            // Upload contract attachments if any
+            const { attachment1Url, attachment2Url } = await uploadContractAttachments(carId);
+
             // Combine existing image paths and new images
             const allImageUrls = [...existingImagePaths, ...newImageUrls];
 
             // Handle contract image - use new one if uploaded, otherwise keep existing
             const finalContractImageUrl = newContractImageUrl || existingContractImagePath;
+
+            // Handle contract attachments - use new ones if uploaded, otherwise keep existing
+            const finalContractAttachment1 = attachment1Url || existingContractAttachment1Path || null;
+            const finalContractAttachment2 = attachment2Url || existingContractAttachment2Path || null;
 
             // Prepare car data
             const carData: any = {
@@ -618,6 +691,8 @@ const EditCar = () => {
                 public: form.public, // Public visibility field
                 features: features.filter((f) => f.label.trim() && f.value.trim()).map((f) => ({ label: f.label.trim(), value: f.value.trim() })), // New features field
                 images: allImageUrls,
+                contract_attachment_1: finalContractAttachment1,
+                contract_attachment_2: finalContractAttachment2,
             };
 
             // Add contract image if exists
@@ -741,6 +816,15 @@ const EditCar = () => {
                             onClick={() => setActiveTab(3)}
                         >
                             {t('features_tab')}
+                        </button>
+                        <button
+                            type="button"
+                            className={`px-6 py-3 border-b-2 font-medium text-sm ${
+                                activeTab === 4 ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                            onClick={() => setActiveTab(4)}
+                        >
+                            {t('contract_attachments')}
                         </button>
                     </div>
                 </div>
@@ -1281,6 +1365,114 @@ const EditCar = () => {
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Tab 4: Contract Attachments */}
+                    {activeTab === 4 && (
+                        <div className="space-y-5">
+                            <div className="mb-5">
+                                <h5 className="text-lg font-semibold dark:text-white-light">{t('contract_attachments')}</h5>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">{t('contract_attachments_description')}</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Contract Attachment 1 */}
+                                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                                    <h6 className="text-base font-medium mb-4">{t('contract_attachment')} #1</h6>
+
+                                    {/* Show existing attachment if available and no new file selected */}
+                                    {existingContractAttachment1 && !contractAttachment1 ? (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <div className="flex items-center space-x-3">
+                                                    {existingContractAttachment1.toLowerCase().endsWith('.pdf') ? (
+                                                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded flex items-center justify-center">
+                                                            <span className="text-red-600 dark:text-red-400 text-lg">📄</span>
+                                                        </div>
+                                                    ) : (
+                                                        <img src={existingContractAttachment1} alt="Attachment 1" className="w-12 h-12 object-cover rounded" />
+                                                    )}
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{t('existing_attachment')}</p>
+                                                        <a href={existingContractAttachment1} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                                                            {t('view_attachment')}
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setExistingContractAttachment1('');
+                                                        setExistingContractAttachment1Path('');
+                                                    }}
+                                                    className="text-red-600 hover:text-red-800 p-1"
+                                                    title={t('remove')}
+                                                >
+                                                    <IconX className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-gray-500">{t('upload_new_to_replace')}</p>
+                                        </div>
+                                    ) : null}
+
+                                    <SingleFileUpload
+                                        file={contractAttachment1}
+                                        onFileChange={(file) => setContractAttachment1(file)}
+                                        accept="image/*,.pdf"
+                                        title={existingContractAttachment1 && !contractAttachment1 ? t('replace_attachment') : t('upload_attachment')}
+                                        description={t('supported_formats_image_pdf')}
+                                    />
+                                </div>
+
+                                {/* Contract Attachment 2 */}
+                                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                                    <h6 className="text-base font-medium mb-4">{t('contract_attachment')} #2</h6>
+
+                                    {/* Show existing attachment if available and no new file selected */}
+                                    {existingContractAttachment2 && !contractAttachment2 ? (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                <div className="flex items-center space-x-3">
+                                                    {existingContractAttachment2.toLowerCase().endsWith('.pdf') ? (
+                                                        <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded flex items-center justify-center">
+                                                            <span className="text-red-600 dark:text-red-400 text-lg">📄</span>
+                                                        </div>
+                                                    ) : (
+                                                        <img src={existingContractAttachment2} alt="Attachment 2" className="w-12 h-12 object-cover rounded" />
+                                                    )}
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-900 dark:text-white">{t('existing_attachment')}</p>
+                                                        <a href={existingContractAttachment2} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                                                            {t('view_attachment')}
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setExistingContractAttachment2('');
+                                                        setExistingContractAttachment2Path('');
+                                                    }}
+                                                    className="text-red-600 hover:text-red-800 p-1"
+                                                    title={t('remove')}
+                                                >
+                                                    <IconX className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-gray-500">{t('upload_new_to_replace')}</p>
+                                        </div>
+                                    ) : null}
+
+                                    <SingleFileUpload
+                                        file={contractAttachment2}
+                                        onFileChange={(file) => setContractAttachment2(file)}
+                                        accept="image/*,.pdf"
+                                        title={existingContractAttachment2 && !contractAttachment2 ? t('replace_attachment') : t('upload_attachment')}
+                                        description={t('supported_formats_image_pdf')}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     )}
 

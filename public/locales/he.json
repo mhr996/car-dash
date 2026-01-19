@@ -1,4 +1,13 @@
 {
+    "contract_attachments": "קבצי חוזה מצורפים",
+    "contract_attachments_description": "העלאת מסמכים הקשורים לחוזה (תמונות או קבצי PDF)",
+    "contract_attachment": "קובץ חוזה מצורף",
+    "existing_attachment": "קובץ קיים",
+    "view_attachment": "צפה בקובץ",
+    "upload_new_to_replace": "העלה קובץ חדש להחלפת הקיים",
+    "replace_attachment": "החלף קובץ",
+    "upload_attachment": "העלה קובץ",
+    "supported_formats_image_pdf": "פורמטים נתמכים: תמונות וקבצי PDF",
     "dashboard": "לוח בקרה",
     "sales": "מכירות",
     "home": "בית",
