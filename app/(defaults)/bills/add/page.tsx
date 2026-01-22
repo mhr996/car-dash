@@ -316,7 +316,7 @@ const AddBill = () => {
                 tax_invoice: 'IN', // Tax Invoice only
                 receipt_only: 'RE', // Receipt only
                 tax_invoice_receipt: 'IR', // Invoice+Receipt
-                credit_note: 'IR', // Credit Note - uses IR with negative/refund notation
+                credit_note: 'IN', // Credit Note - uses IN (Tax Invoice) with canceldoc=Y
             };
 
             // Map payment type to Tranzila payment method

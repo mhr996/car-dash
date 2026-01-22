@@ -139,14 +139,13 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         // - IN = Tax invoice (only)
         // - RE = Receipt (only)
         // - DI = Deal Invoice
-        // Note: Tranzila doesn't have a dedicated Credit Note type.
-        // Credit notes use IR with negative amounts or special description.
+        // Note: Credit notes use IN (Tax Invoice) type with canceldoc parameter
         const documentTypeMap: Record<string, string> = {
             general: 'IR', // Invoice+Receipt (default)
             tax_invoice: 'IN', // Tax Invoice only
             receipt_only: 'RE', // Receipt only
             tax_invoice_receipt: 'IR', // Invoice+Receipt
-            credit_note: 'IR', // Credit Note - uses IR with negative/refund notation
+            credit_note: 'IN', // Credit Note - uses IN (Tax Invoice) with canceldoc=Y
         };
 
         // Map payment type to Tranzila payment method
