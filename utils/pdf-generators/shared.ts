@@ -65,6 +65,7 @@ export const translations: PDFTranslations = {
         taxInvoice: 'فاتورة ضريبية',
         taxReceipt: 'إيصال ضريبي',
         taxInvoiceWithReceipt: 'فاتورة ضريبية مع إيصال',
+        creditNote: 'إشعار دائن',
         general: 'فاتورة عامة',
         recipientSignature: 'توقيع المستلم',
         issuerSignature: 'توقيع المصدر',
@@ -134,6 +135,7 @@ export const translations: PDFTranslations = {
         taxInvoice: 'חשבונית מס',
         taxReceipt: 'קבלה',
         taxInvoiceWithReceipt: 'חשבונית מס עם קבלה',
+        creditNote: 'הודעת זיכוי',
         general: 'חשבונית כללית',
         recipientSignature: 'חתימת מקבל',
         issuerSignature: 'חתימת מוציא',
@@ -203,6 +205,7 @@ export const translations: PDFTranslations = {
         taxInvoice: 'Tax Invoice',
         taxReceipt: 'Tax Receipt',
         taxInvoiceWithReceipt: 'Tax Invoice with Receipt',
+        creditNote: 'Credit Note',
         general: 'General Bill',
         recipientSignature: 'Recipient Signature',
         issuerSignature: 'Issuer Signature',
@@ -359,7 +362,7 @@ export const generateDocumentInfoSection = (t: (key: string) => string, data: an
                 </div>
                 <div class="info-item">
                     <span class="info-label">${t('bill_type')}:</span>
-                    <span class="info-value">${data.bill_type === 'tax_invoice' ? t('taxInvoice') : data.bill_type === 'receipt_only' ? t('taxReceipt') : data.bill_type === 'tax_invoice_receipt' ? t('taxInvoiceWithReceipt') : t('general')}</span>
+                    <span class="info-value">${data.bill_type === 'tax_invoice' ? t('taxInvoice') : data.bill_type === 'receipt_only' ? t('taxReceipt') : data.bill_type === 'tax_invoice_receipt' ? t('taxInvoiceWithReceipt') : data.bill_type === 'credit_note' ? t('creditNote') : t('general')}</span>
                 </div>
             </div>
         </div>
@@ -383,7 +386,7 @@ export const generateDocumentInfoSection = (t: (key: string) => string, data: an
     </div>
 
     <h3 style="font-size: 18px; font-weight: bold; color: #1a2941; text-align: center;">
-        ${data.bill_type === 'tax_invoice' ? t('taxInvoice') : data.bill_type === 'receipt_only' ? t('taxReceipt') : data.bill_type === 'tax_invoice_receipt' ? t('taxInvoiceWithReceipt') : t('general')}
+        ${data.bill_type === 'tax_invoice' ? t('taxInvoice') : data.bill_type === 'receipt_only' ? t('taxReceipt') : data.bill_type === 'tax_invoice_receipt' ? t('taxInvoiceWithReceipt') : data.bill_type === 'credit_note' ? t('creditNote') : t('general')}
     </h3>
 `;
 

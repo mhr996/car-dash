@@ -77,6 +77,7 @@ const AddBill = () => {
     const [saving, setSaving] = useState(false);
     const [deals, setDeals] = useState<Deal[]>([]);
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+    const [existingBills, setExistingBills] = useState<any[]>([]); // Bills already created for selected deal
     const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
     const [alert, setAlert] = useState<{ message: string; type: 'success' | 'danger' } | null>(null);
 
@@ -201,10 +202,19 @@ const AddBill = () => {
             setAlert({ message: t('error_loading_deals'), type: 'danger' });
         }
     };
-    const handleDealSelect = (dealId: string) => {
+    const handleDealSelect = async (dealId: string) => {
         const deal = deals.find((d) => d.id.toString() === dealId);
         if (deal) {
             setSelectedDeal(deal);
+
+            // Fetch existing bills for this deal to check for duplicates
+            try {
+                const { data: bills } = await supabase.from('bills').select('id, bill_type, tranzila_document_number').eq('deal_id', deal.id);
+                setExistingBills(bills || []);
+            } catch (error) {
+                console.error('Error fetching existing bills:', error);
+                setExistingBills([]);
+            }
 
             // Determine customer info based on deal type
             let customerInfo = null;
@@ -299,11 +309,14 @@ const AddBill = () => {
             // - IN = Tax invoice (only)
             // - RE = Receipt (only)
             // - DI = Deal Invoice
+            // Note: Tranzila doesn't have a dedicated Credit Note type.
+            // Credit notes use IR with negative amounts or special description.
             const documentTypeMap: Record<string, string> = {
                 general: 'IR', // Invoice+Receipt (default)
                 tax_invoice: 'IN', // Tax Invoice only
                 receipt_only: 'RE', // Receipt only
                 tax_invoice_receipt: 'IR', // Invoice+Receipt
+                credit_note: 'IR', // Credit Note - uses IR with negative/refund notation
             };
 
             // Map payment type to Tranzila payment method
@@ -402,6 +415,37 @@ const AddBill = () => {
                     name: 'עמלה',
                     price_type: 'G',
                     unit_price: dealAmount,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                });
+            } else if (billData.bill_type === 'credit_note') {
+                // CREDIT NOTE - for cancelling/reversing invoices
+                // Uses IR document type but with canceldoc parameter
+                // Must be checked BEFORE documentType === 'IR' since credit notes map to IR
+                const creditAmount = billData.bill_amount || billData.total_with_tax || totalPaymentAmount || 0;
+
+                if (creditAmount <= 0) {
+                    throw new Error('Credit Note requires a positive amount to reverse');
+                }
+
+                // Build item name - always prefix with הודעת זיכוי to make it clear
+                let itemName = 'הודעת זיכוי';
+                if (billData.bill_description) {
+                    itemName = `הודעת זיכוי - ${billData.bill_description}`;
+                } else if (deal && deal.car) {
+                    itemName = `הודעת זיכוי - ${deal.car.brand} ${deal.car.title} ${deal.car.year}`;
+                } else if (billData.car_details) {
+                    itemName = `הודעת זיכוי - ${billData.car_details}`;
+                }
+
+                items.push({
+                    type: 'I',
+                    code: null,
+                    name: itemName,
+                    price_type: 'G',
+                    unit_price: creditAmount,
                     units_number: 1,
                     unit_type: 1,
                     currency_code: 'ILS',
@@ -576,9 +620,11 @@ const AddBill = () => {
                           },
                       ];
 
-            // Validate payments only for receipts (RE, IR)
+            // Validate payments only for receipts (RE, IR) - but NOT for credit notes
             // Tax invoices (IN) don't require payment confirmation
-            const requiresPayments = documentType === 'RE' || documentType === 'IR';
+            // Credit notes are a special case - they don't require payments at all
+            const isCreditNote = billData.bill_type === 'credit_note';
+            const requiresPayments = !isCreditNote && (documentType === 'RE' || documentType === 'IR');
 
             if (requiresPayments) {
                 const hasValidPayments = tranzilaPayments.some((p) => p.amount && p.amount > 0);
@@ -628,16 +674,24 @@ const AddBill = () => {
                     document_type: documentType,
                     document_date: billData.date || new Date().toISOString().split('T')[0],
                     document_currency_code: 'ILS',
-                    vat_percent: vatPercent,
+                    vat_percent: isCreditNote ? 18 : vatPercent, // Credit notes should have VAT
                     client_company: billData.customer_name || 'Customer',
                     client_name: billData.customer_name || 'Customer',
                     client_id: customerId,
                     client_email: customerEmail || 'no-reply@car-dash.com',
                     client_phone: customerPhone || undefined,
                     items,
-                    payments: tranzilaPayments,
+                    // Credit notes don't need payments - they're reversals
+                    payments: isCreditNote ? [] : tranzilaPayments,
                     created_by_user: 'car-dash',
                     created_by_system: 'car-dash',
+                    // Credit note cancellation parameters
+                    ...(isCreditNote && billData.cancel_tranzila_doc_number
+                        ? {
+                              canceldoc: 'Y',
+                              cancel_document_number: billData.cancel_tranzila_doc_number,
+                          }
+                        : {}),
                 },
             };
 
@@ -1130,6 +1184,10 @@ const AddBill = () => {
                             <BillTypeSelect
                                 defaultValue={billForm.bill_type}
                                 dealType={selectedDeal?.deal_type}
+                                disabledTypes={[
+                                    // Disable tax_invoice if deal already has one (tax_invoice or tax_invoice_receipt)
+                                    ...(existingBills.some((b) => b.bill_type === 'tax_invoice' || b.bill_type === 'tax_invoice_receipt') ? ['tax_invoice', 'tax_invoice_receipt'] : []),
+                                ]}
                                 onChange={(billType) => handleFormChange({ target: { name: 'bill_type', value: billType } } as any)}
                                 className="w-full"
                             />

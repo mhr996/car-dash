@@ -3,6 +3,7 @@ import IconCaretDown from '@/components/icon/icon-caret-down';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconReceipt from '@/components/icon/icon-receipt';
 import IconInvoice from '@/components/icon/icon-invoice';
+import IconMinusCircle from '@/components/icon/icon-minus-circle';
 import { getTranslation } from '@/i18n';
 
 interface BillTypeSelectProps {
@@ -11,10 +12,21 @@ interface BillTypeSelectProps {
     defaultValue?: string;
     className?: string;
     dealType?: string; // Add dealType prop to filter available options
+    showCreditNote?: boolean; // Whether to show credit note option (only available from deal edit page)
+    disabledTypes?: string[]; // Bill types to hide (e.g., ['tax_invoice'] if deal already has one)
     onChange?: (billType: string) => void;
 }
 
-const BillTypeSelect = ({ defaultValue = '', className = 'form-select text-white-dark', dealType, onChange, name = 'bill_type', id }: BillTypeSelectProps) => {
+const BillTypeSelect = ({
+    defaultValue = '',
+    className = 'form-select text-white-dark',
+    dealType,
+    showCreditNote = false,
+    disabledTypes = [],
+    onChange,
+    name = 'bill_type',
+    id,
+}: BillTypeSelectProps) => {
     const { t } = getTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [selectedType, setSelectedType] = useState(defaultValue);
@@ -60,16 +72,37 @@ const BillTypeSelect = ({ defaultValue = '', className = 'form-select text-white
             borderColor: 'border-orange-200 dark:border-orange-800',
             description: t('general_bill_description') || 'Create a general bill with custom description and amount',
         },
+        {
+            value: 'credit_note',
+            label: t('credit_note'),
+            icon: IconMinusCircle,
+            color: 'text-red-600 dark:text-red-400',
+            bgColor: 'bg-red-50 dark:bg-red-900/20',
+            borderColor: 'border-red-200 dark:border-red-800',
+            description: t('credit_note_description') || 'Create a credit note to cancel/reverse a previous invoice',
+        },
     ];
 
     // Filter bill types based on deal type
     const getFilteredBillTypes = () => {
+        let types = billTypes;
+
+        // Only show credit note if explicitly enabled (from deal edit page)
+        if (!showCreditNote) {
+            types = types.filter((type) => type.value !== 'credit_note');
+        }
+
+        // Remove any explicitly disabled types (e.g., tax_invoice if deal already has one)
+        if (disabledTypes.length > 0) {
+            types = types.filter((type) => !disabledTypes.includes(type.value));
+        }
+
         if (dealType === 'intermediary') {
-            // For intermediary deals, show tax_invoice_receipt and general
-            return billTypes.filter((type) => type.value === 'tax_invoice_receipt' || type.value === 'general');
+            // For intermediary deals, show tax_invoice_receipt, general, and optionally credit_note
+            return types.filter((type) => type.value === 'tax_invoice_receipt' || type.value === 'general' || type.value === 'credit_note');
         } else {
-            // For all other deal types, show tax_invoice, receipt_only, and general
-            return billTypes.filter((type) => type.value === 'tax_invoice' || type.value === 'receipt_only' || type.value === 'general');
+            // For all other deal types, show tax_invoice, receipt_only, general, and optionally credit_note
+            return types.filter((type) => type.value === 'tax_invoice' || type.value === 'receipt_only' || type.value === 'general' || type.value === 'credit_note');
         }
     };
 

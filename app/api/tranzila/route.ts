@@ -97,10 +97,19 @@ export async function POST(request: NextRequest) {
  * Create an invoice/receipt document via Tranzila Billing API
  * Ref: https://docs.tranzila.com/docs/invoices/27ffheryfv066-create-document
  *
- * Document Types (Numeric Codes):
- * - 305 = Tax Invoice (חשבונית מס)
- * - 320 = Tax Invoice + Receipt (חשבונית מס קבלה)
- * - 400 = Receipt (קבלה)
+ * Document Types (from Tranzila API):
+ * - IR = Tax Invoice + Receipt (חשבונית מס קבלה)
+ * - IN = Tax Invoice (חשבונית מס)
+ * - RE = Receipt (קבלה)
+ * - DI = Deal Invoice
+ *
+ * For Credit Notes / Cancellations:
+ * - Set `canceldoc: 'Y'` to mark as a credit document
+ * - Add document relation with type 1 (by number) or 2 (by id) to reference original
+ *
+ * Document Relation Types:
+ * - 1 = Cancelling document number - for whole document cancellation
+ * - 2 = Cancelling document id - for whole document cancellation
  *
  * Payment Methods:
  * - 1 = Credit Card
@@ -148,6 +157,31 @@ async function createDocument(data: any = {}) {
             payments: data.payments || [],
         };
 
+        // For credit notes / cancellation documents:
+        // 1. Set canceldoc to 'Y' to mark as credit document
+        // 2. Add document relation to reference the original document being cancelled
+        if (data.canceldoc === 'Y') {
+            payload.canceldoc = 'Y';
+
+            // Add document relation if provided
+            // Type 1 = by document number, Type 2 = by document id
+            if (data.cancel_document_number) {
+                payload.document_relations = [
+                    {
+                        type: 1, // Cancelling by document number
+                        number: data.cancel_document_number,
+                    },
+                ];
+            } else if (data.cancel_document_id) {
+                payload.document_relations = [
+                    {
+                        type: 2, // Cancelling by document id
+                        id: data.cancel_document_id,
+                    },
+                ];
+            }
+        }
+
         console.log('📋 ============ TRANZILA API REQUEST ============');
         console.log('📦 Incoming data parameter:', JSON.stringify(data, null, 2));
         console.log('📤 Full payload being sent to Tranzila:', JSON.stringify(payload, null, 2));
@@ -156,6 +190,10 @@ async function createDocument(data: any = {}) {
         console.log('📞 Client Phone field:', payload.client_phone);
         console.log('💰 Items count:', payload.items ? payload.items.length : 0);
         console.log('💳 Payments count:', payload.payments.length);
+        if (payload.canceldoc) {
+            console.log('🔄 This is a CREDIT/CANCELLATION document');
+            console.log('🔄 Document relations:', JSON.stringify(payload.document_relations, null, 2));
+        }
         console.log('==================================================');
 
         // Use the billing API endpoint for document creation

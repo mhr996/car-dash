@@ -139,11 +139,14 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         // - IN = Tax invoice (only)
         // - RE = Receipt (only)
         // - DI = Deal Invoice
+        // Note: Tranzila doesn't have a dedicated Credit Note type.
+        // Credit notes use IR with negative amounts or special description.
         const documentTypeMap: Record<string, string> = {
             general: 'IR', // Invoice+Receipt (default)
             tax_invoice: 'IN', // Tax Invoice only
             receipt_only: 'RE', // Receipt only
             tax_invoice_receipt: 'IR', // Invoice+Receipt
+            credit_note: 'IR', // Credit Note - uses IR with negative/refund notation
         };
 
         // Map payment type to Tranzila payment method
@@ -164,7 +167,38 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         // Build items array - STRICT VALIDATION, NO FALLBACKS
         let items: any[] = [];
 
-        if (documentType === 'IN') {
+        // Check for credit_note FIRST since it maps to IR but has different validation rules
+        if (billData.bill_type === 'credit_note') {
+            // CREDIT NOTE - for cancelling/reversing invoices
+            // Uses IR document type but doesn't require payments or deal/car
+            const creditAmount = parseFloat(billData.bill_amount) || billData.total_with_tax || 0;
+
+            if (creditAmount <= 0) {
+                throw new Error('Credit Note requires a positive amount to reverse');
+            }
+
+            // Build item name - always prefix with הודעת זיכוי to make it clear
+            let itemName = 'הודעת זיכוי';
+            if (billData.bill_description) {
+                itemName = `הודעת זיכוי - ${billData.bill_description}`;
+            } else if (deal && selectedCar) {
+                itemName = `הודעת זיכוי - ${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}`;
+            } else if (billData.car_details) {
+                itemName = `הודעת זיכוי - ${billData.car_details}`;
+            }
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: itemName,
+                price_type: 'G',
+                unit_price: creditAmount,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+        } else if (documentType === 'IN') {
             // TAX INVOICE - requires deal with car
             if (!deal || !selectedCar) {
                 throw new Error('Tax Invoice requires a deal with a car');
@@ -421,9 +455,11 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                       },
                   ];
 
-        // Validate payments only for receipts (RE, IR)
+        // Validate payments only for receipts (RE, IR) - but NOT for credit notes
         // Tax invoices (IN) don't require payment confirmation
-        const requiresPayments = documentType === 'RE' || documentType === 'IR';
+        // Credit notes are a special case - they don't require payments at all
+        const isCreditNote = billData.bill_type === 'credit_note';
+        const requiresPayments = !isCreditNote && (documentType === 'RE' || documentType === 'IR');
 
         if (requiresPayments) {
             const hasValidPayments = tranzilaPayments.some((p) => p.amount && p.amount > 0);
@@ -467,6 +503,32 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         const commissionAmount = deal?.amount || 0;
         const vatPercent = documentType === 'RE' ? 0 : commissionAmount === 0 ? 0 : 18;
 
+        // Build the request data
+        const tranzilaRequestData: any = {
+            document_type: documentType,
+            document_date: billData.date || new Date().toISOString().split('T')[0],
+            document_currency_code: 'ILS',
+            vat_percent: isCreditNote ? 18 : vatPercent, // Credit notes should have VAT
+            client_company: billData.customer_name || t('unknown_customer'),
+            client_name: billData.customer_name || t('unknown_customer'),
+            client_id: customerId,
+            client_email: customerEmail || 'no-reply@car-dash.com',
+            client_phone: customerPhone || undefined,
+            items,
+            // Credit notes don't need payments - they're reversals
+            payments: isCreditNote ? [] : tranzilaPayments,
+            created_by_user: 'car-dash',
+            created_by_system: 'car-dash',
+        };
+
+        // For credit notes, add cancellation parameters
+        // canceldoc: 'Y' marks this as a credit/cancellation document
+        // cancel_document_number: references the original document being cancelled (type 1 relation)
+        if (isCreditNote && billData.cancel_tranzila_doc_number) {
+            tranzilaRequestData.canceldoc = 'Y';
+            tranzilaRequestData.cancel_document_number = billData.cancel_tranzila_doc_number;
+        }
+
         const response = await fetch('/api/tranzila', {
             method: 'POST',
             headers: {
@@ -474,21 +536,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             },
             body: JSON.stringify({
                 action: 'create_document',
-                data: {
-                    document_type: documentType,
-                    document_date: billData.date || new Date().toISOString().split('T')[0],
-                    document_currency_code: 'ILS',
-                    vat_percent: vatPercent,
-                    client_company: billData.customer_name || t('unknown_customer'),
-                    client_name: billData.customer_name || t('unknown_customer'),
-                    client_id: customerId,
-                    client_email: customerEmail || 'no-reply@car-dash.com',
-                    client_phone: customerPhone || undefined,
-                    items,
-                    payments: tranzilaPayments,
-                    created_by_user: 'car-dash',
-                    created_by_system: 'car-dash',
-                },
+                data: tranzilaRequestData,
             }),
         });
 
@@ -543,6 +591,7 @@ import IconDocument from '@/components/icon/icon-document';
 import IconPaperclip from '@/components/icon/icon-paperclip';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
+import IconMinusCircle from '@/components/icon/icon-minus-circle';
 
 const EditDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
@@ -620,6 +669,10 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
         bill_direction: 'positive',
         bill_description: '',
         bill_amount: '',
+        // Credit note fields - for cancelling a previous document
+        cancel_bill_id: '', // The local bill ID being cancelled
+        cancel_tranzila_doc_id: '', // The Tranzila document ID (for type 2 relation)
+        cancel_tranzila_doc_number: '', // The Tranzila document number (for type 1 relation)
     });
 
     // Helper function to format currency
@@ -1806,6 +1859,9 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                           bill_description: billForm.bill_description || null,
                           bill_amount: parseFloat(billForm.bill_amount) || null,
                           created_at: billForm.date ? new Date(billForm.date + 'T00:00:00').toISOString() : new Date().toISOString(),
+                          // Credit note fields
+                          cancel_tranzila_doc_number: billForm.cancel_tranzila_doc_number || null,
+                          cancel_tranzila_doc_id: billForm.cancel_tranzila_doc_id || null,
                       }
                     : {
                           deal_id: parseInt(dealId),
@@ -1850,6 +1906,9 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                           check_branch: billForm.check_branch || null,
                           cash_amount: parseFloat(billForm.cash_amount) || null,
                           created_at: billForm.date ? new Date(billForm.date + 'T00:00:00').toISOString() : new Date().toISOString(),
+                          // Credit note fields
+                          cancel_tranzila_doc_number: billForm.cancel_tranzila_doc_number || null,
+                          cancel_tranzila_doc_id: billForm.cancel_tranzila_doc_id || null,
                       };
 
             const { data: billResult, error } = await supabase.from('bills').insert([billData]).select().single();
@@ -2000,6 +2059,10 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 check_holder_name: '',
                 check_branch: '',
                 cash_amount: '',
+                // Credit note fields
+                cancel_bill_id: '',
+                cancel_tranzila_doc_id: '',
+                cancel_tranzila_doc_number: '',
             });
             setIsBillSectionExpanded(false);
         } catch (error) {
@@ -2972,10 +3035,70 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                             <BillTypeSelect
                                                 defaultValue={billForm.bill_type}
                                                 dealType={deal?.deal_type}
-                                                onChange={(billType) => handleBillFormChange({ target: { name: 'bill_type', value: billType } } as any)}
+                                                showCreditNote={true}
+                                                disabledTypes={[
+                                                    // Disable tax_invoice if deal already has one (tax_invoice or tax_invoice_receipt)
+                                                    ...(bills.some((b) => b.bill_type === 'tax_invoice' || b.bill_type === 'tax_invoice_receipt') ? ['tax_invoice', 'tax_invoice_receipt'] : []),
+                                                ]}
+                                                onChange={(billType) => {
+                                                    // Auto-set bill_direction to 'negative' for credit notes
+                                                    if (billType === 'credit_note') {
+                                                        setBillForm((prev) => ({
+                                                            ...prev,
+                                                            bill_type: billType,
+                                                            bill_direction: 'negative',
+                                                        }));
+                                                    } else {
+                                                        handleBillFormChange({ target: { name: 'bill_type', value: billType } } as any);
+                                                    }
+                                                }}
                                                 className="w-full"
                                             />
                                         </div>
+                                        {/* Select Bill to Cancel - Only show for credit notes */}
+                                        {billForm.bill_type === 'credit_note' && (
+                                            <div>
+                                                <div className="mb-4 flex items-center gap-3">
+                                                    <IconMinusCircle className="w-5 h-5 text-red-500" />
+                                                    <div>
+                                                        <h6 className="text-md font-semibold dark:text-white-light">{t('select_bill_to_cancel')}</h6>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_bill_to_cancel_desc')}</p>
+                                                    </div>
+                                                </div>
+                                                {bills.filter((b) => b.tranzila_document_number && b.bill_type !== 'credit_note').length > 0 ? (
+                                                    <select
+                                                        name="cancel_bill_id"
+                                                        value={billForm.cancel_bill_id}
+                                                        onChange={(e) => {
+                                                            const selectedBill = bills.find((b) => b.id.toString() === e.target.value);
+                                                            setBillForm((prev) => ({
+                                                                ...prev,
+                                                                cancel_bill_id: e.target.value,
+                                                                cancel_tranzila_doc_id: selectedBill?.tranzila_document_id || '',
+                                                                cancel_tranzila_doc_number: selectedBill?.tranzila_document_number || '',
+                                                                // Auto-fill the amount from the selected bill
+                                                                bill_amount: selectedBill ? getBillAmount(selectedBill).toString() : '',
+                                                                bill_description: selectedBill ? `${t('credit_note_for_bill')} #${selectedBill.tranzila_document_number}` : '',
+                                                            }));
+                                                        }}
+                                                        className="form-select bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200"
+                                                    >
+                                                        <option value="">{t('select_bill_to_cancel_placeholder')}</option>
+                                                        {bills
+                                                            .filter((b) => b.tranzila_document_number && b.bill_type !== 'credit_note')
+                                                            .map((bill) => (
+                                                                <option key={bill.id} value={bill.id}>
+                                                                    #{bill.tranzila_document_number} - {t(`bill_type_${bill.bill_type}`)} - ₪{getBillAmount(bill).toLocaleString()}
+                                                                </option>
+                                                            ))}
+                                                    </select>
+                                                ) : (
+                                                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                                        <p className="text-yellow-700 dark:text-yellow-300 text-sm">{t('no_bills_to_cancel')}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                         {/* Bill Date Selection */}
                                         {billForm.bill_type && (
                                             <div>
@@ -3001,8 +3124,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 </div>
                                             </div>
                                         )}
-                                        {/* Bill Direction Selector for All Bills except tax_invoice and tax_invoice_receipt */}
-                                        {billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && (
+                                        {/* Bill Direction Selector for All Bills except tax_invoice, tax_invoice_receipt, and credit_note */}
+                                        {billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && billForm.bill_type !== 'credit_note' && (
                                             <div>
                                                 <div className="mb-4 flex items-center gap-3">
                                                     <IconDollarSign className="w-5 h-5 text-primary" />
