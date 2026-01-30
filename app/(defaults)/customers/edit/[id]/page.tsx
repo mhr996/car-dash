@@ -88,6 +88,10 @@ const EditCustomer = () => {
             setAlert({ visible: true, message: t('phone_required'), type: 'danger' });
             return false;
         }
+        if (!form.id_number.trim()) {
+            setAlert({ visible: true, message: t('id_number_required'), type: 'danger' });
+            return false;
+        }
         if (!form.customer_type.trim()) {
             setAlert({ visible: true, message: t('customer_type_required'), type: 'danger' });
             return false;
@@ -118,7 +122,14 @@ const EditCustomer = () => {
 
             const { error } = await supabase.from('customers').update(customerData).eq('id', customerId);
 
-            if (error) throw error;
+            if (error) {
+                // Check for unique constraint violation on id_number
+                if (error.code === '23505' && error.message?.includes('id_number')) {
+                    setAlert({ visible: true, message: t('id_number_already_exists'), type: 'danger' });
+                    return;
+                }
+                throw error;
+            }
 
             setAlert({ visible: true, message: t('customer_updated_successfully'), type: 'success' });
 
@@ -245,9 +256,9 @@ const EditCustomer = () => {
                         {/* ID Number */}
                         <div>
                             <label htmlFor="id_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('id_number')}
+                                {t('id_number')} <span className="text-red-500">*</span>
                             </label>
-                            <input type="text" id="id_number" name="id_number" value={form.id_number} onChange={handleInputChange} className="form-input" placeholder={t('enter_id_number')} />
+                            <input type="text" id="id_number" name="id_number" value={form.id_number} onChange={handleInputChange} className="form-input" placeholder={t('enter_id_number')} required />
                         </div>
                         {/* Customer Type */}
                         <div>

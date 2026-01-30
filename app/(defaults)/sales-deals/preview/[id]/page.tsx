@@ -79,7 +79,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [car, setCar] = useState<Car | null>(null);
     const [carTakenFromClient, setCarTakenFromClient] = useState<Car | null>(null);
     const [bills, setBills] = useState<Bill[]>([]);
-    const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
+    const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string; direction?: 'positive' | 'negative' }>>([]);
     const [bankTransferOrders, setBankTransferOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
     const [carImageUrl, setCarImageUrl] = useState<string | null>(null);
     const [carTakenImageUrl, setCarTakenImageUrl] = useState<string | null>(null);
@@ -1192,7 +1192,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                         <IconDocument className="w-5 h-5" />
                                         أمر سجل (Register Order)
                                     </h5>
-                                    <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Amounts deducted from the deal balance'}</p>
+                                    <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Amounts adjusting the deal balance'}</p>
                                 </div>
 
                                 {/* Register Orders Table */}
@@ -1200,6 +1200,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                     <table className="table-hover">
                                         <thead>
                                             <tr>
+                                                <th>{t('direction') || 'Direction'}</th>
                                                 <th>{t('amount')}</th>
                                                 <th>{t('description')}</th>
                                                 <th>{t('date')}</th>
@@ -1209,7 +1210,15 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                             {registerOrders.map((order, index) => (
                                                 <tr key={index}>
                                                     <td>
-                                                        <span className="text-danger font-semibold">-{formatCurrency(order.amount)}</span>
+                                                        <span className={`badge ${order.direction === 'positive' ? 'bg-success' : 'bg-danger'}`}>
+                                                            {order.direction === 'positive' ? t('addition') || 'Addition' : t('deduction') || 'Deduction'}
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span className={`font-semibold ${order.direction === 'positive' ? 'text-success' : 'text-danger'}`}>
+                                                            {order.direction === 'positive' ? '+' : '-'}
+                                                            {formatCurrency(order.amount)}
+                                                        </span>
                                                     </td>
                                                     <td>{order.description}</td>
                                                     <td className="text-sm text-gray-600 dark:text-gray-400">
@@ -1224,9 +1233,21 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                         </tbody>
                                         <tfoot>
                                             <tr className="bg-gray-50 dark:bg-gray-800">
-                                                <td className="font-bold">{t('total_deductions') || 'Total Deductions'}:</td>
+                                                <td colSpan={2} className="font-bold">
+                                                    {t('net_total') || 'Net Total'}:
+                                                </td>
                                                 <td colSpan={2}>
-                                                    <span className="text-danger font-bold text-lg">-{formatCurrency(registerOrders.reduce((sum, order) => sum + order.amount, 0))}</span>
+                                                    {(() => {
+                                                        const totalPositive = registerOrders.filter((o) => o.direction === 'positive').reduce((sum, order) => sum + order.amount, 0);
+                                                        const totalNegative = registerOrders.filter((o) => o.direction !== 'positive').reduce((sum, order) => sum + order.amount, 0);
+                                                        const netTotal = totalPositive - totalNegative;
+                                                        return (
+                                                            <span className={`font-bold text-lg ${netTotal >= 0 ? 'text-success' : 'text-danger'}`}>
+                                                                {netTotal >= 0 ? '+' : ''}
+                                                                {formatCurrency(netTotal)}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </td>
                                             </tr>
                                         </tfoot>

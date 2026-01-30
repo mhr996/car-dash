@@ -77,6 +77,10 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
             newErrors.phone = t('phone_required');
         }
 
+        if (!form.id_number.trim()) {
+            newErrors.id_number = t('id_number_required');
+        }
+
         if (!form.customer_type) {
             newErrors.customer_type = t('customer_type_required');
         }
@@ -113,7 +117,14 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
 
             const { data, error } = await supabase.from('customers').insert([customerData]).select().single();
 
-            if (error) throw error;
+            if (error) {
+                // Check for unique constraint violation on id_number
+                if (error.code === '23505' && error.message?.includes('id_number')) {
+                    setErrors({ id_number: t('id_number_already_exists') });
+                    return;
+                }
+                throw error;
+            }
 
             onCustomerCreated(data);
             handleClose();
@@ -200,9 +211,19 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
                         {/* Identity Number */}
                         <div>
                             <label htmlFor="id_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                {t('id_number')}
+                                {t('id_number')} <span className="text-red-500">*</span>
                             </label>
-                            <input type="text" id="id_number" name="id_number" value={form.id_number} onChange={handleInputChange} className="form-input" placeholder={t('enter_id_number')} />
+                            <input
+                                type="text"
+                                id="id_number"
+                                name="id_number"
+                                value={form.id_number}
+                                onChange={handleInputChange}
+                                className={`form-input ${errors.id_number ? 'border-red-500' : ''}`}
+                                placeholder={t('enter_id_number')}
+                                required
+                            />
+                            {errors.id_number && <p className="text-red-500 text-xs mt-1">{errors.id_number}</p>}
                         </div>
 
                         {/* Birth Date */}

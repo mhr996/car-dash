@@ -18,7 +18,7 @@ interface BillsTableProps {
     car?: any; // Car data for the deal
     carTakenFromClient?: any; // Car taken from client for exchange deals
     selectedCustomer?: any; // Selected customer for display
-    registerOrders?: Array<{ amount: number; description: string; created_at: string }>;
+    registerOrders?: Array<{ amount: number; description: string; created_at: string; direction?: 'positive' | 'negative' }>;
     bankTransferOrders?: Array<{ amount: number; description: string; created_at: string }>;
 }
 
@@ -50,10 +50,15 @@ const BillsTable: React.FC<BillsTableProps> = ({
             totalBalance += carEvaluationAmount; // Add as credit (positive impact)
         }
 
-        // Deduct register orders
+        // Handle register orders based on direction
         if (registerOrders && registerOrders.length > 0) {
-            const totalDeductions = registerOrders.reduce((sum, order) => sum + order.amount, 0);
-            totalBalance -= totalDeductions;
+            registerOrders.forEach((order) => {
+                if (order.direction === 'positive') {
+                    totalBalance += order.amount; // Positive adds to balance (reduces debt)
+                } else {
+                    totalBalance -= order.amount; // Negative (default) deducts from balance (increases debt)
+                }
+            });
         }
 
         // Add bank transfer orders (for financing assistance intermediary)

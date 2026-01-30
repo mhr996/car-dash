@@ -471,6 +471,10 @@ const AddDeal = () => {
             setAlert({ message: t('old_car_details_required'), type: 'danger' });
             return false;
         }
+        if (!exchangeForm.old_car_number.trim()) {
+            setAlert({ message: t('car_number_required'), type: 'danger' });
+            return false;
+        }
         if (!exchangeForm.old_car_purchase_price || parseFloat(exchangeForm.old_car_purchase_price) <= 0) {
             setAlert({ message: t('old_car_purchase_price_required'), type: 'danger' });
             return false;
@@ -650,7 +654,7 @@ const AddDeal = () => {
                     market_price: exchangeForm.old_car_market_price ? parseFloat(exchangeForm.old_car_market_price) : 0,
                     buy_price: parseFloat(exchangeForm.old_car_purchase_price),
                     sale_price: exchangeForm.old_car_market_price ? parseFloat(exchangeForm.old_car_market_price) : 0,
-                    car_number: exchangeForm.old_car_number || '',
+                    car_number: exchangeForm.old_car_number.trim(), // Car number is required
                     images: JSON.stringify([]),
                     created_at: new Date(dealDate + 'T' + new Date().toTimeString().split(' ')[0]).toISOString(), // Use deal date
                 };
@@ -1395,7 +1399,7 @@ const AddDeal = () => {
                     </div>
                     <div>
                         <label htmlFor="old_car_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('car_number')}
+                            {t('car_number')} <span className="text-red-500">*</span>
                         </label>
                         <input
                             type="text"
@@ -1405,6 +1409,7 @@ const AddDeal = () => {
                             onChange={handleExchangeFormChange}
                             className="form-input"
                             placeholder={t('enter_car_number')}
+                            required
                         />
                     </div>
                     <div>

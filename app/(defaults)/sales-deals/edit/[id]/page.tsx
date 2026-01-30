@@ -729,10 +729,16 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             dealAmount -= carEvaluation;
         }
 
-        // Deduct register orders (أمر سجل)
+        // Deduct or add register orders (أمر سجل) based on direction
         if (registerOrders && registerOrders.length > 0) {
-            const totalDeductions = registerOrders.reduce((sum, order) => sum + order.amount, 0);
-            dealAmount += totalDeductions; // Add because dealAmount is the remaining debt, deductions increase it
+            registerOrders.forEach((order) => {
+                // Default to negative (deduction) for backwards compatibility
+                if (order.direction === 'positive') {
+                    dealAmount -= order.amount; // Positive reduces the debt
+                } else {
+                    dealAmount += order.amount; // Negative (deduction) increases the debt
+                }
+            });
         }
 
         // Calculate total payments from bills
@@ -799,9 +805,10 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const [registerOrderForm, setRegisterOrderForm] = useState({
         amount: '',
         description: '',
+        direction: 'negative' as 'positive' | 'negative',
     });
     const [creatingRegisterOrder, setCreatingRegisterOrder] = useState(false);
-    const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
+    const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string; direction?: 'positive' | 'negative' }>>([]);
 
     // Bank Transfer Order states (for financing assistance intermediary)
     const [bankTransferOrderForm, setBankTransferOrderForm] = useState({
@@ -1137,6 +1144,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 amount: parseFloat(registerOrderForm.amount),
                 description: registerOrderForm.description.trim(),
                 created_at: new Date().toISOString(),
+                direction: registerOrderForm.direction,
             };
 
             // Add to existing register orders array
@@ -1155,6 +1163,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             setRegisterOrderForm({
                 amount: '',
                 description: '',
+                direction: 'negative',
             });
         } catch (error) {
             console.error('Error creating register order:', error);
@@ -3781,121 +3790,167 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     {/* Bills Tab */}
                     {hasPermission('view_bills') && activeTab === 'bills' && (
                         <>
-                            {deal?.deal_type === 'exchange' && (
-                                <>
-                                    {/* Register Order Section */}
-                                    <div className="mb-6 panel bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 border-2 border-orange-300 dark:border-orange-700">
-                                        <div className="mb-4">
-                                            <h5 className="text-lg font-bold text-orange-800 dark:text-orange-300 flex items-center gap-2">
-                                                <IconDocument className="w-5 h-5" />
-                                                أمر سجل (Register Order)
-                                            </h5>
-                                            <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Add amounts to be deducted from the deal balance'}</p>
-                                        </div>
+                            {/* Register Order Section - Available for all deal types */}
+                            <div className="mb-6 panel bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 border-2 border-orange-300 dark:border-orange-700">
+                                <div className="mb-4">
+                                    <h5 className="text-lg font-bold text-orange-800 dark:text-orange-300 flex items-center gap-2">
+                                        <IconDocument className="w-5 h-5" />
+                                        أمر سجل (Register Order)
+                                    </h5>
+                                    <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">{t('register_order_description') || 'Add amounts to adjust the deal balance'}</p>
+                                </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div>
-                                                <label htmlFor="register_order_amount" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                    {t('amount')} <span className="text-red-500">*</span>
-                                                </label>
-                                                <input
-                                                    type="number"
-                                                    id="register_order_amount"
-                                                    value={registerOrderForm.amount}
-                                                    onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, amount: e.target.value }))}
-                                                    onWheel={(e) => e.currentTarget.blur()}
-                                                    className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                                    placeholder="0"
-                                                    step="0.01"
-                                                    min="0"
-                                                />
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label htmlFor="register_order_description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                                                    {t('description')} <span className="text-red-500">*</span>
-                                                </label>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        id="register_order_description"
-                                                        value={registerOrderForm.description}
-                                                        onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, description: e.target.value }))}
-                                                        className="form-input flex-1"
-                                                        placeholder={t('enter_description')}
-                                                    />
-                                                    <button type="button" onClick={handleCreateRegisterOrder} className="btn btn-primary" disabled={creatingRegisterOrder}>
-                                                        {creatingRegisterOrder ? (
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-l-transparent"></div>
-                                                                {t('creating')}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex items-center gap-2">
-                                                                <IconPlus className="w-4 h-4" />
-                                                                {t('add')}
-                                                            </div>
-                                                        )}
-                                                    </button>
-                                                </div>
-                                            </div>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    {/* Direction Toggle */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('direction') || 'Direction'} <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterOrderForm((prev) => ({ ...prev, direction: 'negative' }))}
+                                                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                                                    registerOrderForm.direction === 'negative'
+                                                        ? 'bg-danger text-white'
+                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                {t('deduction') || 'Deduction'} (-)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterOrderForm((prev) => ({ ...prev, direction: 'positive' }))}
+                                                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                                                    registerOrderForm.direction === 'positive'
+                                                        ? 'bg-success text-white'
+                                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                }`}
+                                            >
+                                                {t('addition') || 'Addition'} (+)
+                                            </button>
                                         </div>
                                     </div>
-                                    {/* Register Orders List */}
-                                    {registerOrders.length > 0 && (
-                                        <div className="mb-6 panel">
-                                            <div className="mb-4">
-                                                <h5 className="text-lg font-semibold text-gray-800 dark:text-white">{t('register_orders') || 'Register Orders'}</h5>
-                                            </div>
-                                            <div className="table-responsive">
-                                                <table className="table-hover">
-                                                    <thead>
-                                                        <tr>
-                                                            <th className="text-sm font-medium">{t('amount')}</th>
-                                                            <th className="text-sm font-medium">{t('description')}</th>
-                                                            <th className="text-sm font-medium">{t('created_date')}</th>
-                                                            <th className="text-sm font-medium text-center">{t('actions')}</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {registerOrders.map((order, index) => (
-                                                            <tr key={index}>
-                                                                <td>
-                                                                    <span className="text-danger font-semibold">-{formatCurrency(order.amount)}</span>
-                                                                </td>
-                                                                <td>{order.description}</td>
-                                                                <td className="text-sm text-gray-600 dark:text-gray-400">
-                                                                    {new Date(order.created_at).toLocaleDateString('en-GB', {
-                                                                        year: 'numeric',
-                                                                        month: '2-digit',
-                                                                        day: '2-digit',
-                                                                    })}
-                                                                </td>
-                                                                <td className="text-center">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleDeleteRegisterOrder(index)}
-                                                                        className="btn btn-sm btn-outline-danger"
-                                                                        title={t('delete')}
-                                                                    >
-                                                                        <IconTrashLines className="w-4 h-4" />
-                                                                    </button>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                    <tfoot>
-                                                        <tr className="bg-gray-50 dark:bg-gray-800">
-                                                            <td className="font-bold">{t('total_deductions') || 'Total Deductions'}:</td>
-                                                            <td colSpan={3}>
-                                                                <span className="text-danger font-bold text-lg">-{formatCurrency(registerOrders.reduce((sum, order) => sum + order.amount, 0))}</span>
-                                                            </td>
-                                                        </tr>
-                                                    </tfoot>
-                                                </table>
-                                            </div>
+                                    <div>
+                                        <label htmlFor="register_order_amount" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('amount')} <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            id="register_order_amount"
+                                            value={registerOrderForm.amount}
+                                            onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, amount: e.target.value }))}
+                                            onWheel={(e) => e.currentTarget.blur()}
+                                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            placeholder="0"
+                                            step="0.01"
+                                            min="0"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label htmlFor="register_order_description" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                            {t('description')} <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                id="register_order_description"
+                                                value={registerOrderForm.description}
+                                                onChange={(e) => setRegisterOrderForm((prev) => ({ ...prev, description: e.target.value }))}
+                                                className="form-input flex-1"
+                                                placeholder={t('enter_description')}
+                                            />
+                                            <button type="button" onClick={handleCreateRegisterOrder} className="btn btn-primary" disabled={creatingRegisterOrder}>
+                                                {creatingRegisterOrder ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-l-transparent"></div>
+                                                        {t('creating')}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <IconPlus className="w-4 h-4" />
+                                                        {t('add')}
+                                                    </div>
+                                                )}
+                                            </button>
                                         </div>
-                                    )}
-                                </>
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Register Orders List */}
+                            {registerOrders.length > 0 && (
+                                <div className="mb-6 panel">
+                                    <div className="mb-4">
+                                        <h5 className="text-lg font-semibold text-gray-800 dark:text-white">{t('register_orders') || 'Register Orders'}</h5>
+                                    </div>
+                                    <div className="table-responsive">
+                                        <table className="table-hover w-full">
+                                            <thead>
+                                                <tr>
+                                                    <th className="text-sm font-medium text-start">{t('direction') || 'Direction'}</th>
+                                                    <th className="text-sm font-medium text-start">{t('amount')}</th>
+                                                    <th className="text-sm font-medium text-start">{t('description')}</th>
+                                                    <th className="text-sm font-medium text-start">{t('created_date')}</th>
+                                                    <th className="text-sm font-medium text-center w-20">{t('actions')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {registerOrders.map((order, index) => (
+                                                    <tr key={index}>
+                                                        <td className="text-start">
+                                                            <span className={`badge ${order.direction === 'positive' ? 'bg-success' : 'bg-danger'}`}>
+                                                                {order.direction === 'positive' ? t('addition') || 'Addition' : t('deduction') || 'Deduction'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="text-start">
+                                                            <span className={`font-semibold ${order.direction === 'positive' ? 'text-success' : 'text-danger'}`}>
+                                                                {order.direction === 'positive' ? '+' : '-'}
+                                                                {formatCurrency(order.amount)}
+                                                            </span>
+                                                        </td>
+                                                        <td className="text-start">{order.description}</td>
+                                                        <td className="text-start text-sm text-gray-600 dark:text-gray-400">
+                                                            {new Date(order.created_at).toLocaleDateString('en-GB', {
+                                                                year: 'numeric',
+                                                                month: '2-digit',
+                                                                day: '2-digit',
+                                                            })}
+                                                        </td>
+                                                        <td className="text-center">
+                                                            <button type="button" onClick={() => handleDeleteRegisterOrder(index)} className="btn btn-sm btn-outline-danger" title={t('delete')}>
+                                                                <IconTrashLines className="w-4 h-4" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="bg-gray-50 dark:bg-gray-800">
+                                                    <td colSpan={4} className="font-bold text-start px-4 py-3">
+                                                        <div className="flex items-center justify-between pe-4">
+                                                            <span>{t('net_total') || 'Net Total'}:</span>
+                                                            <span
+                                                                className={`font-bold text-lg ${(() => {
+                                                                    const totalPositive = registerOrders.filter((o) => o.direction === 'positive').reduce((sum, order) => sum + order.amount, 0);
+                                                                    const totalNegative = registerOrders.filter((o) => o.direction !== 'positive').reduce((sum, order) => sum + order.amount, 0);
+                                                                    return totalPositive - totalNegative >= 0 ? 'text-success' : 'text-danger';
+                                                                })()}`}
+                                                            >
+                                                                {(() => {
+                                                                    const totalPositive = registerOrders.filter((o) => o.direction === 'positive').reduce((sum, order) => sum + order.amount, 0);
+                                                                    const totalNegative = registerOrders.filter((o) => o.direction !== 'positive').reduce((sum, order) => sum + order.amount, 0);
+                                                                    const netTotal = totalPositive - totalNegative;
+                                                                    return `${netTotal >= 0 ? '+' : ''}${formatCurrency(netTotal)}`;
+                                                                })()}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3"></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
                             )}
 
                             {/* Bank Transfer Order Section (for financing assistance intermediary deals) */}
