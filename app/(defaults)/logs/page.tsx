@@ -32,6 +32,7 @@ const LogsPage = () => {
     const [items, setItems] = useState<Log[]>([]);
     const [loading, setLoading] = useState(true);
     const [billsData, setBillsData] = useState<{ [dealId: string]: any[] }>({});
+    const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
     const [page, setPage] = useState(1);
     const PAGE_SIZES = [10, 20, 30, 50, 100];
@@ -75,6 +76,14 @@ const LogsPage = () => {
 
     useEffect(() => {
         fetchLogs();
+        // Fetch current user email
+        const fetchUserEmail = async () => {
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+            setCurrentUserEmail(user?.email || null);
+        };
+        fetchUserEmail();
     }, []);
 
     const fetchLogs = async () => {
@@ -554,7 +563,11 @@ const LogsPage = () => {
                                 accessor: 'id',
                                 title: t('id'),
                                 sortable: false,
-                                render: ({ id }, index) => <strong className="text-info">#{initialRecords.length - ((page - 1) * pageSize + index)}</strong>,
+                                render: ({ id }, index) => (
+                                    <strong className="text-info" title={currentUserEmail === 'demo@demo.com' ? `Real ID: ${id}` : undefined}>
+                                        #{initialRecords.length - ((page - 1) * pageSize + index)}
+                                    </strong>
+                                ),
                             },
                             {
                                 accessor: 'created_at',
