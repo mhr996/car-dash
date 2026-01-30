@@ -13,6 +13,7 @@ interface BillTypeSelectProps {
     className?: string;
     dealType?: string; // Add dealType prop to filter available options
     showCreditNote?: boolean; // Whether to show credit note option (only available from deal edit page)
+    showRefundReceipt?: boolean; // Whether to show refund receipt option (only available from deal edit page)
     disabledTypes?: string[]; // Bill types to hide (e.g., ['tax_invoice'] if deal already has one)
     onChange?: (billType: string) => void;
 }
@@ -22,6 +23,7 @@ const BillTypeSelect = ({
     className = 'form-select text-white-dark',
     dealType,
     showCreditNote = false,
+    showRefundReceipt = false,
     disabledTypes = [],
     onChange,
     name = 'bill_type',
@@ -81,6 +83,15 @@ const BillTypeSelect = ({
             borderColor: 'border-red-200 dark:border-red-800',
             description: t('credit_note_description') || 'Create a credit note to cancel/reverse a previous invoice',
         },
+        {
+            value: 'refund_receipt',
+            label: t('refund_receipt'),
+            icon: IconMinusCircle,
+            color: 'text-pink-600 dark:text-pink-400',
+            bgColor: 'bg-pink-50 dark:bg-pink-900/20',
+            borderColor: 'border-pink-200 dark:border-pink-800',
+            description: t('refund_receipt_description') || 'Create a refund receipt to cancel/reverse a previous receipt',
+        },
     ];
 
     // Filter bill types based on deal type
@@ -92,17 +103,22 @@ const BillTypeSelect = ({
             types = types.filter((type) => type.value !== 'credit_note');
         }
 
+        // Only show refund receipt if explicitly enabled (from deal edit page)
+        if (!showRefundReceipt) {
+            types = types.filter((type) => type.value !== 'refund_receipt');
+        }
+
         // Remove any explicitly disabled types (e.g., tax_invoice if deal already has one)
         if (disabledTypes.length > 0) {
             types = types.filter((type) => !disabledTypes.includes(type.value));
         }
 
         if (dealType === 'intermediary') {
-            // For intermediary deals, show tax_invoice_receipt, general, and optionally credit_note
-            return types.filter((type) => type.value === 'tax_invoice_receipt' || type.value === 'general' || type.value === 'credit_note');
+            // For intermediary deals, show tax_invoice_receipt, general, and optionally credit_note/refund_receipt
+            return types.filter((type) => type.value === 'tax_invoice_receipt' || type.value === 'general' || type.value === 'credit_note' || type.value === 'refund_receipt');
         } else {
-            // For all other deal types, show tax_invoice, receipt_only, general, and optionally credit_note
-            return types.filter((type) => type.value === 'tax_invoice' || type.value === 'receipt_only' || type.value === 'general' || type.value === 'credit_note');
+            // For all other deal types, show tax_invoice, receipt_only, general, and optionally credit_note/refund_receipt
+            return types.filter((type) => type.value === 'tax_invoice' || type.value === 'receipt_only' || type.value === 'general' || type.value === 'credit_note' || type.value === 'refund_receipt');
         }
     };
 

@@ -140,12 +140,14 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         // - RE = Receipt (only)
         // - DI = Deal Invoice
         // Note: Credit notes use IN (Tax Invoice) type with canceldoc parameter
+        // Note: Refund receipts use RE (Receipt) type with canceldoc parameter
         const documentTypeMap: Record<string, string> = {
             general: 'IR', // Invoice+Receipt (default)
             tax_invoice: 'IN', // Tax Invoice only
             receipt_only: 'RE', // Receipt only
             tax_invoice_receipt: 'IR', // Invoice+Receipt
             credit_note: 'IN', // Credit Note - uses IN (Tax Invoice) with canceldoc=Y
+            refund_receipt: 'RE', // Refund Receipt - uses RE (Receipt) with canceldoc=Y
         };
 
         // Map payment type to Tranzila payment method
@@ -166,10 +168,10 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         // Build items array - STRICT VALIDATION, NO FALLBACKS
         let items: any[] = [];
 
-        // Check for credit_note FIRST since it maps to IR but has different validation rules
+        // Check for credit_note FIRST since it maps to IN but has different validation rules
         if (billData.bill_type === 'credit_note') {
             // CREDIT NOTE - for cancelling/reversing invoices
-            // Uses IR document type but doesn't require payments or deal/car
+            // Uses IN document type but doesn't require payments or deal/car
             const creditAmount = parseFloat(billData.bill_amount) || billData.total_with_tax || 0;
 
             if (creditAmount <= 0) {
@@ -192,6 +194,36 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 name: itemName,
                 price_type: 'G',
                 unit_price: creditAmount,
+                units_number: 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            });
+        } else if (billData.bill_type === 'refund_receipt') {
+            // REFUND RECEIPT - for cancelling/reversing receipts
+            // Uses RE document type with canceldoc parameter
+            const refundAmount = parseFloat(billData.bill_amount) || billData.total_with_tax || 0;
+
+            if (refundAmount <= 0) {
+                throw new Error('Refund Receipt requires a positive amount to reverse');
+            }
+
+            // Build item name - always prefix with קבלה החזר to make it clear
+            let itemName = 'קבלה החזר';
+            if (billData.bill_description) {
+                itemName = `קבלה החזר - ${billData.bill_description}`;
+            } else if (deal && selectedCar) {
+                itemName = `קבלה החזר - ${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}`;
+            } else if (billData.car_details) {
+                itemName = `קבלה החזר - ${billData.car_details}`;
+            }
+
+            items.push({
+                type: 'I',
+                code: null,
+                name: itemName,
+                price_type: 'G',
+                unit_price: refundAmount,
                 units_number: 1,
                 unit_type: 1,
                 currency_code: 'ILS',
@@ -454,11 +486,12 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                       },
                   ];
 
-        // Validate payments only for receipts (RE, IR) - but NOT for credit notes
+        // Validate payments only for receipts (RE, IR) - but NOT for credit notes or refund receipts
         // Tax invoices (IN) don't require payment confirmation
-        // Credit notes are a special case - they don't require payments at all
+        // Credit notes and refund receipts are special cases - they don't require payments at all
         const isCreditNote = billData.bill_type === 'credit_note';
-        const requiresPayments = !isCreditNote && (documentType === 'RE' || documentType === 'IR');
+        const isRefundReceipt = billData.bill_type === 'refund_receipt';
+        const requiresPayments = !isCreditNote && !isRefundReceipt && (documentType === 'RE' || documentType === 'IR');
 
         if (requiresPayments) {
             const hasValidPayments = tranzilaPayments.some((p) => p.amount && p.amount > 0);
@@ -507,23 +540,23 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             document_type: documentType,
             document_date: billData.date || new Date().toISOString().split('T')[0],
             document_currency_code: 'ILS',
-            vat_percent: isCreditNote ? 18 : vatPercent, // Credit notes should have VAT
+            vat_percent: isCreditNote ? 18 : vatPercent, // Credit notes should have VAT, refund receipts don't
             client_company: billData.customer_name || t('unknown_customer'),
             client_name: billData.customer_name || t('unknown_customer'),
             client_id: customerId,
             client_email: customerEmail || 'no-reply@car-dash.com',
             client_phone: customerPhone || undefined,
             items,
-            // Credit notes don't need payments - they're reversals
-            payments: isCreditNote ? [] : tranzilaPayments,
+            // Credit notes and refund receipts don't need payments - they're reversals
+            payments: isCreditNote || isRefundReceipt ? [] : tranzilaPayments,
             created_by_user: 'car-dash',
             created_by_system: 'car-dash',
         };
 
-        // For credit notes, add cancellation parameters
+        // For credit notes and refund receipts, add cancellation parameters
         // canceldoc: 'Y' marks this as a credit/cancellation document
         // cancel_document_number: references the original document being cancelled (type 1 relation)
-        if (isCreditNote && billData.cancel_tranzila_doc_number) {
+        if ((isCreditNote || isRefundReceipt) && billData.cancel_tranzila_doc_number) {
             tranzilaRequestData.canceldoc = 'Y';
             tranzilaRequestData.cancel_document_number = billData.cancel_tranzila_doc_number;
         }
@@ -3044,13 +3077,14 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 defaultValue={billForm.bill_type}
                                                 dealType={deal?.deal_type}
                                                 showCreditNote={true}
+                                                showRefundReceipt={true}
                                                 disabledTypes={[
                                                     // Disable tax_invoice if deal already has one (tax_invoice or tax_invoice_receipt)
                                                     ...(bills.some((b) => b.bill_type === 'tax_invoice' || b.bill_type === 'tax_invoice_receipt') ? ['tax_invoice', 'tax_invoice_receipt'] : []),
                                                 ]}
                                                 onChange={(billType) => {
-                                                    // Auto-set bill_direction to 'negative' for credit notes
-                                                    if (billType === 'credit_note') {
+                                                    // Auto-set bill_direction to 'negative' for credit notes and refund receipts
+                                                    if (billType === 'credit_note' || billType === 'refund_receipt') {
                                                         setBillForm((prev) => ({
                                                             ...prev,
                                                             bill_type: billType,
@@ -3093,7 +3127,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                     >
                                                         <option value="">{t('select_bill_to_cancel_placeholder')}</option>
                                                         {bills
-                                                            .filter((b) => b.tranzila_document_number && b.bill_type !== 'credit_note')
+                                                            .filter((b) => b.tranzila_document_number && b.bill_type !== 'credit_note' && b.bill_type !== 'refund_receipt')
                                                             .map((bill) => (
                                                                 <option key={bill.id} value={bill.id}>
                                                                     #{bill.tranzila_document_number} - {t(`bill_type_${bill.bill_type}`)} - ₪{getBillAmount(bill).toLocaleString()}
@@ -3103,6 +3137,50 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 ) : (
                                                     <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                                                         <p className="text-yellow-700 dark:text-yellow-300 text-sm">{t('no_bills_to_cancel')}</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {/* Select Receipt to Refund - Only show for refund receipts */}
+                                        {billForm.bill_type === 'refund_receipt' && (
+                                            <div>
+                                                <div className="mb-4 flex items-center gap-3">
+                                                    <IconMinusCircle className="w-5 h-5 text-pink-500" />
+                                                    <div>
+                                                        <h6 className="text-md font-semibold dark:text-white-light">{t('select_receipt_to_refund')}</h6>
+                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_receipt_to_refund_desc')}</p>
+                                                    </div>
+                                                </div>
+                                                {bills.filter((b) => b.tranzila_document_number && (b.bill_type === 'receipt_only' || b.bill_type === 'tax_invoice_receipt')).length > 0 ? (
+                                                    <select
+                                                        name="cancel_bill_id"
+                                                        value={billForm.cancel_bill_id}
+                                                        onChange={(e) => {
+                                                            const selectedBill = bills.find((b) => b.id.toString() === e.target.value);
+                                                            setBillForm((prev) => ({
+                                                                ...prev,
+                                                                cancel_bill_id: e.target.value,
+                                                                cancel_tranzila_doc_id: selectedBill?.tranzila_document_id || '',
+                                                                cancel_tranzila_doc_number: selectedBill?.tranzila_document_number || '',
+                                                                // Auto-fill the amount from the selected receipt
+                                                                bill_amount: selectedBill ? getBillAmount(selectedBill).toString() : '',
+                                                                bill_description: selectedBill ? `${t('refund_receipt_for_bill')} #${selectedBill.tranzila_document_number}` : '',
+                                                            }));
+                                                        }}
+                                                        className="form-select bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all duration-200"
+                                                    >
+                                                        <option value="">{t('select_receipt_to_refund_placeholder')}</option>
+                                                        {bills
+                                                            .filter((b) => b.tranzila_document_number && (b.bill_type === 'receipt_only' || b.bill_type === 'tax_invoice_receipt'))
+                                                            .map((bill) => (
+                                                                <option key={bill.id} value={bill.id}>
+                                                                    #{bill.tranzila_document_number} - {t(`bill_type_${bill.bill_type}`)} - ₪{getBillAmount(bill).toLocaleString()}
+                                                                </option>
+                                                            ))}
+                                                    </select>
+                                                ) : (
+                                                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                                        <p className="text-yellow-700 dark:text-yellow-300 text-sm">{t('no_receipts_to_refund')}</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -3132,74 +3210,80 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 </div>
                                             </div>
                                         )}
-                                        {/* Bill Direction Selector for All Bills except tax_invoice, tax_invoice_receipt, and credit_note */}
-                                        {billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && billForm.bill_type !== 'credit_note' && (
-                                            <div>
-                                                <div className="mb-4 flex items-center gap-3">
-                                                    <IconDollarSign className="w-5 h-5 text-primary" />
-                                                    <div>
-                                                        <h6 className="text-md font-semibold dark:text-white-light">{t('bill_direction')}</h6>
-                                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_bill_direction_desc')}</p>
+                                        {/* Bill Direction Selector for All Bills except tax_invoice, tax_invoice_receipt, credit_note, and refund_receipt */}
+                                        {billForm.bill_type &&
+                                            billForm.bill_type !== 'tax_invoice' &&
+                                            billForm.bill_type !== 'tax_invoice_receipt' &&
+                                            billForm.bill_type !== 'credit_note' &&
+                                            billForm.bill_type !== 'refund_receipt' && (
+                                                <div>
+                                                    <div className="mb-4 flex items-center gap-3">
+                                                        <IconDollarSign className="w-5 h-5 text-primary" />
+                                                        <div>
+                                                            <h6 className="text-md font-semibold dark:text-white-light">{t('bill_direction')}</h6>
+                                                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_bill_direction_desc')}</p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div
-                                                        className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                                                            billForm.bill_direction === 'positive'
-                                                                ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                                                : 'border-gray-300 dark:border-gray-600 hover:border-green-400 dark:hover:border-green-500'
-                                                        }`}
-                                                        onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'positive' } } as any)}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div
-                                                                className={`p-2 rounded-full ${billForm.bill_direction === 'positive' ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-700'}`}
-                                                            >
-                                                                <IconDollarSign
-                                                                    className={`w-4 h-4 ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <h3
-                                                                    className={`font-semibold ${billForm.bill_direction === 'positive' ? 'text-green-800 dark:text-green-200' : 'text-gray-700 dark:text-gray-300'}`}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div
+                                                            className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                                                billForm.bill_direction === 'positive'
+                                                                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                                                    : 'border-gray-300 dark:border-gray-600 hover:border-green-400 dark:hover:border-green-500'
+                                                            }`}
+                                                            onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'positive' } } as any)}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div
+                                                                    className={`p-2 rounded-full ${billForm.bill_direction === 'positive' ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-700'}`}
                                                                 >
-                                                                    {t('positive_bill')}
-                                                                </h3>
-                                                                <p className={`text-sm ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                                                                    {t('positive_bill_desc')}
-                                                                </p>
+                                                                    <IconDollarSign
+                                                                        className={`w-4 h-4 ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <h3
+                                                                        className={`font-semibold ${billForm.bill_direction === 'positive' ? 'text-green-800 dark:text-green-200' : 'text-gray-700 dark:text-gray-300'}`}
+                                                                    >
+                                                                        {t('positive_bill')}
+                                                                    </h3>
+                                                                    <p className={`text-sm ${billForm.bill_direction === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                                                                        {t('positive_bill_desc')}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                                                                billForm.bill_direction === 'negative'
+                                                                    ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                                                                    : 'border-gray-300 dark:border-gray-600 hover:border-red-400 dark:hover:border-red-500'
+                                                            }`}
+                                                            onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'negative' } } as any)}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div
+                                                                    className={`p-2 rounded-full ${billForm.bill_direction === 'negative' ? 'bg-red-100 dark:bg-red-800' : 'bg-gray-100 dark:bg-gray-700'}`}
+                                                                >
+                                                                    <IconDollarSign
+                                                                        className={`w-4 h-4 ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <h3
+                                                                        className={`font-semibold ${billForm.bill_direction === 'negative' ? 'text-red-800 dark:text-red-200' : 'text-gray-700 dark:text-gray-300'}`}
+                                                                    >
+                                                                        {t('negative_bill')}
+                                                                    </h3>
+                                                                    <p className={`text-sm ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}>
+                                                                        {t('negative_bill_desc')}
+                                                                    </p>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div
-                                                        className={`p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                                                            billForm.bill_direction === 'negative'
-                                                                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                                                : 'border-gray-300 dark:border-gray-600 hover:border-red-400 dark:hover:border-red-500'
-                                                        }`}
-                                                        onClick={() => handleBillFormChange({ target: { name: 'bill_direction', value: 'negative' } } as any)}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div
-                                                                className={`p-2 rounded-full ${billForm.bill_direction === 'negative' ? 'bg-red-100 dark:bg-red-800' : 'bg-gray-100 dark:bg-gray-700'}`}
-                                                            >
-                                                                <IconDollarSign className={`w-4 h-4 ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`} />
-                                                            </div>
-                                                            <div>
-                                                                <h3
-                                                                    className={`font-semibold ${billForm.bill_direction === 'negative' ? 'text-red-800 dark:text-red-200' : 'text-gray-700 dark:text-gray-300'}`}
-                                                                >
-                                                                    {t('negative_bill')}
-                                                                </h3>
-                                                                <p className={`text-sm ${billForm.bill_direction === 'negative' ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}>
-                                                                    {t('negative_bill_desc')}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
                                         {/* General Bill Details */}
                                         {billForm.bill_type === 'general' && (
                                             <div>

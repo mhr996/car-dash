@@ -109,7 +109,7 @@ export interface PDFTranslations {
 }
 
 // Define valid bill types for internal use
-export type ValidBillType = 'general' | 'receipt_only' | 'tax_invoice' | 'tax_invoice_receipt' | 'credit_note';
+export type ValidBillType = 'general' | 'receipt_only' | 'tax_invoice' | 'tax_invoice_receipt' | 'credit_note' | 'refund_receipt';
 
 // Helper function to validate and normalize bill types
 export const normalizeBillType = (billType: string): ValidBillType => {
@@ -133,6 +133,10 @@ export const normalizeBillType = (billType: string): ValidBillType => {
         case 'creditnote':
         case 'credit':
             return 'credit_note';
+        case 'refund_receipt':
+        case 'refundreceipt':
+        case 'refund':
+            return 'refund_receipt';
         default:
             console.warn(`Unknown bill type: ${billType}, defaulting to 'general'`);
             return 'general';
