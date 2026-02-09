@@ -51,6 +51,12 @@ interface Car {
         address: string;
         phone: string;
     };
+    source_customer_id?: number | null;
+    source_customer?: {
+        id: number;
+        name: string;
+        phone?: string;
+    };
     deals?: Array<{
         id: number;
         title: string;
@@ -136,6 +142,7 @@ const CarsList = () => {
                         `
                         *, 
                         providers(id, name, address, phone),
+                        source_customer:customers!cars_source_customer_id_fkey(id, name, phone),
                         deals!deals_car_id_fkey(id, title, deal_type, status, customer_name, created_at)
                     `,
                     )
@@ -622,7 +629,9 @@ const CarsList = () => {
                                     accessor: 'provider',
                                     title: t('provider'),
                                     sortable: true,
-                                    render: ({ providers, provider }) => <span>{providers?.name || provider || '-'}</span>,
+                                    render: ({ providers, source_customer, provider }) => (
+                                        <span>{providers?.name || source_customer?.name || provider || '-'}</span>
+                                    ),
                                 },
                                 {
                                     accessor: 'market_price',
