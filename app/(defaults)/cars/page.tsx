@@ -629,9 +629,7 @@ const CarsList = () => {
                                     accessor: 'provider',
                                     title: t('provider'),
                                     sortable: true,
-                                    render: ({ providers, source_customer, provider }) => (
-                                        <span>{providers?.name || source_customer?.name || provider || '-'}</span>
-                                    ),
+                                    render: ({ providers, source_customer, provider }) => <span>{providers?.name || source_customer?.name || provider || '-'}</span>,
                                 },
                                 {
                                     accessor: 'market_price',

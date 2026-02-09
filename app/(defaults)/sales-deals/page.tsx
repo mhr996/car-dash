@@ -214,7 +214,8 @@ const DealsList = () => {
                     item.buyer?.name?.toLowerCase().includes(matchesSearch) ||
                     String(item.buyer?.id_number || '')
                         .toLowerCase()
-                        .includes(matchesSearch);
+                        .includes(matchesSearch) ||
+                    item.cars?.car_number?.toLowerCase().includes(matchesSearch);
 
                 // Deal filters
                 const dealTypeMatch = !activeFilters.dealType || item.deal_type === activeFilters.dealType;
