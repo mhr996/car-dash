@@ -1356,6 +1356,7 @@
     "deal_amount_exchange": "مبلغ الصفقة",
     "sale_price_auto": "سعر البيع",
     "connected_bills": "الفواتير المرتبطة",
+    "tranzila_number": "رقم ترانزيلا",
     "no_bills_connected": "لا توجد فواتير مرتبطة بهذه الصفقة حتى الآن",
     "unknown_customer": "عميل غير معروف",
     "bill_number": "رقم الفاتورة",

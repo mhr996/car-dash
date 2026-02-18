@@ -204,6 +204,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                     <thead>
                         <tr className="bg-gray-50 dark:bg-gray-800">
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('bill_type')}</th>
+                            <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('tranzila_number')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('customer_name')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('amount')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('bank_transfer_details')}</th>
@@ -219,6 +220,9 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
                                         {t('car_taken_from_client_label')}
                                     </span>
+                                </td>
+                                <td className="px-4 py-3 text-sm">
+                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                                     {deal?.customers?.name || deal?.customer?.name || selectedCustomer?.name || t('unknown_customer')}
@@ -247,6 +251,9 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                             {t('bank_transfer_order_customer')}
                                         </span>
                                     </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
+                                    </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{order.description}</td>
                                     <td className="px-4 py-3 text-sm">
                                         <span className="text-purple-600 dark:text-purple-400 font-medium">{formatCurrency(order.amount)}</span>
@@ -269,6 +276,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                             {t(`bill_type_${bill.bill_type}`)}
                                         </span>
                                     </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{bill.tranzila_document_number || '-'}</td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{bill.deals?.customers?.name || bill.customer_name || t('unknown_customer')}</td>
                                     <td className="px-4 py-3 text-sm">
                                         {billAmount < 0 ? (

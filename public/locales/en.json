@@ -1221,6 +1221,7 @@
     "deal_amount_exchange": "Deal Amount",
     "sale_price_auto": "Sale Price",
     "connected_bills": "Connected Bills",
+    "tranzila_number": "Tranzila #",
     "no_bills_connected": "No bills connected to this deal yet",
     "unknown_customer": "Unknown Customer",
     "bill_number": "Bill Number",
