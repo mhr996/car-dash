@@ -78,6 +78,9 @@ export async function POST(request: NextRequest) {
             case 'create_document':
                 return await createDocument(data);
 
+            case 'get_document':
+                return await getDocument(data);
+
             default:
                 return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
         }
@@ -241,7 +244,7 @@ async function createDocument(data: any = {}) {
 export async function GET() {
     return NextResponse.json({
         message: 'Tranzila API integration is running',
-        endpoints: ['create_document'],
+        endpoints: ['create_document', 'get_document'],
         documentTypes: {
             '305': 'Tax Invoice (חשבונית מס)',
             '320': 'Tax Invoice + Receipt (חשבונית מס קבלה)',
@@ -254,4 +257,63 @@ export async function GET() {
             4: 'Bank Transfer',
         },
     });
+}
+
+/**
+ * Get document details from Tranzila
+ * Used for fetching original receipt data when creating refund receipts
+ * Uses search_documents endpoint as get_document returns PDF
+ */
+async function getDocument(data: any = {}) {
+    try {
+        const headers = generateTranzilaAuthHeaders();
+
+        if (!data.document_id) {
+            return NextResponse.json({ error: 'Missing document_id' }, { status: 400 });
+        }
+
+        console.log('📄 ============ TRANZILA GET DOCUMENT REQUEST ============');
+        console.log('🎯 Document ID:', data.document_id);
+        console.log('==================================================');
+
+        // Use search_documents endpoint to get document details in JSON format
+        // The get_document endpoint returns PDF which is not useful for extracting data
+        const searchPayload = {
+            terminal_name: TRANZILA_CONFIG.terminal,
+            document_id: parseInt(data.document_id),
+            response_language: 'eng',
+        };
+
+        const searchUrl = `${TRANZILA_CONFIG.billingApiUrl}/search_documents`;
+        const searchResponse = await fetch(searchUrl, {
+            method: 'POST',
+            headers: {
+                ...headers,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(searchPayload),
+        });
+
+        let searchResult: any = null;
+        try {
+            searchResult = await searchResponse.json();
+        } catch {}
+
+        console.log('Search document response:', JSON.stringify(searchResult, null, 2));
+
+        return NextResponse.json({
+            ok: searchResponse.ok && searchResult?.status_code === 0,
+            status: searchResponse.status,
+            response: searchResult,
+        });
+    } catch (e: any) {
+        console.error('Error getting document:', e);
+        return NextResponse.json(
+            {
+                ok: false,
+                error: e?.message || 'Unknown error',
+            },
+            { status: 500 },
+        );
+    }
 }

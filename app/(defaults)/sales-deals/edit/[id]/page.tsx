@@ -549,22 +549,62 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             client_email: customerEmail || 'no-reply@car-dash.com',
             client_phone: customerPhone || undefined,
             items,
-            // Credit notes don't need payments, but refund receipts require a payment entry
-            payments: isCreditNote
-                ? []
-                : isRefundReceipt
-                  ? [
-                        {
-                            payment_method: 10, // 10 = Other
-                            amount: parseFloat(billData.bill_amount) || billData.total_with_tax || 0,
-                            currency_code: 'ILS',
-                            to_doc_currency_exchange_rate: 1,
-                        },
-                    ]
-                  : tranzilaPayments,
+            // Payments will be set below based on bill type
+            payments: tranzilaPayments,
             created_by_user: 'car-dash',
             created_by_system: 'car-dash',
         };
+
+        // Handle payments for different bill types
+        if (isCreditNote) {
+            // Credit notes don't need payments
+            tranzilaRequestData.payments = [];
+        } else if (isRefundReceipt && billData.cancel_tranzila_doc_id) {
+            // For refund receipts, fetch original document from Tranzila to get payment details
+            console.log('🔍 Fetching original receipt from Tranzila, document_id:', billData.cancel_tranzila_doc_id);
+
+            const tranzilaDocResponse = await fetch('/api/tranzila', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get_document',
+                    data: { document_id: billData.cancel_tranzila_doc_id },
+                }),
+            });
+
+            const tranzilaDocResult = await tranzilaDocResponse.json();
+            console.log('📄 Tranzila document response:', tranzilaDocResult);
+
+            // Validate the response
+            if (!tranzilaDocResult.ok) {
+                throw new Error(`Failed to fetch original receipt from Tranzila: ${tranzilaDocResult.error || 'Unknown error'}`);
+            }
+
+            // Extract payments from the Tranzila document
+            const originalDocument = tranzilaDocResult.response?.documents?.[0] || tranzilaDocResult.response?.document;
+
+            if (!originalDocument) {
+                throw new Error('Original receipt not found in Tranzila. Cannot create refund receipt.');
+            }
+
+            const originalPayments = originalDocument?.payments || [];
+
+            if (originalPayments.length === 0) {
+                throw new Error('Original receipt has no payment information. Cannot create refund receipt.');
+            }
+
+            // Map original payments to refund payments with same details
+            tranzilaRequestData.payments = originalPayments.map((payment: any) => ({
+                payment_method: payment.payment_method || 10,
+                payment_date: payment.payment_date || billData.date || new Date().toISOString().split('T')[0],
+                amount: payment.amount || 0,
+                currency_code: payment.currency_code || 'ILS',
+                to_doc_currency_exchange_rate: payment.to_doc_currency_exchange_rate || 1,
+                description: `החזר עבור קבלה #${billData.cancel_tranzila_doc_number || ''}`,
+            }));
+        } else if (isRefundReceipt && !billData.cancel_tranzila_doc_id) {
+            throw new Error('Refund receipt requires selecting an original receipt to refund.');
+        }
 
         // For credit notes and refund receipts, add cancellation parameters
         // canceldoc: 'Y' marks this as a credit/cancellation document

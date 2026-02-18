@@ -124,6 +124,18 @@ const BillsTable: React.FC<BillsTableProps> = ({
             return -Math.abs(amount);
         }
 
+        // Credit notes - use bill_amount, display as positive (they reverse invoices)
+        if (bill.bill_type === 'credit_note') {
+            const amount = parseFloat(bill.bill_amount || bill.total_with_tax || '0');
+            return Math.abs(amount);
+        }
+
+        // Refund receipts - use bill_amount, display as positive (they reverse receipts)
+        if (bill.bill_type === 'refund_receipt') {
+            const amount = parseFloat(bill.bill_amount || bill.total_with_tax || '0');
+            return Math.abs(amount);
+        }
+
         // For receipt types, calculate total from payments array if available
         if (bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') {
             let totalAmount = 0;
