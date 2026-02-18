@@ -541,6 +541,8 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             document_date: billData.date || new Date().toISOString().split('T')[0],
             document_currency_code: 'ILS',
             vat_percent: isCreditNote ? 18 : vatPercent, // Credit notes should have VAT, refund receipts don't
+            // action: 1 = debit (normal bill), 3 = credit (refund/credit note)
+            action: isCreditNote || isRefundReceipt ? 3 : 1,
             client_company: billData.customer_name || t('unknown_customer'),
             client_name: billData.customer_name || t('unknown_customer'),
             client_id: customerId,
@@ -3107,7 +3109,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_bill_to_cancel_desc')}</p>
                                                     </div>
                                                 </div>
-                                                {bills.filter((b) => b.tranzila_document_number && b.bill_type !== 'credit_note').length > 0 ? (
+                                                {bills.filter((b) => b.tranzila_document_number && b.bill_type === 'tax_invoice').length > 0 ? (
                                                     <select
                                                         name="cancel_bill_id"
                                                         value={billForm.cancel_bill_id}
@@ -3127,7 +3129,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                     >
                                                         <option value="">{t('select_bill_to_cancel_placeholder')}</option>
                                                         {bills
-                                                            .filter((b) => b.tranzila_document_number && b.bill_type !== 'credit_note' && b.bill_type !== 'refund_receipt')
+                                                            .filter((b) => b.tranzila_document_number && b.bill_type === 'tax_invoice')
                                                             .map((bill) => (
                                                                 <option key={bill.id} value={bill.id}>
                                                                     #{bill.tranzila_document_number} - {t(`bill_type_${bill.bill_type}`)} - ₪{getBillAmount(bill).toLocaleString()}
@@ -3210,8 +3212,9 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 </div>
                                             </div>
                                         )}
-                                        {/* Bill Direction Selector for All Bills except tax_invoice, tax_invoice_receipt, credit_note, and refund_receipt */}
-                                        {billForm.bill_type &&
+                                        {/* Bill Direction Selector - Hidden per request */}
+                                        {false &&
+                                            billForm.bill_type &&
                                             billForm.bill_type !== 'tax_invoice' &&
                                             billForm.bill_type !== 'tax_invoice_receipt' &&
                                             billForm.bill_type !== 'credit_note' &&

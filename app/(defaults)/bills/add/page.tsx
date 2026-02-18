@@ -675,6 +675,8 @@ const AddBill = () => {
                     document_date: billData.date || new Date().toISOString().split('T')[0],
                     document_currency_code: 'ILS',
                     vat_percent: isCreditNote ? 18 : vatPercent, // Credit notes should have VAT
+                    // action: 1 = debit (normal bill), 3 = credit (refund/credit note)
+                    action: isCreditNote ? 3 : 1,
                     client_company: billData.customer_name || 'Customer',
                     client_name: billData.customer_name || 'Customer',
                     client_id: customerId,
@@ -1195,8 +1197,8 @@ const AddBill = () => {
                     </div>
                 )}
 
-                {/* Bill Direction Selector */}
-                {billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && (
+                {/* Bill Direction Selector - Hidden per request */}
+                {false && billForm.bill_type && billForm.bill_type !== 'tax_invoice' && billForm.bill_type !== 'tax_invoice_receipt' && (
                     <div className="panel">
                         <div className="mb-5 flex items-center gap-3">
                             <IconDollarSign className="w-5 h-5 text-primary" />
