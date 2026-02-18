@@ -549,8 +549,19 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
             client_email: customerEmail || 'no-reply@car-dash.com',
             client_phone: customerPhone || undefined,
             items,
-            // Credit notes and refund receipts don't need payments - they're reversals
-            payments: isCreditNote || isRefundReceipt ? [] : tranzilaPayments,
+            // Credit notes don't need payments, but refund receipts require a payment entry
+            payments: isCreditNote
+                ? []
+                : isRefundReceipt
+                  ? [
+                        {
+                            payment_method: 10, // 10 = Other
+                            amount: parseFloat(billData.bill_amount) || billData.total_with_tax || 0,
+                            currency_code: 'ILS',
+                            to_doc_currency_exchange_rate: 1,
+                        },
+                    ]
+                  : tranzilaPayments,
             created_by_user: 'car-dash',
             created_by_system: 'car-dash',
         };
