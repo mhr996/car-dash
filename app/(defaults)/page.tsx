@@ -47,6 +47,7 @@ interface DashboardStats {
     totalRevenue: number;
     monthlyRevenue: number;
     totalCarsSalePrice: number;
+    totalCarsBuyPrice: number;
     carsGrowth: number;
     dealsGrowth: number;
     customersGrowth: number;
@@ -80,6 +81,7 @@ const HomePage = () => {
         totalRevenue: 0,
         monthlyRevenue: 0,
         totalCarsSalePrice: 0,
+        totalCarsBuyPrice: 0,
         carsGrowth: 0,
         dealsGrowth: 0,
         customersGrowth: 0,
@@ -197,10 +199,10 @@ const HomePage = () => {
                     { data: carStatusData },
                     { data: recentActivity },
                 ] = await Promise.all([
-                    // Current period queries
+                    // Current period queries - fetch cars with deals to filter out sold/archived
                     timeFilter === 'all'
-                        ? supabase.from('cars').select('*', { count: 'exact', head: true })
-                        : supabase.from('cars').select('*', { count: 'exact', head: true }).gte('created_at', currentStart.toISOString()),
+                        ? supabase.from('cars').select('id, sale_price, buy_price, deals!deals_car_id_fkey(id)')
+                        : supabase.from('cars').select('id, sale_price, buy_price, deals!deals_car_id_fkey(id)').gte('created_at', currentStart.toISOString()),
 
                     timeFilter === 'all'
                         ? supabase.from('deals').select('*', { count: 'exact', head: true })
@@ -216,8 +218,8 @@ const HomePage = () => {
 
                     // Previous period queries (only if not 'all')
                     timeFilter === 'all'
-                        ? Promise.resolve({ count: 0 })
-                        : supabase.from('cars').select('*', { count: 'exact', head: true }).gte('created_at', previousStart.toISOString()).lt('created_at', previousEnd.toISOString()),
+                        ? Promise.resolve({ data: [] })
+                        : supabase.from('cars').select('id, deals!deals_car_id_fkey(id)').gte('created_at', previousStart.toISOString()).lt('created_at', previousEnd.toISOString()),
 
                     timeFilter === 'all'
                         ? Promise.resolve({ count: 0 })
@@ -236,8 +238,8 @@ const HomePage = () => {
                         ? Promise.resolve({ data: [] })
                         : supabase.from('deals').select('amount').gte('created_at', previousStart.toISOString()).lt('created_at', previousEnd.toISOString()).not('amount', 'is', null),
 
-                    // Total cars sale price (all cars regardless of date filter)
-                    supabase.from('cars').select('sale_price').not('sale_price', 'is', null),
+                    // Total cars sale & cost price (all non-sold cars regardless of date filter)
+                    supabase.from('cars').select('sale_price, buy_price, deals!deals_car_id_fkey(id)'),
 
                     // Chart data queries (last 6 months)
                     supabase.from('deals').select('created_at').gte('created_at', sixMonthsAgo.toISOString()),
@@ -254,20 +256,24 @@ const HomePage = () => {
                     supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(10),
                 ]);
 
-                // Process results
-                const totalCars = carsResult.count || 0;
+                // Process results - filter out sold/archived cars (cars with deals)
+                const availableCars = (carsResult.data || []).filter((car: any) => !car.deals || car.deals.length === 0);
+                const totalCars = availableCars.length;
                 const totalDeals = dealsResult.count || 0;
                 const totalCustomers = customersResult.count || 0;
                 const totalProviders = providersResult.count || 0;
 
-                const previousCars = previousCarsResult.count || 0;
+                const previousAvailableCars = (previousCarsResult.data || []).filter((car: any) => !car.deals || car.deals.length === 0);
+                const previousCars = previousAvailableCars.length;
                 const previousDeals = previousDealsResult.count || 0;
                 const previousCustomers = previousCustomersResult.count || 0;
 
                 const totalRevenue = revenueData?.reduce((sum, deal) => sum + (deal.amount || 0), 0) || 0;
                 const monthlyRevenue = totalRevenue;
                 const previousMonthRevenue = previousRevenueData?.reduce((sum, deal) => sum + (deal.amount || 0), 0) || 0;
-                const totalCarsSalePrice = carsWithSalePrices?.reduce((sum, car) => sum + (car.sale_price || 0), 0) || 0;
+                const availableCarsAll = (carsWithSalePrices || []).filter((car: any) => !car.deals || car.deals.length === 0);
+                const totalCarsSalePrice = availableCarsAll.reduce((sum: number, car: any) => sum + (car.sale_price || 0), 0);
+                const totalCarsBuyPrice = availableCarsAll.reduce((sum: number, car: any) => sum + (car.buy_price || 0), 0);
 
                 // Calculate growth rates
                 const carsGrowth = timeFilter === 'all' ? 0 : calculateGrowth(totalCars || 0, previousCars || 0);
@@ -331,6 +337,7 @@ const HomePage = () => {
                     totalRevenue,
                     monthlyRevenue,
                     totalCarsSalePrice,
+                    totalCarsBuyPrice,
                     carsGrowth,
                     dealsGrowth,
                     customersGrowth,
@@ -775,9 +782,15 @@ const HomePage = () => {
                         <div className="mt-5 flex items-center">
                             <div className="text-3xl font-bold ltr:mr-3 rtl:ml-3">{formatNumber(stats.totalCars)}</div>
                         </div>
-                        <div className="mt-2 mb-2">
-                            <div className="text-lg font-semibold text-success">{formatCurrency(stats.totalCarsSalePrice)}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{t('total_sale_value')}</div>
+                        <div className="mt-2 mb-2 flex items-center gap-4">
+                            <div>
+                                <div className="text-lg font-semibold text-success">{formatCurrency(stats.totalCarsSalePrice)}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{t('total_sale_value')}</div>
+                            </div>
+                            <div>
+                                <div className="text-lg font-semibold text-danger">{formatCurrency(stats.totalCarsBuyPrice)}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{t('total_cost_value')}</div>
+                            </div>
                         </div>
                         <div className="mt-5 flex items-center font-semibold">
                             <IconCar className="h-5 w-5 text-primary ltr:mr-2 rtl:ml-2" />
