@@ -320,7 +320,7 @@ const CustomersList = () => {
                                     sortable: true,
                                     render: ({ customer_type }) => (
                                         <span className={`badge ${getCustomerTypeBadgeClass(customer_type)}`}>
-                                            {t(`customer_type`)}${customer_type}
+                                            {customer_type ? t(`customer_type_${customer_type}`) : t('customer_type_null')}
                                         </span>
                                     ),
                                 },

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import IconCaretDown from '@/components/icon/icon-caret-down';
+import IconUser from '@/components/icon/icon-user';
 import { getTranslation } from '@/i18n';
 import supabase from '@/lib/supabase';
 
 interface Provider {
-    id: string;
+    id: string | number;
     name: string;
-    address: string;
-    phone: string;
+    address?: string;
+    phone?: string;
 }
 
 interface ProviderSelectProps {
@@ -27,12 +28,10 @@ const ProviderSelect = ({ defaultValue, className = 'form-select text-white-dark
     const [loading, setLoading] = useState(true);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
-    // Update selectedProvider when defaultValue changes
     useEffect(() => {
         setSelectedProvider(defaultValue);
     }, [defaultValue]);
 
-    // Fetch providers from database
     useEffect(() => {
         const fetchProviders = async () => {
             try {
@@ -50,10 +49,13 @@ const ProviderSelect = ({ defaultValue, className = 'form-select text-white-dark
         fetchProviders();
     }, []);
 
-    // Filter providers based on search term
     const filteredProviders = providers.filter((provider) => {
         const searchLower = searchTerm.toLowerCase();
-        return provider.name.toLowerCase().includes(searchLower) || provider.address.toLowerCase().includes(searchLower) || provider.phone.toLowerCase().includes(searchLower);
+        return (
+            provider.name.toLowerCase().includes(searchLower) ||
+            (provider.address || '').toLowerCase().includes(searchLower) ||
+            (provider.phone || '').toLowerCase().includes(searchLower)
+        );
     });
 
     useEffect(() => {
@@ -67,65 +69,122 @@ const ProviderSelect = ({ defaultValue, className = 'form-select text-white-dark
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleProviderSelect = (providerId: string) => {
-        setSelectedProvider(providerId);
+    const handleProviderSelect = (providerId: string | number) => {
+        setSelectedProvider(String(providerId));
         setIsOpen(false);
         setSearchTerm('');
         if (onChange) {
             const event = {
-                target: { value: providerId, name: name },
+                target: { value: String(providerId), name: name },
             } as React.ChangeEvent<HTMLSelectElement>;
             onChange(event);
         }
     };
 
-    const getSelectedProviderName = () => {
-        const selected = providers.find((provider) => provider.id === selectedProvider);
-        return selected ? selected.name : t('select_provider');
+    const selected = providers.find((p) => String(p.id) === String(selectedProvider));
+
+    const getSelectedLabel = () => {
+        if (selected) {
+            return (
+                <div className="flex items-center gap-3 px-3 py-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                        <IconUser className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-gray-900 dark:text-white truncate">{selected.name}</div>
+                        <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {selected.phone && (
+                                <div className="flex items-center gap-1">
+                                    <IconUser className="w-3 h-3" />
+                                    <span className="truncate">{selected.phone}</span>
+                                </div>
+                            )}
+                            {selected.address && (
+                                <span className="truncate">{selected.address}</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <div className="flex items-center gap-3 px-3 py-3 text-gray-500 dark:text-gray-400">
+                <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-800">
+                    <IconUser className="w-5 h-5" />
+                </div>
+                <span>{loading ? t('loading') + '...' : t('select_provider')}</span>
+            </div>
+        );
     };
 
     if (loading) {
         return (
-            <div className={`${className} cursor-not-allowed dark:bg-black dark:text-white-dark dark:border-[#374151] flex items-center justify-between`}>
-                <span className="text-gray-400">{t('loading')}...</span>
-                <IconCaretDown className="w-4 h-4" />
+            <div className="cursor-not-allowed rounded-lg border border-gray-300 dark:border-[#374151] bg-white dark:bg-black min-h-[70px] flex items-center justify-between px-4">
+                <div className="flex items-center gap-3 px-3 py-3 text-gray-500 dark:text-gray-400">
+                    <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-800">
+                        <IconUser className="w-5 h-5" />
+                    </div>
+                    <span>{t('loading')}...</span>
+                </div>
+                <IconCaretDown className="w-4 h-4 text-gray-500" />
             </div>
         );
     }
 
     return (
-        <div ref={wrapperRef} className="relative">
-            <div className={`${className} cursor-pointer dark:bg-black dark:text-white-dark dark:border-[#374151] flex items-center justify-between`} onClick={() => setIsOpen(!isOpen)}>
-                <span>{getSelectedProviderName()}</span>
-                <IconCaretDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <div ref={wrapperRef} className="relative w-full">
+            <div
+                className={`${className} cursor-pointer rounded-lg border border-gray-300 dark:border-[#374151] bg-white dark:bg-black hover:border-primary dark:hover:border-primary transition-all duration-200 min-h-[70px] flex items-center justify-between px-4 w-full`}
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                {getSelectedLabel()}
+                <IconCaretDown className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 text-gray-500 dark:text-gray-400 ${isOpen ? 'rotate-180' : ''}`} />
             </div>
             {isOpen && (
-                <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-300 bg-white shadow-lg dark:bg-black dark:border-[#374151]">
-                    <div className="p-2">
-                        <input
-                            type="text"
-                            className="w-full rounded border border-gray-300 p-2 focus:border-primary focus:outline-none dark:bg-black dark:border-[#374151] dark:text-white-dark"
-                            placeholder={t('search_providers')}
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            autoFocus
-                        />
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
+                <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-200 dark:border-[#374151] bg-white dark:bg-black shadow-lg shadow-black/10 dark:shadow-black/50">
+                    {providers.length > 5 && (
+                        <div className="p-2 border-b border-gray-200 dark:border-[#374151]">
+                            <input
+                                type="text"
+                                className="w-full rounded-lg border border-gray-300 dark:border-[#374151] p-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20 dark:bg-black dark:text-white-dark"
+                                placeholder={t('search_providers')}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+                    )}
+                    <div className="max-h-80 overflow-y-auto p-2">
                         {filteredProviders.length > 0 ? (
-                            filteredProviders.map((provider) => (
-                                <div
-                                    key={provider.id}
-                                    className="cursor-pointer px-4 py-3 hover:bg-gray-100 dark:text-white-dark dark:hover:bg-[#191e3a] border-b border-gray-100 dark:border-[#374151] last:border-b-0"
-                                    onClick={() => handleProviderSelect(provider.id)}
-                                >
-                                    <div className="font-medium">{provider.name}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{provider.address}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">{provider.phone}</div>
-                                </div>
-                            ))
+                            filteredProviders.map((provider) => {
+                                const isSelected = String(provider.id) === String(selectedProvider);
+                                return (
+                                    <div
+                                        key={provider.id}
+                                        className={`cursor-pointer rounded-lg p-4 mb-2 last:mb-0 hover:bg-gray-50 dark:hover:bg-[#1a2238] transition-all duration-200 ${
+                                            isSelected ? 'bg-primary/5 border border-primary/20' : 'border border-transparent'
+                                        }`}
+                                        onClick={() => handleProviderSelect(provider.id)}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 rounded-full bg-primary/10 flex-shrink-0">
+                                                <IconUser className="w-4 h-4 text-primary" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className={`font-semibold text-gray-900 dark:text-white ${isSelected ? 'text-primary' : ''}`}>{provider.name}</h4>
+                                                {provider.phone && (
+                                                    <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{provider.phone}</div>
+                                                )}
+                                                {provider.address && (
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{provider.address}</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
                         ) : (
-                            <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-center">{t('no_providers_found')}</div>
+                            <div className="p-4 text-center text-gray-500 dark:text-gray-400">{t('no_providers_found')}</div>
                         )}
                     </div>
                 </div>

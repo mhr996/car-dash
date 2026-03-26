@@ -10,6 +10,8 @@ import IconCalendar from '@/components/icon/icon-calendar';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconShoppingCart from '@/components/icon/icon-shopping-cart';
 import IconTrendingUp from '@/components/icon/icon-trending-up';
+import IconMail from '@/components/icon/icon-mail';
+import IconSend from '@/components/icon/icon-send';
 import supabase from '@/lib/supabase';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -44,8 +46,10 @@ const CustomerPreview = () => {
     const router = useRouter();
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [customerMessages, setCustomerMessages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [transactionsLoading, setTransactionsLoading] = useState(true);
+    const [messagesLoading, setMessagesLoading] = useState(true);
     const [customerBalance, setCustomerBalance] = useState<number>(0);
 
     useEffect(() => {
@@ -109,6 +113,31 @@ const CustomerPreview = () => {
             fetchTransactions();
         }
     }, [params?.id]);
+
+    useEffect(() => {
+        if (!customer?.name) return;
+
+        const fetchCustomerMessages = async () => {
+            setMessagesLoading(true);
+            try {
+                const { data, error } = await supabase
+                    .from('messages')
+                    .select('*')
+                    .eq('recipient', customer.name)
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+                setCustomerMessages(data || []);
+            } catch (e) {
+                console.error('Failed to load customer messages:', e);
+                setCustomerMessages([]);
+            } finally {
+                setMessagesLoading(false);
+            }
+        };
+
+        fetchCustomerMessages();
+    }, [customer?.id, customer?.name]);
 
     const getCustomerTypeBadgeClass = (type: string) => {
         return type === 'new' ? 'badge-outline-success' : 'badge-outline-primary';
@@ -381,6 +410,87 @@ const CustomerPreview = () => {
 
                                 {transactionsLoading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Customer Message History */}
+                <div className="mt-6">
+                    <div className="panel">
+                        <div className="mb-5 flex items-center justify-between">
+                            <h3 className="text-lg font-semibold flex items-center gap-2">
+                                <IconMail className="w-5 h-5 text-primary" />
+                                {t('customer_message_history')}
+                            </h3>
+                            <Link href={`/messages/send?customerId=${customer.id}`} className="btn btn-sm btn-primary">
+                                <IconSend className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
+                                {t('send_message')}
+                            </Link>
+                        </div>
+
+                        <div className="datatables">
+                            <DataTable
+                                className={`${messagesLoading ? 'filter blur-sm pointer-events-none' : 'table-hover whitespace-nowrap'}`}
+                                records={customerMessages}
+                                columns={[
+                                    {
+                                        accessor: 'created_at',
+                                        title: t('date'),
+                                        sortable: true,
+                                        render: ({ created_at }) => (
+                                            <span>
+                                                {created_at
+                                                    ? new Date(created_at).toLocaleDateString('en-GB', {
+                                                          year: 'numeric',
+                                                          month: '2-digit',
+                                                          day: '2-digit',
+                                                          hour: '2-digit',
+                                                          minute: '2-digit',
+                                                      })
+                                                    : '-'}
+                                            </span>
+                                        ),
+                                    },
+                                    {
+                                        accessor: 'type',
+                                        title: t('type'),
+                                        sortable: true,
+                                        render: ({ type }) => {
+                                            const typeLabels: Record<string, string> = {
+                                                collection: t('collection'),
+                                                promotion: t('promotion'),
+                                                holiday: t('holiday_greetings'),
+                                                other: t('other'),
+                                            };
+                                            return <span className="badge badge-outline-primary">{typeLabels[type] || type}</span>;
+                                        },
+                                    },
+                                    {
+                                        accessor: 'content',
+                                        title: t('message_content'),
+                                        sortable: false,
+                                        render: ({ content }) => (
+                                            <span className="text-sm max-w-[300px] truncate block" title={content}>
+                                                {content}
+                                            </span>
+                                        ),
+                                    },
+                                    {
+                                        accessor: 'status',
+                                        title: t('status'),
+                                        sortable: true,
+                                        render: ({ status }) => (
+                                            <span className={`badge ${status === 'sent' ? 'badge-outline-success' : 'badge-outline-warning'}`}>
+                                                {status}
+                                            </span>
+                                        ),
+                                    },
+                                ]}
+                                minHeight={150}
+                                noRecordsText={t('no_messages_for_customer')}
+                            />
+
+                            {messagesLoading && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
                         </div>
                     </div>
                 </div>

@@ -67,6 +67,39 @@ interface Car {
     }>;
 }
 
+/** Map DB `cars.status` to i18n: prefers `car_inventory_status_*`, then raw key. */
+function labelForCarInventoryStatus(t: (key: string) => string, raw: string | undefined | null): string {
+    if (raw == null || String(raw).trim() === '') return '—';
+    const key = String(raw).trim().toLowerCase().replace(/\s+/g, '_');
+    const specificKey = `car_inventory_status_${key}`;
+    const fromSpecific = t(specificKey);
+    if (fromSpecific !== specificKey) return fromSpecific;
+    const fromGeneric = t(key);
+    return fromGeneric !== key ? fromGeneric : String(raw).trim();
+}
+
+function carStatusBadgeClass(status: string | undefined | null): string {
+    const s = String(status ?? '').trim().toLowerCase();
+    if (s === 'new') return 'badge-outline-success';
+    if (s === 'used') return 'badge-outline-info';
+    if (s === 'received_from_client') return 'badge-outline-warning';
+    if (s === 'returned_to_customer') return 'badge-outline-danger';
+    return 'badge-outline-secondary';
+}
+
+function carIsReturnedToCustomerArchive(car: Car): boolean {
+    return String(car.status ?? '').trim().toLowerCase() === 'returned_to_customer';
+}
+
+function carHasActiveSaleDeal(car: Car): boolean {
+    return car.deals?.some((d) => d.status !== 'cancelled') ?? false;
+}
+
+/** Archived: showroom car tied to a non-cancelled deal, or trade-in returned to customer (cars.status) */
+function carIsArchivedForUi(car: Car): boolean {
+    return carHasActiveSaleDeal(car) || carIsReturnedToCustomerArchive(car);
+}
+
 type TabType = 'available' | 'archived';
 
 const CarsList = () => {
@@ -173,9 +206,8 @@ const CarsList = () => {
     useEffect(() => {
         setInitialRecords(
             items.filter((item) => {
-                // Tab-based filtering: Available cars (no deals) vs Archived cars (has deals)
-                const hasDeals = item.deals && item.deals.length > 0;
-                const matchesTab = activeTab === 'available' ? !hasDeals : hasDeals;
+                const isArchived = carIsArchivedForUi(item);
+                const matchesTab = activeTab === 'available' ? !isArchived : isArchived;
 
                 if (!matchesTab) return false;
 
@@ -487,7 +519,7 @@ const CarsList = () => {
                                     />
                                 </svg>
                                 {t('available_cars')}
-                                <span className="badge bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{items.filter((car) => !car.deals || car.deals.length === 0).length}</span>
+                                <span className="badge bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{items.filter((car) => !carIsArchivedForUi(car)).length}</span>
                             </button>
                         </li>
                         <li className="mx-2">
@@ -503,7 +535,7 @@ const CarsList = () => {
                                     <path fillRule="evenodd" d="M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" clipRule="evenodd" />
                                 </svg>
                                 {t('archived_cars')}
-                                <span className="badge bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{items.filter((car) => car.deals && car.deals.length > 0).length}</span>
+                                <span className="badge bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">{items.filter((car) => carIsArchivedForUi(car)).length}</span>
                             </button>
                         </li>
                     </ul>
@@ -655,8 +687,16 @@ const CarsList = () => {
                                               title: t('deal_info'),
                                               sortable: false,
                                               render: (car: Car) => {
-                                                  if (!car.deals || car.deals.length === 0) return <span className="text-gray-400">-</span>;
-                                                  const deal = car.deals[0]; // Show the first deal
+                                                  if (carIsReturnedToCustomerArchive(car)) {
+                                                      return (
+                                                          <div className="text-sm text-danger">
+                                                              <div className="font-medium">{labelForCarInventoryStatus(t, car.status)}</div>
+                                                              <div className="text-xs text-gray-500 dark:text-gray-400">{t('archived_exchange_tradein_note')}</div>
+                                                          </div>
+                                                      );
+                                                  }
+                                                  const deal = car.deals?.find((d) => d.status !== 'cancelled');
+                                                  if (!deal) return <span className="text-gray-400">-</span>;
                                                   return (
                                                       <div className="text-sm">
                                                           <div className="font-medium">{deal.title}</div>
@@ -778,17 +818,10 @@ const CarsList = () => {
                                                 />
                                                 <div className="absolute top-2 right-2 flex gap-2">
                                                     <span
-                                                        className={`badge ${
-                                                            car.status === 'new'
-                                                                ? 'badge-outline-success'
-                                                                : car.status === 'used'
-                                                                  ? 'badge-outline-info'
-                                                                  : car.status === 'received_from_client'
-                                                                    ? 'badge-outline-warning'
-                                                                    : 'badge-outline-secondary'
-                                                        } bg-white dark:bg-gray-800`}
+                                                        className={`badge ${carStatusBadgeClass(car.status)} bg-white dark:bg-gray-800`}
+                                                        title={t('car_status')}
                                                     >
-                                                        {t(`car_status`)} {car.status}
+                                                        {labelForCarInventoryStatus(t, car.status)}
                                                     </span>
                                                 </div>
                                             </div>

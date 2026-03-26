@@ -380,6 +380,19 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
 
         setSaving(true);
         try {
+            // Check if car_number exists in available cars (not archived) - prevent 409 duplicate
+            const { data: existingCars } = await supabase
+                .from('cars')
+                .select('id, car_number, deals:deals!deals_car_id_fkey(id)')
+                .ilike('car_number', form.car_number.trim());
+            const hasAvailableWithSameNumber =
+                existingCars?.some((car: any) => !car.deals || (Array.isArray(car.deals) && car.deals.length === 0));
+            if (hasAvailableWithSameNumber) {
+                setErrors({ submit: t('car_number_duplicate_available') });
+                setSaving(false);
+                return;
+            }
+
             let uploadedImages: string[] = [];
 
             // Upload thumbnail image if provided
@@ -421,9 +434,14 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
 
             onCarCreated(data);
             handleClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error creating car:', error);
-            setErrors({ submit: t('error_creating_car') });
+            const isDuplicate =
+                error?.code === '23505' ||
+                error?.status === 409 ||
+                error?.message?.includes('duplicate') ||
+                error?.message?.includes('unique');
+            setErrors({ submit: isDuplicate ? t('car_number_duplicate_available') : t('error_creating_car') });
         } finally {
             setSaving(false);
         }

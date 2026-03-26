@@ -8,12 +8,14 @@ import { getTranslation } from '@/i18n';
 interface FilterProps {
     onFilterChange: (filters: DealFilters) => void;
     onClearFilters: () => void;
+    initialFilters?: Partial<DealFilters>;
 }
 
 export interface DealFilters {
     search: string;
     dealType: string;
     status: string;
+    billStatus: string;
     amountFrom: string;
     amountTo: string;
     sellingPriceFrom: string;
@@ -87,7 +89,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, p
                                 </div>
                             ))
                         ) : (
-                            <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-center">No options found</div>
+                            <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-center">{t('no_options_found')}</div>
                         )}
                     </div>
                 </div>
@@ -96,13 +98,14 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, p
     );
 };
 
-const DealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) => {
+const DealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters, initialFilters }) => {
     const { t } = getTranslation();
     const [isExpanded, setIsExpanded] = useState(false);
     const [filters, setFilters] = useState<DealFilters>({
         search: '',
         dealType: '',
         status: '',
+        billStatus: '',
         amountFrom: '',
         amountTo: '',
         sellingPriceFrom: '',
@@ -111,6 +114,7 @@ const DealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) 
         dateTo: '',
         sellerId: '',
         buyerId: '',
+        ...initialFilters,
     });
 
     const dealTypeOptions = [
@@ -133,6 +137,12 @@ const DealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) 
         { value: 'cancelled', label: t('deal_status_cancelled') },
     ];
 
+    const billStatusOptions = [
+        { value: '', label: t('all') },
+        { value: 'has_bill', label: t('bill_created') },
+        { value: 'no_bill', label: t('no_bill_created') },
+    ];
+
     useEffect(() => {
         onFilterChange(filters);
     }, [filters, onFilterChange]);
@@ -149,6 +159,7 @@ const DealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) 
             search: '',
             dealType: '',
             status: '',
+            billStatus: '',
             amountFrom: '',
             amountTo: '',
             sellingPriceFrom: '',
@@ -204,6 +215,12 @@ const DealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) 
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('status')}</label>
                             <CustomSelect options={statusOptions} value={filters.status} onChange={(value) => handleInputChange('status', value)} placeholder={t('all')} className="form-select" />
+                        </div>
+
+                        {/* Bill Status Filter */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('bill_status')}</label>
+                            <CustomSelect options={billStatusOptions} value={filters.billStatus} onChange={(value) => handleInputChange('billStatus', value)} placeholder={t('all')} className="form-select" />
                         </div>
 
                         {/* Date From Filter */}

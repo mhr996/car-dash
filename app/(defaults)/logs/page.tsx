@@ -223,6 +223,7 @@ const LogsPage = () => {
         if (!log.car) return t('not_available');
 
         const car = log.car;
+
         return (
             <div className="text-sm">
                 <div className="font-medium">
@@ -250,11 +251,25 @@ const LogsPage = () => {
             sourceName = customer?.name || t('not_available');
         }
 
+        const purchaseReturned =
+            (car as { returned_to_customer?: boolean }).returned_to_customer === true || (car as { status?: string }).status === 'returned_to_customer';
+        const purchaseShowroomRestored =
+            (car as { exchange_returned_to_showroom?: boolean }).exchange_returned_to_showroom === true ||
+            (car as { deal_cancelled_showroom_restored?: boolean }).deal_cancelled_showroom_restored === true;
+
+        const purchasePriceLine = purchaseReturned ? (
+            <div className="text-danger font-medium">({t('log_exchange_returned_brackets')})</div>
+        ) : purchaseShowroomRestored ? (
+            <div className="text-danger font-medium">({t('log_car_status_back_to_showroom')})</div>
+        ) : (
+            <div className="text-gray-500 dark:text-gray-400">₪{car.buy_price?.toLocaleString() || '0'}</div>
+        );
+
         return (
             <div className="text-sm">
                 <div className="font-medium">{formatDate(car.created_at) || t('not_available')}</div>
                 <div className="text-gray-500 dark:text-gray-400">{sourceName}</div>
-                <div className="text-gray-500 dark:text-gray-400">₪{car.buy_price?.toLocaleString() || '0'}</div>
+                {purchasePriceLine}
             </div>
         );
     };
@@ -267,22 +282,35 @@ const LogsPage = () => {
         const seller = deal.seller || deal.sellers;
         const buyer = deal.buyer || deal.buyers;
 
+        const showExchangeCancelledLabels = deal.status === 'cancelled' && deal.deal_type === 'exchange';
+        const exchangeCancelledBadge = showExchangeCancelledLabels ? (
+            <span className="text-danger font-medium"> ({t('log_exchange_deal_cancelled_brackets')})</span>
+        ) : null;
+
         // For exchange and intermediary deals with buyer and seller
         if ((deal.deal_type === 'exchange' || deal.deal_type === 'intermediary' || deal.deal_type === 'financing_assistance_intermediary') && (seller || buyer)) {
+            const salePriceLine = showExchangeCancelledLabels ? (
+                <div className="text-danger font-medium">({t('log_exchange_deal_cancelled_brackets')})</div>
+            ) : (
+                <div className="text-gray-500 dark:text-gray-400">₪{deal.selling_price?.toLocaleString() || deal.amount?.toLocaleString() || '0'}</div>
+            );
+
             return (
                 <div className="text-sm">
                     <div className="font-medium">{formatDate(deal.created_at) || t('not_available')}</div>
                     {seller && (
                         <div className="text-gray-500 dark:text-gray-400">
                             {t('seller')}: {seller.name}
+                            {showExchangeCancelledLabels && !buyer ? exchangeCancelledBadge : null}
                         </div>
                     )}
                     {buyer && (
                         <div className="text-gray-500 dark:text-gray-400">
                             {t('buyer')}: {buyer.name}
+                            {showExchangeCancelledLabels ? exchangeCancelledBadge : null}
                         </div>
                     )}
-                    <div className="text-gray-500 dark:text-gray-400">₪{deal.selling_price?.toLocaleString() || deal.amount?.toLocaleString() || '0'}</div>
+                    {salePriceLine}
                 </div>
             );
         }
@@ -291,8 +319,15 @@ const LogsPage = () => {
         return (
             <div className="text-sm">
                 <div className="font-medium">{formatDate(deal.created_at) || t('not_available')}</div>
-                <div className="text-gray-500 dark:text-gray-400">{customer?.name || deal.customer_name || t('not_available')}</div>
-                <div className="text-gray-500 dark:text-gray-400">₪{deal.selling_price?.toLocaleString() || deal.amount?.toLocaleString() || '0'}</div>
+                <div className="text-gray-500 dark:text-gray-400">
+                    {customer?.name || deal.customer_name || t('not_available')}
+                    {showExchangeCancelledLabels ? exchangeCancelledBadge : null}
+                </div>
+                {showExchangeCancelledLabels ? (
+                    <div className="text-danger font-medium">({t('log_exchange_deal_cancelled_brackets')})</div>
+                ) : (
+                    <div className="text-gray-500 dark:text-gray-400">₪{deal.selling_price?.toLocaleString() || deal.amount?.toLocaleString() || '0'}</div>
+                )}
             </div>
         );
     };
@@ -655,10 +690,21 @@ const LogsPage = () => {
                                 accessor: 'deal_status',
                                 title: t('deal_status'),
                                 render: (log) => {
-                                    if (!log.deal || !log.deal.status) {
-                                        return <span className="text-gray-400">{t('not_available')}</span>;
+                                    if (log.deal?.status) {
+                                        return <span className={`badge ${getStatusBadgeClass(log.deal.status)}`}>{t(`status_${log.deal.status}`)}</span>;
                                     }
-                                    return <span className={`badge ${getStatusBadgeClass(log.deal.status)}`}>{t(`status_${log.deal.status}`)}</span>;
+                                    const car = log.car as Log['car'] & {
+                                        deal_cancelled?: boolean;
+                                        deal_cancelled_showroom_restored?: boolean;
+                                        status?: string;
+                                    };
+                                    if (car?.deal_cancelled || car?.status === 'returned_to_customer') {
+                                        return <span className={`badge ${getStatusBadgeClass('cancelled')}`}>{t('status_cancelled')}</span>;
+                                    }
+                                    if (car?.deal_cancelled_showroom_restored) {
+                                        return <span className={`badge ${getStatusBadgeClass('cancelled')}`}>{t('status_cancelled')}</span>;
+                                    }
+                                    return <span className="text-gray-400">{t('not_available')}</span>;
                                 },
                             },
                         ]}

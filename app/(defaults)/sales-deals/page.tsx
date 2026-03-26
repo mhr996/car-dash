@@ -5,6 +5,7 @@ import IconPlus from '@/components/icon/icon-plus';
 import { sortBy } from 'lodash';
 import { DataTableSortStatus, DataTable } from 'mantine-datatable';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import React, { useEffect, useState, useRef } from 'react';
 import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
@@ -32,6 +33,7 @@ interface DealFilters {
     search: string;
     dealType: string;
     status: string;
+    billStatus: string;
     dateFrom: string;
     dateTo: string;
     sellerId: string;
@@ -40,6 +42,7 @@ interface DealFilters {
 
 const DealsList = () => {
     const { t } = getTranslation();
+    const searchParams = useSearchParams();
     const { hasPermission, loading: permissionsLoading } = usePermissions();
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -61,6 +64,7 @@ const DealsList = () => {
         search: '',
         dealType: '',
         status: '',
+        billStatus: '',
         dateFrom: '',
         dateTo: '',
         sellerId: '',
@@ -74,6 +78,7 @@ const DealsList = () => {
             setViewMode(savedView);
         }
     }, []);
+
 
     // Save view preference when changed
     const handleViewChange = (view: 'list' | 'grid') => {
@@ -223,13 +228,21 @@ const DealsList = () => {
                 const sellerMatch = !activeFilters.sellerId || item.seller?.id === activeFilters.sellerId;
                 const buyerMatch = !activeFilters.buyerId || item.buyer?.id === activeFilters.buyerId;
 
+                // Bill status filter
+                const bills = item.bills as any[] | undefined;
+                const hasBills = bills && bills.length > 0;
+                const billStatusMatch =
+                    !activeFilters.billStatus ||
+                    (activeFilters.billStatus === 'has_bill' && hasBills) ||
+                    (activeFilters.billStatus === 'no_bill' && !hasBills);
+
                 // Date range
                 const dateFrom = activeFilters.dateFrom ? new Date(activeFilters.dateFrom) : null;
                 const dateTo = activeFilters.dateTo ? new Date(activeFilters.dateTo) : null;
                 const itemDate = new Date(item.created_at);
                 const dateMatch = (!dateFrom || itemDate >= dateFrom) && (!dateTo || itemDate <= dateTo);
 
-                return searchMatch && dealTypeMatch && statusMatch && sellerMatch && buyerMatch && dateMatch;
+                return searchMatch && dealTypeMatch && statusMatch && billStatusMatch && sellerMatch && buyerMatch && dateMatch;
             }),
         );
     }, [items, search, activeFilters]);
@@ -561,6 +574,11 @@ const DealsList = () => {
                     </div>
                     <div className="flex-grow">
                         <DealFilters
+                            initialFilters={
+                                searchParams?.get('billStatus') === 'no_bill' || searchParams?.get('billStatus') === 'has_bill'
+                                    ? { billStatus: searchParams.get('billStatus')! }
+                                    : undefined
+                            }
                             onFilterChange={(newFilters) => {
                                 setActiveFilters(newFilters);
                                 // Also update the search state to keep it in sync
@@ -571,6 +589,7 @@ const DealsList = () => {
                                     search: '',
                                     dealType: '',
                                     status: '',
+                                    billStatus: '',
                                     dateFrom: '',
                                     dateTo: '',
                                     sellerId: '',

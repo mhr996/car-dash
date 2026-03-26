@@ -95,6 +95,78 @@ const AddCar = () => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
     };
+
+    // عند اختيار رقم سيارة موجودة في المؤرشفة، تعبئة البيانات تلقائياً
+    const handleCarNumberBlur = async () => {
+        const carNumberTrimmed = form.car_number?.trim();
+        if (!carNumberTrimmed) return;
+
+        try {
+            const { data: cars, error } = await supabase
+                .from('cars')
+                .select(
+                    `
+                    *,
+                    providers(id, name),
+                    source_customer:customers!cars_source_customer_id_fkey(id, name, phone)
+                `,
+                )
+                .ilike('car_number', carNumberTrimmed);
+
+            if (error) return;
+
+            // السيارات المؤرشفة = لها صف في deals
+            const { data: carsWithDeals } = await supabase
+                .from('cars')
+                .select('id, deals:deals!deals_car_id_fkey(id)')
+                .ilike('car_number', carNumberTrimmed);
+
+            const archivedIds = new Set(
+                (carsWithDeals || [])
+                    .filter((c: any) => c.deals && Array.isArray(c.deals) && c.deals.length > 0)
+                    .map((c: any) => c.id),
+            );
+
+            const archivedCar = (cars || []).find((c: any) => archivedIds.has(c.id));
+            if (!archivedCar) return;
+
+            setForm((prev) => ({
+                ...prev,
+                title: archivedCar.title || prev.title,
+                year: archivedCar.year ? String(archivedCar.year) : prev.year,
+                brand: archivedCar.brand || prev.brand,
+                status: archivedCar.status || prev.status,
+                type: archivedCar.type || prev.type,
+                kilometers: archivedCar.kilometers != null ? String(archivedCar.kilometers) : prev.kilometers,
+                market_price: archivedCar.market_price != null ? String(archivedCar.market_price) : prev.market_price,
+                buy_price: archivedCar.buy_price != null ? String(archivedCar.buy_price) : prev.buy_price,
+                sale_price: archivedCar.sale_price != null ? String(archivedCar.sale_price) : prev.sale_price,
+                desc: archivedCar.desc || prev.desc,
+                public: archivedCar.public ?? prev.public,
+            }));
+
+            if (archivedCar.source_customer_id && archivedCar.source_customer) {
+                setCarSource('customer');
+                const sc = archivedCar.source_customer as { id: number | string; name: string; phone?: string };
+                setSelectedCustomer({
+                    id: String(sc.id),
+                    name: sc.name,
+                    phone: sc.phone || '',
+                    age: 0,
+                });
+                setForm((prev) => ({ ...prev, provider: '' }));
+            } else if (archivedCar.provider != null) {
+                setCarSource('provider');
+                setSelectedCustomer(null);
+                setForm((prev) => ({ ...prev, provider: String(archivedCar.provider) }));
+            }
+
+            setAlert({ visible: true, message: t('archived_car_data_loaded') || 'تم تحميل بيانات السيارة المؤرشفة', type: 'success' });
+        } catch {
+            // تجاهل الأخطاء - المستخدم ربما أدخل رقم سيارة جديدة
+        }
+    };
+
     const handleThumbnailSelect = () => {
         thumbnailInputRef.current?.click();
     };
@@ -416,6 +488,19 @@ const AddCar = () => {
         if (!validateForm()) return;
         setSaving(true);
         try {
+            // Check if car_number exists in available cars (not archived) - prevent 409 duplicate
+            const { data: existingCars } = await supabase
+                .from('cars')
+                .select('id, car_number, deals:deals!deals_car_id_fkey(id)')
+                .ilike('car_number', form.car_number.trim());
+            const hasAvailableWithSameNumber =
+                existingCars?.some((car: any) => !car.deals || (Array.isArray(car.deals) && car.deals.length === 0));
+            if (hasAvailableWithSameNumber) {
+                setAlert({ visible: true, message: t('car_number_duplicate_available'), type: 'danger' });
+                setSaving(false);
+                return;
+            }
+
             // First, create the car record without images to get the car ID
             const carData = {
                 title: form.title.trim(),
@@ -501,11 +586,17 @@ const AddCar = () => {
             setTimeout(() => {
                 router.push('/cars');
             }, 1500);
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
+            const isDuplicate =
+                error?.code === '23505' ||
+                error?.status === 409 ||
+                error?.message?.includes('duplicate') ||
+                error?.message?.includes('unique');
+            const message = isDuplicate ? t('car_number_duplicate_available') : error instanceof Error ? error.message : t('error_adding_car');
             setAlert({
                 visible: true,
-                message: error instanceof Error ? error.message : t('error_adding_car'),
+                message,
                 type: 'danger',
             });
         } finally {
@@ -631,6 +722,7 @@ const AddCar = () => {
                                         name="car_number"
                                         value={form.car_number}
                                         onChange={handleInputChange}
+                                        onBlur={handleCarNumberBlur}
                                         className="form-input"
                                         placeholder={t('enter_car_number')}
                                         required

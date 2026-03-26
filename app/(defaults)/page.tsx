@@ -6,6 +6,7 @@ import supabase from '@/lib/supabase';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { getTranslation } from '@/i18n';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // Dynamically import ReactApexChart with SSR disabled
 const ReactApexChart = dynamic(() => import('react-apexcharts'), {
@@ -25,7 +26,6 @@ import IconMenuInvoice from '@/components/icon/menu/icon-menu-invoice';
 import IconUsersGroup from '@/components/icon/icon-users-group';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconEye from '@/components/icon/icon-eye';
-import IconPlus from '@/components/icon/icon-plus';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconCash from '@/components/icon/icon-cash-banknotes';
 import IconSettings from '@/components/icon/icon-settings';
@@ -61,6 +61,8 @@ interface DashboardStats {
     recentActivity: any[];
     dealsByType: { [key: string]: number };
     carsByStatus: { [key: string]: number };
+    dealsWithoutBills: any[];
+    latestDeals: any[];
 }
 
 type TimeFilter = 'week' | 'month' | 'year' | 'all';
@@ -71,6 +73,7 @@ const HomePage = () => {
     const [isMounted, setIsMounted] = useState(false);
     const [timeFilter, setTimeFilter] = useState<TimeFilter>('month');
     const { t } = getTranslation();
+    const { hasPermission, loading: permissionsLoading } = usePermissions();
 
     const [stats, setStats] = useState<DashboardStats>({
         totalCars: 0,
@@ -94,6 +97,8 @@ const HomePage = () => {
         recentActivity: [],
         dealsByType: {},
         carsByStatus: {},
+        dealsWithoutBills: [],
+        latestDeals: [],
     });
 
     // Set is mounted for client-side rendering of charts
@@ -173,30 +178,7 @@ const HomePage = () => {
                 // Consolidate all database queries into fewer parallel calls
                 const sixMonthsAgo = new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1);
 
-                const [
-                    // Current period counts
-                    carsResult,
-                    dealsResult,
-                    customersResult,
-                    providersResult,
-                    // Previous period counts (for growth calculation)
-                    previousCarsResult,
-                    previousDealsResult,
-                    previousCustomersResult,
-                    // Revenue data
-                    { data: revenueData },
-                    { data: previousRevenueData },
-                    // Total cars sale price
-                    { data: carsWithSalePrices },
-                    // Chart data (all in single queries)
-                    { data: allDealsForChart },
-                    { data: allCarsForChart },
-                    { data: allRevenueForChart },
-                    // Additional data
-                    { data: dealTypesData },
-                    { data: carStatusData },
-                    { data: recentActivity },
-                ] = await Promise.all([
+                const results = await Promise.all([
                     // Current period queries
                     timeFilter === 'all'
                         ? supabase.from('cars').select('*', { count: 'exact', head: true })
@@ -254,15 +236,45 @@ const HomePage = () => {
                     supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(10),
                 ]);
 
-                // Process results
-                const totalCars = carsResult.count || 0;
-                const totalDeals = dealsResult.count || 0;
-                const totalCustomers = customersResult.count || 0;
-                const totalProviders = providersResult.count || 0;
+                // Destructure results
+                const [
+                    carsResult,
+                    dealsResult,
+                    customersResult,
+                    providersResult,
+                    previousCarsResult,
+                    previousDealsResult,
+                    previousCustomersResult,
+                    revenueResult,
+                    previousRevenueResult,
+                    carsWithSalePricesResult,
+                    allDealsForChartResult,
+                    allCarsForChartResult,
+                    allRevenueForChartResult,
+                    dealTypesResult,
+                    carStatusResult,
+                    recentActivityResult,
+                ] = results;
 
-                const previousCars = previousCarsResult.count || 0;
-                const previousDeals = previousDealsResult.count || 0;
-                const previousCustomers = previousCustomersResult.count || 0;
+                const revenueData = revenueResult?.data;
+                const previousRevenueData = previousRevenueResult?.data;
+                const carsWithSalePrices = carsWithSalePricesResult?.data;
+                const allDealsForChart = allDealsForChartResult?.data;
+                const allCarsForChart = allCarsForChartResult?.data;
+                const allRevenueForChart = allRevenueForChartResult?.data;
+                const dealTypesData = dealTypesResult?.data;
+                const carStatusData = carStatusResult?.data;
+                const recentActivity = recentActivityResult?.data;
+
+                // Process results
+                const totalCars = carsResult?.count ?? 0;
+                const totalDeals = dealsResult?.count ?? 0;
+                const totalCustomers = customersResult?.count ?? 0;
+                const totalProviders = providersResult?.count ?? 0;
+
+                const previousCars = previousCarsResult?.count ?? 0;
+                const previousDeals = previousDealsResult?.count ?? 0;
+                const previousCustomers = previousCustomersResult?.count ?? 0;
 
                 const totalRevenue = revenueData?.reduce((sum, deal) => sum + (deal.amount || 0), 0) || 0;
                 const monthlyRevenue = totalRevenue;
@@ -345,6 +357,8 @@ const HomePage = () => {
                     recentActivity: recentActivity || [],
                     dealsByType,
                     carsByStatus,
+                    dealsWithoutBills: [],
+                    latestDeals: [],
                 });
             } catch (error) {
                 console.error('Error fetching dashboard stats:', error);
@@ -354,6 +368,66 @@ const HomePage = () => {
 
         fetchDashboardStats();
     }, [timeFilter]);
+
+    // Fetch deals for dashboard tables - نفس استعلام صفحة صفقات المبيعات
+    useEffect(() => {
+        if (permissionsLoading) return;
+
+        const fetchDeals = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('deals')
+                    .select(
+                        `
+                        id,
+                        title,
+                        selling_price,
+                        created_at,
+                        deal_type,
+                        status,
+                        customers!deals_customer_id_fkey (id, name),
+                        seller:customers!deals_seller_id_fkey (id, name),
+                        buyer:customers!deals_buyer_id_fkey (id, name),
+                        cars!deals_car_id_fkey (id, brand, title, car_number, year)${
+                            hasPermission('view_bills')
+                                ? `,
+                        bills (id)`
+                                : ''
+                        }
+                    `
+                    )
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                if (error) throw error;
+
+                const allDeals = (data || []) as any[];
+                const dealsWithoutBills = allDeals.filter((d) => !d.bills || d.bills.length === 0);
+                const latestDeals = allDeals.filter((d) => d.bills && d.bills.length > 0).slice(0, 10);
+
+                setStats((prev) => ({
+                    ...prev,
+                    dealsWithoutBills,
+                    latestDeals,
+                }));
+            } catch (err) {
+                console.error('Error fetching deals for dashboard:', err);
+            }
+        };
+        fetchDeals();
+    }, [permissionsLoading]);
+
+    const getStatusBadgeClass = (status: string) => {
+        switch (status) {
+            case 'active':
+                return 'badge-outline-success';
+            case 'completed':
+                return 'badge-outline-primary';
+            case 'cancelled':
+                return 'badge-outline-danger';
+            default:
+                return 'badge-outline-secondary';
+        }
+    };
 
     // Format currency
     const formatCurrency = (value: number) => {
@@ -657,9 +731,8 @@ const HomePage = () => {
                         ))}
                     </div>
 
-                    {/* Loading skeleton for deals by type and quick actions */}
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                        {/* Deals by type skeleton */}
+                    {/* Loading skeleton for deals by type and tables */}
+                    <div className="space-y-6">
                         <div className="panel">
                             <div className="mb-5">
                                 <div className="h-5 bg-gray-300/60 dark:bg-gray-700 rounded w-24 animate-pulse"></div>
@@ -668,30 +741,19 @@ const HomePage = () => {
                                 <div className="h-64 w-64 bg-gray-300/60 dark:bg-gray-700 rounded-full animate-pulse"></div>
                             </div>
                         </div>
-
-                        {/* Quick actions skeleton */}
-                        <div className="panel lg:col-span-2">
-                            <div className="mb-5">
-                                <div className="h-5 bg-gray-300/60 dark:bg-gray-700 rounded w-20 animate-pulse"></div>
-                            </div>
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                                {[1, 2, 3, 4].map((i) => (
-                                    <div key={i} className="flex flex-col items-center rounded-md border border-gray-200 dark:border-gray-600 p-4">
-                                        <div className="h-12 w-12 bg-gray-300/60 dark:bg-gray-700 rounded-lg mb-3 animate-pulse"></div>
-                                        <div className="h-4 bg-gray-300/60 dark:bg-gray-700 rounded w-16 mb-2 animate-pulse"></div>
-                                        <div className="h-3 bg-gray-300/60 dark:bg-gray-700 rounded w-20 animate-pulse"></div>
-                                    </div>
+                        <div className="panel">
+                            <div className="h-5 bg-gray-300/60 dark:bg-gray-700 rounded w-40 mb-4 animate-pulse"></div>
+                            <div className="space-y-3">
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                    <div key={i} className="h-12 bg-gray-300/60 dark:bg-gray-700 rounded animate-pulse"></div>
                                 ))}
                             </div>
-                            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                {[1, 2, 3, 4].map((i) => (
-                                    <div key={i} className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 p-4 gap-2">
-                                        <div className="h-12 w-12 bg-gray-300/60 dark:bg-gray-700 rounded-lg mr-4 animate-pulse"></div>
-                                        <div className="flex-1">
-                                            <div className="h-4 bg-gray-300/60 dark:bg-gray-700 rounded w-20 mb-2 animate-pulse"></div>
-                                            <div className="h-3 bg-gray-300/60 dark:bg-gray-700 rounded w-24 animate-pulse"></div>
-                                        </div>
-                                    </div>
+                        </div>
+                        <div className="panel">
+                            <div className="h-5 bg-gray-300/60 dark:bg-gray-700 rounded w-40 mb-4 animate-pulse"></div>
+                            <div className="space-y-3">
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                    <div key={i} className="h-12 bg-gray-300/60 dark:bg-gray-700 rounded animate-pulse"></div>
                                 ))}
                             </div>
                         </div>
@@ -826,10 +888,10 @@ const HomePage = () => {
                     </div>
                 </div>
 
-                {/* Deals by Type & Quick Actions */}
+                {/* Deals by Type (1/3) & Latest sales deals (2/3) */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 my-6">
-                    {/* Deals by Type */}
-                    <div className="panel">
+                    {/* Deals by Type - 1/3 */}
+                    <div className="panel lg:col-span-1">
                         <div className="mb-5 flex items-center justify-between">
                             <h5 className="text-lg font-semibold dark:text-white-light">{t('deals_by_type')}</h5>
                         </div>
@@ -843,117 +905,139 @@ const HomePage = () => {
                         </div>
                     </div>
 
-                    {/* Quick Actions */}
+                    {/* Latest sales deals - 2/3 */}
                     <div className="panel lg:col-span-2">
-                        <div className="mb-5 flex items-center justify-between">
-                            <h5 className="text-lg font-semibold dark:text-white-light">{t('quick_actions')}</h5>
-                        </div>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {/* Add New Car */}
-                            <Link href="/cars/add" className="group">
-                                <div className="flex flex-col items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-primary hover:bg-primary/5 dark:border-[#191e3a] dark:hover:border-primary">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary mb-3">
-                                        <IconPlus className="h-6 w-6" />
-                                    </div>
-                                    <div className="text-center">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-primary dark:text-white-light text-sm">{t('add_new_car')}</h6>
-                                        <p className="text-xs text-white-dark mt-1">{t('create_new_car')}</p>
-                                    </div>
-                                </div>
-                            </Link>
-
-                            {/* Add New Deal */}
-                            <Link href="/sales-deals/add" className="group">
-                                <div className="flex flex-col items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-warning hover:bg-warning/5 dark:border-[#191e3a] dark:hover:border-warning">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-warning/10 text-warning mb-3">
-                                        <IconPlus className="h-6 w-6" />
-                                    </div>
-                                    <div className="text-center">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-warning dark:text-white-light text-sm">{t('add_new_deal')}</h6>
-                                        <p className="text-xs text-white-dark mt-1">{t('create_new_deal')}</p>
-                                    </div>
-                                </div>
-                            </Link>
-
-                            {/* Add New Bill */}
-                            <Link href="/bills/add" className="group">
-                                <div className="flex flex-col items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-info hover:bg-info/5 dark:border-[#191e3a] dark:hover:border-info">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-info/10 text-info mb-3">
-                                        <IconPlus className="h-6 w-6" />
-                                    </div>
-                                    <div className="text-center">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-info dark:text-white-light text-sm">{t('add_new_bill')}</h6>
-                                        <p className="text-xs text-white-dark mt-1">{t('create_new_bill')}</p>
-                                    </div>
-                                </div>
-                            </Link>
-
-                            {/* Add New Client */}
-                            <Link href="/customers/add" className="group">
-                                <div className="flex flex-col items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-success hover:bg-success/5 dark:border-[#191e3a] dark:hover:border-success">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-success/10 text-success mb-3">
-                                        <IconPlus className="h-6 w-6" />
-                                    </div>
-                                    <div className="text-center">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-success dark:text-white-light text-sm">{t('add_new_client')}</h6>
-                                        <p className="text-xs text-white-dark mt-1">{t('create_new_client')}</p>
-                                    </div>
-                                </div>
+                        <div className="flex items-center justify-between mb-5">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('latest_sales_deals')}</h5>
+                            <Link href="/sales-deals" className="text-sm text-primary hover:underline">
+                                {t('view')}
                             </Link>
                         </div>
-
-                        {/* Quick Management Links */}
-                        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <Link href="/cars" className="group">
-                                <div className="flex items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-primary hover:bg-primary/5 dark:border-[#191e3a] dark:hover:border-primary">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                        <IconCar className="h-6 w-6" />
-                                    </div>
-                                    <div className="ltr:ml-4 rtl:mr-4">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-primary dark:text-white-light">{t('manage_cars')}</h6>
-                                        <p className="text-xs text-white-dark">{t('add_edit_cars')}</p>
-                                    </div>
-                                </div>
-                            </Link>
-
-                            <Link href="/sales-deals" className="group">
-                                <div className="flex items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-warning hover:bg-warning/5 dark:border-[#191e3a] dark:hover:border-warning">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-warning/10 text-warning">
-                                        <IconMenuInvoice className="h-6 w-6" />
-                                    </div>
-                                    <div className="ltr:ml-4 rtl:mr-4">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-warning dark:text-white-light">{t('manage_deals')}</h6>
-                                        <p className="text-xs text-white-dark">{t('create_track_deals')}</p>
-                                    </div>
-                                </div>
-                            </Link>
-
-                            <Link href="/customers" className="group">
-                                <div className="flex items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-success hover:bg-success/5 dark:border-[#191e3a] dark:hover:border-success">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-success/10 text-success">
-                                        <IconUsersGroup className="h-6 w-6" />
-                                    </div>
-                                    <div className="ltr:ml-4 rtl:mr-4">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-success dark:text-white-light">{t('manage_customers')}</h6>
-                                        <p className="text-xs text-white-dark">{t('view_customer_info')}</p>
-                                    </div>
-                                </div>
-                            </Link>
-
-                            <Link href="/analytics" className="group">
-                                <div className="flex items-center rounded-md border border-gray-200 p-4 transition-all duration-300 hover:border-danger hover:bg-danger/5 dark:border-[#191e3a] dark:hover:border-danger">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-danger/10 text-danger">
-                                        <IconEye className="h-6 w-6" />
-                                    </div>
-                                    <div className="ltr:ml-4 rtl:mr-4">
-                                        <h6 className="font-semibold text-[#515365] group-hover:text-danger dark:text-white-light">{t('view_analytics')}</h6>
-                                        <p className="text-xs text-white-dark">{t('detailed_reports')}</p>
-                                    </div>
-                                </div>
-                            </Link>
-                        </div>
+                        {stats.latestDeals.length === 0 ? (
+                            <div className="p-4 text-center text-gray-500 dark:text-gray-400">{t('no_records')}</div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[600px]">
+                                <thead className="bg-gray-50 dark:bg-[#191e3a]">
+                                    <tr>
+                                        <th className="text-start p-3 font-medium">{t('id')}</th>
+                                        <th className="text-start p-3 font-medium">{t('deal_created_date')}</th>
+                                        <th className="text-start p-3 font-medium">{t('customer')}</th>
+                                        <th className="text-start p-3 font-medium">{t('car_info')}</th>
+                                        <th className="text-end p-3 font-medium">{t('amount')}</th>
+                                        <th className="text-center p-3 font-medium">{t('status')}</th>
+                                        <th className="text-center p-3 font-medium">{t('bill_status')}</th>
+                                        <th className="text-center p-3 font-medium w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {stats.latestDeals.slice(0, 7).map((deal: any) => {
+                                        const hasBills = deal.bills && deal.bills.length > 0;
+                                        return (
+                                            <tr key={deal.id} className="border-t border-gray-100 dark:border-[#191e3a] hover:bg-gray-50 dark:hover:bg-[#191e3a]/50">
+                                                <td className="p-3 text-start">#{deal.id}</td>
+                                                <td className="p-3 text-start text-xs whitespace-nowrap">
+                                                    {deal.created_at ? new Date(deal.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+                                                </td>
+                                                <td className="p-3 text-start">
+                                                    {deal.deal_type === 'intermediary'
+                                                        ? `${deal.seller?.name || t('no_seller')} → ${deal.buyer?.name || t('no_buyer')}`
+                                                        : deal.customers?.name || t('no_customer')}
+                                                </td>
+                                                <td className="p-3 text-start text-xs">
+                                                    {deal.cars ? `${deal.cars.brand} ${deal.cars.title} ${deal.cars.car_number ? `(${deal.cars.car_number})` : ''}` : t('no_car_assigned')}
+                                                </td>
+                                                <td className="p-3 text-end font-medium">{formatCurrency(deal.selling_price || 0)}</td>
+                                                <td className="p-3 text-center">
+                                                    <span className={`badge text-xs ${getStatusBadgeClass(deal.status)}`}>{t(`status_${deal.status}`)}</span>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <span className={`badge text-xs ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>
+                                                        {hasBills ? t('bill_created') : t('no_bill_created')}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <Link href={`/sales-deals/preview/${deal.id}`} className="text-primary hover:underline inline-flex">
+                                                        <IconEye className="h-4 w-4" />
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            </div>
+                        )}
                     </div>
                 </div>
+
+                {/* Deals without invoices - جدول مستقل */}
+                <div className="my-6">
+                    <div className="panel">
+                        <div className="flex items-center justify-between mb-5">
+                            <h5 className="text-lg font-semibold dark:text-white-light">{t('deals_without_invoices')}</h5>
+                            <Link href="/sales-deals?billStatus=no_bill" className="text-sm text-primary hover:underline">
+                                {t('view')}
+                            </Link>
+                        </div>
+                        {stats.dealsWithoutBills.length === 0 ? (
+                            <div className="p-4 text-center text-gray-500 dark:text-gray-400">{t('no_records')}</div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                            <table className="w-full text-sm min-w-[600px]">
+                                <thead className="bg-gray-50 dark:bg-[#191e3a]">
+                                    <tr>
+                                        <th className="text-start p-3 font-medium">{t('id')}</th>
+                                        <th className="text-start p-3 font-medium">{t('deal_created_date')}</th>
+                                        <th className="text-start p-3 font-medium">{t('customer')}</th>
+                                        <th className="text-start p-3 font-medium">{t('car_info')}</th>
+                                        <th className="text-end p-3 font-medium">{t('amount')}</th>
+                                        <th className="text-center p-3 font-medium">{t('status')}</th>
+                                        <th className="text-center p-3 font-medium">{t('bill_status')}</th>
+                                        <th className="text-center p-3 font-medium w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {stats.dealsWithoutBills.map((deal: any) => {
+                                        const hasBills = deal.bills && deal.bills.length > 0;
+                                        return (
+                                            <tr key={deal.id} className="border-t border-gray-100 dark:border-[#191e3a] hover:bg-gray-50 dark:hover:bg-[#191e3a]/50">
+                                                <td className="p-3 text-start">#{deal.id}</td>
+                                                <td className="p-3 text-start text-xs whitespace-nowrap">
+                                                    {deal.created_at ? new Date(deal.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}
+                                                </td>
+                                                <td className="p-3 text-start">
+                                                    {deal.deal_type === 'intermediary'
+                                                        ? `${deal.seller?.name || t('no_seller')} → ${deal.buyer?.name || t('no_buyer')}`
+                                                        : deal.customers?.name || t('no_customer')}
+                                                </td>
+                                                <td className="p-3 text-start text-xs">
+                                                    {deal.cars ? `${deal.cars.brand} ${deal.cars.title} ${deal.cars.car_number ? `(${deal.cars.car_number})` : ''}` : t('no_car_assigned')}
+                                                </td>
+                                                <td className="p-3 text-end font-medium">{formatCurrency(deal.selling_price || 0)}</td>
+                                                <td className="p-3 text-center">
+                                                    <span className={`badge text-xs ${getStatusBadgeClass(deal.status)}`}>{t(`status_${deal.status}`)}</span>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <span className={`badge text-xs ${hasBills ? 'badge-outline-success' : 'badge-outline-warning'}`}>
+                                                        {hasBills ? t('bill_created') : t('no_bill_created')}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <Link href={`/sales-deals/preview/${deal.id}`} className="text-primary hover:underline inline-flex">
+                                                        <IconEye className="h-4 w-4" />
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
 
                 {/* Charts Section */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

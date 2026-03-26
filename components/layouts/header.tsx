@@ -142,7 +142,7 @@ const Header = () => {
                     <div className="flex items-center space-x-1.5 ltr:ml-auto rtl:mr-auto rtl:space-x-reverse dark:text-[#d0d2d6] sm:flex-1 ltr:sm:ml-0 sm:rtl:mr-0 lg:space-x-2">
                         <div className="sm:ltr:mr-auto sm:rtl:ml-auto">
                             <div className={`${search && '!block'} w-[400px] absolute inset-x-0 top-1/2 z-10 mx-4 hidden -translate-y-1/2 sm:relative sm:top-0 sm:mx-0 sm:block sm:translate-y-0`}>
-                                <GlobalSearch />
+                                <GlobalSearch key={pathname?.startsWith('/messages') ? 'messages' : 'main'} />
                             </div>
                             {/* <button
                                 type="button"

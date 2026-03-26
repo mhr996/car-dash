@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useClickAway } from 'react-use';
 import IconSearch from '@/components/icon/icon-search';
 import IconUser from '@/components/icon/icon-user';
@@ -23,6 +23,7 @@ interface SearchResult {
 const GlobalSearch = () => {
     const { t } = getTranslation();
     const router = useRouter();
+    const pathname = usePathname();
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +36,25 @@ const GlobalSearch = () => {
         setIsOpen(false);
         setSelectedIndex(-1);
     });
+
+    // Clear search when entering Messages section (prevents unwanted email/autofill)
+    useEffect(() => {
+        if (pathname?.startsWith('/messages')) {
+            const clear = () => {
+                setSearchQuery('');
+                setSearchResults([]);
+                setIsOpen(false);
+            };
+            clear();
+            // Clear again after delays to catch late browser autofill
+            const t1 = setTimeout(clear, 100);
+            const t2 = setTimeout(clear, 400);
+            return () => {
+                clearTimeout(t1);
+                clearTimeout(t2);
+            };
+        }
+    }, [pathname]);
 
     const debounce = (func: Function, delay: number) => {
         let timeoutId: NodeJS.Timeout;
@@ -198,12 +218,24 @@ const GlobalSearch = () => {
             const uniqueBills = allBills.filter((bill, index, self) => index === self.findIndex((b) => b.id === bill.id));
 
             if (uniqueBills.length > 0) {
+                const billTypeKeys: Record<string, string> = {
+                    tax_invoice: 'bill_type_tax_invoice',
+                    receipt_only: 'bill_type_receipt_only',
+                    tax_invoice_receipt: 'bill_type_tax_invoice_receipt',
+                    general: 'bill_type_general',
+                    credit_note: 'bill_type_credit_note',
+                    refund_receipt: 'bill_type_refund_receipt',
+                    register_order: 'bill_type_register_order',
+                };
                 uniqueBills.forEach((bill: any) => {
                     const matchInfo = bill.payment_match ? ` (${bill.payment_match})` : '';
+                    const key = bill.bill_type && (billTypeKeys[bill.bill_type] || `bill_type_${bill.bill_type}`);
+                    const billTypeLabel = bill.bill_type ? (t(key) !== key ? t(key) : t('bill')) : t('bill');
+                    const customerLabel = bill.customer_name || t('unknown_customer');
                     results.push({
                         id: bill.id.toString(),
                         type: 'bill',
-                        title: `${bill.bill_type || 'Bill'} - ${bill.customer_name || 'Unknown'}${matchInfo}`,
+                        title: `${billTypeLabel} - ${customerLabel}${matchInfo}`,
                         subtitle: bill.car_details || '',
                         metadata: `₪${(bill.total_with_tax || bill.total || 0).toLocaleString()}`,
                         link: `/bills/preview/${bill.id}`,
@@ -349,6 +381,9 @@ const GlobalSearch = () => {
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
                     onFocus={() => searchQuery.trim() && setIsOpen(true)}
+                    autoComplete="off"
+                    name="global-search"
+                    data-lpignore="true"
                     className="form-input w-full bg-gray-100 placeholder:tracking-widest ltr:pl-9 ltr:pr-9 rtl:pl-9 rtl:pr-9 sm:bg-transparent ltr:sm:pr-4 rtl:sm:pl-4"
                     placeholder={t('search')}
                 />

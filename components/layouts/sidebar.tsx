@@ -99,6 +99,9 @@ const Sidebar = () => {
 
     useEffect(() => {
         setActiveRoute();
+        if (pathname?.startsWith('/messages')) {
+            setCurrentMenu('messages');
+        }
         if (window.innerWidth < 1024 && themeConfig.sidebar) {
             dispatch(toggleSidebar());
         }
@@ -205,7 +208,7 @@ const Sidebar = () => {
                                 </>
                             )}
 
-                            {(hasPermission('view_sales_deals') || hasPermission('view_purchases_deals') || hasPermission('view_bills') || hasPermission('view_logs')) && (
+                            {(hasPermission('view_sales_deals') || hasPermission('view_purchases_deals') || hasPermission('view_bills') || hasPermission('view_commissions') || hasPermission('view_logs')) && (
                                 <>
                                     <h2 className="-mx-4 mb-1 flex items-center bg-white-light/30 px-7 py-3 font-extrabold uppercase dark:bg-dark dark:bg-opacity-[0.08]">
                                         <IconMinus className="hidden h-5 w-4 flex-none" />
@@ -240,6 +243,17 @@ const Sidebar = () => {
                                                 <div className="flex items-center">
                                                     <IconMenuInvoice className="shrink-0 group-hover:!text-primary" />
                                                     <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('bills')}</span>
+                                                </div>
+                                            </Link>
+                                        </li>
+                                    )}
+
+                                    {hasPermission('view_commissions') && (
+                                        <li className="nav-item">
+                                            <Link href="/commissions" className="group">
+                                                <div className="flex items-center">
+                                                    <IconMenuInvoice className="shrink-0 group-hover:!text-primary" />
+                                                    <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('commissions')}</span>
                                                 </div>
                                             </Link>
                                         </li>
@@ -285,6 +299,47 @@ const Sidebar = () => {
                                             </Link>
                                         </li>
                                     )}
+                                    <li className="menu nav-item">
+                                        <button
+                                            type="button"
+                                            className={`nav-link w-full ${currentMenu === 'messages' ? 'active' : ''}`}
+                                            onClick={() => toggleMenu('messages')}
+                                        >
+                                            <div className="flex items-center">
+                                                <IconMenuChat className="shrink-0 group-hover:!text-primary" />
+                                                <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('messages_section')}</span>
+                                                <IconCaretDown className={`ltr:ml-auto rtl:mr-auto shrink-0 transition-transform duration-200 ${currentMenu === 'messages' ? 'rotate-180' : ''}`} />
+                                            </div>
+                                        </button>
+                                        <AnimateHeight duration={300} height={currentMenu === 'messages' ? 'auto' : 0}>
+                                            <ul className="sub-menu [&_a]:!px-4 [&_a]:!py-2.5 [&_a]:before:!hidden">
+                                                <li className="nav-item">
+                                                    <Link href="/messages/send" className="group">
+                                                        <div className="flex items-center">
+                                                            <IconMenuMailbox className="shrink-0 group-hover:!text-primary" />
+                                                            <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('send_messages')}</span>
+                                                        </div>
+                                                    </Link>
+                                                </li>
+                                                <li className="nav-item">
+                                                    <Link href="/messages/history" className="group">
+                                                        <div className="flex items-center">
+                                                            <IconMenuMailbox className="shrink-0 group-hover:!text-primary" />
+                                                            <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('message_history')}</span>
+                                                        </div>
+                                                    </Link>
+                                                </li>
+                                                <li className="nav-item">
+                                                    <Link href="/messages/settings" className="group">
+                                                        <div className="flex items-center">
+                                                            <IconMenuMailbox className="shrink-0 group-hover:!text-primary" />
+                                                            <span className="text-black ltr:pl-3 rtl:pr-3 dark:text-[#506690] dark:group-hover:text-white-dark">{t('message_settings')}</span>
+                                                        </div>
+                                                    </Link>
+                                                </li>
+                                            </ul>
+                                        </AnimateHeight>
+                                    </li>
                                 </>
                             )}
                         </ul>

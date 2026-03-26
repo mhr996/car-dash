@@ -82,7 +82,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, p
                                 </div>
                             ))
                         ) : (
-                            <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-center">No options found</div>
+                            <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-center">{t('no_options_found')}</div>
                         )}
                     </div>
                 </div>

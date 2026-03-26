@@ -138,7 +138,7 @@ const DealSelect = ({ deals = [], selectedDeal = null, className = 'form-select 
                 <div className="p-2 rounded-full bg-gray-100 dark:bg-gray-800">
                     <IconMenuWidgets className="w-5 h-5" />
                 </div>
-                <span>{loading ? t('loading_deals') || 'Loading deals...' : t('select_deal')}</span>
+                <span>{loading ? t('loading_deals') : t('select_deal')}</span>
             </div>
         );
     };
@@ -230,7 +230,7 @@ const DealSelect = ({ deals = [], selectedDeal = null, className = 'form-select 
             )}
             {isOpen && !loading && deals.length === 0 && (
                 <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-200 dark:border-[#374151] bg-white dark:bg-black shadow-lg shadow-black/10 dark:shadow-black/50">
-                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">{t('no_deals_available') || 'No deals available'}</div>
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">{t('no_deals_available')}</div>
                 </div>
             )}
         </div>

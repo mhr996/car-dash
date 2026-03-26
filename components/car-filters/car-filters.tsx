@@ -89,7 +89,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, p
                                 </div>
                             ))
                         ) : (
-                            <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-center">No options found</div>
+                            <div className="px-4 py-2 text-gray-500 dark:text-gray-400 text-center">{t('no_options_found')}</div>
                         )}
                     </div>
                 </div>
@@ -117,9 +117,10 @@ const CarFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) =
 
     const statusOptions = [
         { value: '', label: t('all_statuses') },
-        { value: 'new', label: t('new') },
-        { value: 'used', label: t('used') },
-        { value: 'received_from_client', label: t('received_from_client') },
+        { value: 'new', label: t('car_inventory_status_new') },
+        { value: 'used', label: t('car_inventory_status_used') },
+        { value: 'received_from_client', label: t('car_inventory_status_received_from_client') },
+        { value: 'returned_to_customer', label: t('car_inventory_status_returned_to_customer') },
     ];
 
     const publicStatusOptions = [
