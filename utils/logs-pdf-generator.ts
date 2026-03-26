@@ -1,6 +1,7 @@
 import { Log } from '@/types';
 import { getTranslation } from '@/i18n';
 import { formatDate } from '@/utils/date-formatter';
+import { getLogTableDisplayDate, getLogSortTimestamp } from '@/utils/log-display-date';
 import { getCompanyInfo } from '@/lib/company-info';
 
 export class LogsPDFGenerator {
@@ -290,7 +291,7 @@ export class LogsPDFGenerator {
             .map(
                 (log) => `
             <tr>
-                <td class="data-cell">${log.car?.created_at ? formatDate(log.car.created_at) : t('not_available')}</td>
+                <td class="data-cell">${getLogTableDisplayDate(log) || t('not_available')}</td>
                 <td class="data-cell">${this.getCarModelDetails(log, t)}</td>
                 <td class="data-cell">${this.getPurchaseInfo(log, t)}</td>
                 <td class="data-cell">${this.getSaleInfo(log, t)}</td>

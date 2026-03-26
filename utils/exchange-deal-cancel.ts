@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import supabase from '@/lib/supabase';
+import { patchDealCancelledInLogs } from '@/utils/deal-cancel-logs';
 
 type JsonLogRow = {
     id: string;
@@ -81,10 +82,12 @@ export async function applyExchangeDealCancellationSideEffects(
         customerCarId: string | null | undefined;
         showroomCarId: string | null | undefined;
         cancellationReason: string;
+        /** Stored in `logs.deal.cancelled_at` (from cancel form date) */
+        cancelledAt: string;
     },
     db: SupabaseClient = supabase as unknown as SupabaseClient,
 ): Promise<void> {
-    const { dealId, customerCarId, showroomCarId, cancellationReason } = params;
+    const { dealId, customerCarId, showroomCarId, cancellationReason, cancelledAt } = params;
 
     if (customerCarId) {
         const { data: updatedCar, error: carErr } = await db
@@ -113,6 +116,11 @@ export async function applyExchangeDealCancellationSideEffects(
         }
     }
 
+    await patchDealCancelledInLogs(db, dealId, cancellationReason, {
+        exchangeCancelled: true,
+        cancelledAt: cancelledAt.trim(),
+    });
+
     const logs = await fetchRelevantLogs(db, dealId, customerCarId, showroomCarId);
     const logErrors: string[] = [];
 
@@ -120,16 +128,6 @@ export async function applyExchangeDealCancellationSideEffects(
         const row = log as JsonLogRow & { deal?: Record<string, unknown>; car?: Record<string, unknown> };
         const updates: Record<string, unknown> = {};
         let touched = false;
-
-        if (row.deal && String((row.deal as { id?: string }).id) === String(dealId)) {
-            updates.deal = {
-                ...row.deal,
-                status: 'cancelled',
-                cancellation_reason: cancellationReason,
-                exchange_cancelled: true,
-            };
-            touched = true;
-        }
 
         if (customerCarId && row.car && String((row.car as { id?: string }).id) === String(customerCarId)) {
             updates.car = {

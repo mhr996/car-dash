@@ -21,6 +21,8 @@ import { Deal, Customer, Car, FileItem, DealAttachments, DealAttachment } from '
 import { BillWithPayments } from '@/types/payment';
 import { usePermissions } from '@/hooks/usePermissions';
 import { applyExchangeDealCancellationSideEffects } from '@/utils/exchange-deal-cancel';
+import { patchDealCancelledInLogs } from '@/utils/deal-cancel-logs';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface Bill extends BillWithPayments {
     amount: number;
@@ -908,6 +910,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     // Cancel deal confirmation modal state
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
+    /** YYYY-MM-DD — shown in activity logs as deal cancellation date */
+    const [cancelDealDate, setCancelDealDate] = useState('');
     const [cancellingDeal, setCancellingDeal] = useState(false);
 
     useEffect(() => {
@@ -1457,13 +1461,18 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
     // Handle cancel deal with confirmation modal
     const handleCancelDealClick = () => {
-        setShowCancelModal(true);
         setCancelReason('');
+        setCancelDealDate(new Date().toISOString().slice(0, 10));
+        setShowCancelModal(true);
     };
 
     const handleCancelDealConfirm = async () => {
         if (!cancelReason.trim()) {
             setAlert({ message: t('cancel_reason_required'), type: 'danger' });
+            return;
+        }
+        if (!cancelDealDate || !/^\d{4}-\d{2}-\d{2}$/.test(cancelDealDate)) {
+            setAlert({ message: t('cancel_deal_date_required'), type: 'danger' });
             return;
         }
         if (deal?.status === 'cancelled') {
@@ -1474,8 +1483,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
         setCancellingDeal(true);
         try {
-            // Check if deal has bills to determine if we need to create a refund bill
-            const hasBills = bills && bills.length > 0;
+            const cancelledAtIso = `${cancelDealDate}T00:00:00.000Z`;
 
             const isExchange = deal?.deal_type === 'exchange';
             const exchangeCustomerCarId = deal?.car_taken_from_client;
@@ -1494,47 +1502,33 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
             if (dealError) throw dealError;
 
-            // If deal has bills, create a refund bill
-            if (hasBills && deal) {
-                const refundBillData = {
-                    deal_id: dealId,
-                    bill_type: 'general',
-                    bill_direction: 'negative', // Refund bills should be negative
-                    status: 'pending',
-                    customer_name: selectedCustomer?.name || t('unknown_customer'),
-                    phone: selectedCustomer?.phone || '',
-                    date: new Date().toISOString().split('T')[0],
-                    bill_description: `${t('refund_bill_for_deal')}: ${deal.title}`,
-                    bill_amount: parseFloat(deal.amount?.toString() || '0'),
-                    free_text: `${t('deal_cancelled_refund')} - ${cancelReason.trim()}`,
-                    created_at: new Date().toISOString().split('T')[0] + 'T00:00:00.000Z',
-                };
-
-                const { data: refundBillResult, error: billError } = await supabase.from('bills').insert([refundBillData]).select().single();
-
-                if (billError) throw billError;
-                if (!refundBillResult) throw new Error('Failed to create refund bill');
-
-                // Create Tranzila document for refund bill - THIS IS MANDATORY
-                // If Tranzila fails, we'll rollback the bill creation
-                try {
-                    const refundPayments: BillPayment[] = [
-                        {
-                            payment_type: 'cash',
-                            amount: parseFloat(deal.amount?.toString() || '0'),
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
+                const token = sessionData.session?.access_token;
+                if (!isExchange) {
+                    const logRes = await fetch('/api/deals/cancel-log-updates', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { Authorization: `Bearer ${token}` } : {}),
                         },
-                    ];
-                    await createTranzilaDocument(refundBillResult.id, refundBillData, refundPayments, deal);
-                } catch (tranzilaError) {
-                    // Rollback: Delete the refund bill that was just created
-                    await supabase.from('bills').delete().eq('id', refundBillResult.id);
-                    throw new Error(t('tranzila_document_creation_failed') + ': ' + (tranzilaError instanceof Error ? tranzilaError.message : 'Unknown error'));
+                        body: JSON.stringify({
+                            dealId: String(dealId),
+                            cancellationReason: cancelReason.trim(),
+                            cancelledAt: cancelledAtIso,
+                        }),
+                    });
+                    if (!logRes.ok) {
+                        await patchDealCancelledInLogs(supabase as unknown as SupabaseClient, String(dealId), cancelReason.trim(), {
+                            cancelledAt: cancelledAtIso,
+                        });
+                    }
                 }
-
-                setAlert({ message: t('deal_cancelled_with_refund_bill'), type: 'success' });
-            } else {
-                setAlert({ message: t('deal_cancelled_successfully'), type: 'success' });
+            } catch (logErr) {
+                console.warn('cancel-log-updates failed', logErr);
             }
+
+            setAlert({ message: t('deal_cancelled_successfully'), type: 'success' });
 
             if (isExchange) {
                 try {
@@ -1551,6 +1545,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                             customerCarId: exchangeCustomerCarId ?? null,
                             showroomCarId: exchangeShowroomCarId ?? null,
                             cancellationReason: cancelReason.trim(),
+                            cancelledAt: cancelledAtIso,
                         }),
                     });
 
@@ -1562,6 +1557,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 customerCarId: exchangeCustomerCarId,
                                 showroomCarId: exchangeShowroomCarId,
                                 cancellationReason: cancelReason.trim(),
+                                cancelledAt: cancelledAtIso,
                             });
                         } else {
                             throw new Error(j.error || res.statusText);
@@ -1575,6 +1571,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                             customerCarId: exchangeCustomerCarId,
                             showroomCarId: exchangeShowroomCarId,
                             cancellationReason: cancelReason.trim(),
+                            cancelledAt: cancelledAtIso,
                         });
                     } catch (fallbackErr) {
                         console.error('Exchange cleanup fallback failed:', fallbackErr);
@@ -1599,6 +1596,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             );
             setShowCancelModal(false);
             setCancelReason('');
+            setCancelDealDate('');
         } catch (error) {
             console.error('Error cancelling deal:', error);
             setAlert({ message: t('error_cancelling_deal'), type: 'danger' });
@@ -4373,7 +4371,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                             <button onClick={() => setShowCancelModal(false)} className="btn btn-outline-secondary" disabled={cancellingDeal}>
                                 {t('cancel')}
                             </button>
-                            <button onClick={handleCancelDealConfirm} className="btn btn-danger" disabled={cancellingDeal || !cancelReason.trim()}>
+                            <button
+                                onClick={handleCancelDealConfirm}
+                                className="btn btn-danger"
+                                disabled={cancellingDeal || !cancelReason.trim() || !cancelDealDate}
+                            >
                                 {cancellingDeal ? t('cancelling') : t('confirm_cancel_deal')}
                             </button>
                         </div>

@@ -14,6 +14,7 @@ import IconListCheck from '@/components/icon/icon-list-check';
 import Link from 'next/link';
 import LogFilters from '@/components/log-filters/log-filters';
 import { formatDate } from '@/utils/date-formatter';
+import { getLogTableDisplayDate, getLogSortTimestamp } from '@/utils/log-display-date';
 import { LogsPDFGenerator } from '@/utils/logs-pdf-generator';
 import IconDownload from '@/components/icon/icon-download';
 import { PermissionGuard } from '@/components/auth/permission-guard';
@@ -185,12 +186,7 @@ const LogsPage = () => {
     }, [pageSize]);
 
     useEffect(() => {
-        const sortedByCarDate = [...initialRecords].sort((a, b) => {
-            // Sort by car.created_at from newer to older
-            const dateA = new Date(a.car?.created_at || 0);
-            const dateB = new Date(b.car?.created_at || 0);
-            return dateB.getTime() - dateA.getTime();
-        });
+        const sortedByCarDate = [...initialRecords].sort((a, b) => getLogSortTimestamp(b) - getLogSortTimestamp(a));
 
         const from = (page - 1) * pageSize;
         const to = from + pageSize;
@@ -201,11 +197,9 @@ const LogsPage = () => {
         let sorted = [...initialRecords];
 
         if (sortStatus.columnAccessor === 'created_at') {
-            // Sort by car.created_at
             sorted = sorted.sort((a, b) => {
-                const dateA = new Date(a.car?.created_at || 0);
-                const dateB = new Date(b.car?.created_at || 0);
-                return sortStatus.direction === 'desc' ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
+                const diff = getLogSortTimestamp(b) - getLogSortTimestamp(a);
+                return sortStatus.direction === 'desc' ? diff : -diff;
             });
         } else {
             // Sort by other columns using lodash sortBy
@@ -610,7 +604,7 @@ const LogsPage = () => {
                                 sortable: true,
                                 render: (log) => (
                                     <div className="flex items-center gap-2">
-                                        <div className="text-sm">{formatDate(log.car.created_at) || t('not_available')}</div>
+                                        <div className="text-sm">{getLogTableDisplayDate(log) || t('not_available')}</div>
                                         {log.deal && log.deal.id && (
                                             <Link
                                                 href={`/sales-deals/preview/${log.deal.id}`}

@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { applyExchangeDealCancellationSideEffects } from '@/utils/exchange-deal-cancel';
+import { patchDealCancelledInLogs } from '@/utils/deal-cancel-logs';
 
-/**
- * Runs exchange cancellation cleanup with the service role so RLS cannot block
- * updates to cars / logs (common cause of “deal cancelled but car/logs unchanged”).
- */
 export async function POST(request: NextRequest) {
     try {
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -37,7 +33,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { dealId, customerCarId, showroomCarId, cancellationReason, cancelledAt } = body;
+        const { dealId, cancellationReason, cancelledAt } = body;
 
         if (!dealId || typeof cancellationReason !== 'string' || !cancellationReason.trim()) {
             return NextResponse.json({ error: 'dealId and cancellationReason are required' }, { status: 400 });
@@ -50,21 +46,14 @@ export async function POST(request: NextRequest) {
             auth: { autoRefreshToken: false, persistSession: false },
         });
 
-        await applyExchangeDealCancellationSideEffects(
-            {
-                dealId: String(dealId),
-                customerCarId: customerCarId != null ? String(customerCarId) : null,
-                showroomCarId: showroomCarId != null ? String(showroomCarId) : null,
-                cancellationReason: cancellationReason.trim(),
-                cancelledAt: cancelledAt.trim(),
-            },
-            admin,
-        );
+        await patchDealCancelledInLogs(admin, String(dealId), cancellationReason.trim(), {
+            cancelledAt: cancelledAt.trim(),
+        });
 
         return NextResponse.json({ ok: true });
     } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Internal error';
-        console.error('exchange-cancel-side-effects:', e);
+        console.error('cancel-log-updates:', e);
         return NextResponse.json({ error: message }, { status: 500 });
     }
 }

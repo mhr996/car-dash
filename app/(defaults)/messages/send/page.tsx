@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { MessageTemplate } from '../settings/page';
-import { DEFAULT_TEMPLATE_KEYS } from '../settings/page';
-
-const OTHER_TYPE_ID = 'other';
+import type { MessageTemplate } from '../message-templates';
+import { DEFAULT_TEMPLATE_KEYS } from '../message-templates';
 import IconSend from '@/components/icon/icon-send';
 import IconUsersGroup from '@/components/icon/icon-users-group';
 import IconUser from '@/components/icon/icon-user';
@@ -22,6 +20,7 @@ type DefaultMessageType = 'collection' | 'promotion' | 'holiday' | 'other';
 type TargetType = 'all' | 'group' | 'individual';
 
 const TEMPLATES_STORAGE_KEY = 'msg_templates';
+const OTHER_TYPE_ID = 'other';
 
 export default function SendMessagePage() {
     const { t } = getTranslation();
