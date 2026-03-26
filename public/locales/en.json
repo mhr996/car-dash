@@ -629,6 +629,7 @@
     "performance_last_months": "Performance over the last 6 months",
     "total_revenue": "Total Revenue",
     "total_sale_value": "Total Sale Value",
+    "total_cost_value": "Total Cost Value",
     "public": "Public",
     "public_visibility": "Public Visibility",
     "car_is_public": "Car is visible to public",
