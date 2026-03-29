@@ -44,9 +44,7 @@ const AddCommission = () => {
     const [freeText, setFreeText] = useState('');
 
     // الفاتورة الضريبية - بنود يدوية
-    const [items, setItems] = useState<CommissionItem[]>([
-        { id: '1', item_description: '', unit_price: 0, quantity: 1 },
-    ]);
+    const [items, setItems] = useState<CommissionItem[]>([{ id: '1', item_description: '', unit_price: 0, quantity: 1 }]);
 
     // سند القبض - مدفوعات
     const [payments, setPayments] = useState<BillPayment[]>([{ payment_type: 'cash', amount: 0 }]);
@@ -60,7 +58,11 @@ const AddCommission = () => {
             return;
         }
         const fetchProvider = async () => {
-            const { data } = await supabase.from('providers').select('id, name, address, phone').eq('id', parseInt(providerId, 10) || providerId).single();
+            const { data } = await supabase
+                .from('providers')
+                .select('id, name, address, phone')
+                .eq('id', parseInt(providerId, 10) || providerId)
+                .single();
             setSelectedProvider(data || null);
         };
         fetchProvider();
@@ -77,11 +79,7 @@ const AddCommission = () => {
     };
 
     const updateItem = (id: string, field: keyof CommissionItem, value: string | number) => {
-        setItems((prev) =>
-            prev.map((i) =>
-                i.id === id ? { ...i, [field]: field === 'item_description' ? value : typeof value === 'string' ? parseFloat(value) || 0 : value } : i
-            )
-        );
+        setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: field === 'item_description' ? value : typeof value === 'string' ? parseFloat(value) || 0 : value } : i)));
     };
 
     const itemsTotal = items.reduce((sum, i) => sum + (i.unit_price || 0) * (i.quantity || 1), 0);
@@ -90,8 +88,183 @@ const AddCommission = () => {
     const totalWithTax = itemsTotal;
 
     const receiptTotalAmount = parseFloat(receiptAmount) || 0;
-    const totalAmountForPaymentForm =
-        commissionType === 'receipt_only' ? receiptTotalAmount : commissionType === 'tax_invoice_receipt' ? totalWithTax : 0;
+    const totalAmountForPaymentForm = commissionType === 'receipt_only' ? receiptTotalAmount : commissionType === 'tax_invoice_receipt' ? totalWithTax : 0;
+
+    // ==================== Tranzila Integration ====================
+    // Calls Tranzila API first — returns document info. DB insert only happens after success.
+    const createTranzilaDocument = async (
+        commissionData: {
+            commission_type: string;
+            date: string;
+        },
+        commissionItems: CommissionItem[],
+        commissionPayments: BillPayment[],
+        provider: ProviderInfo,
+    ): Promise<{ id: string; number: string; retrieval_key: string; created_at: string }> => {
+        // Map commission type to Tranzila document type (same mapping as bills)
+        const documentTypeMap: Record<string, string> = {
+            tax_invoice: 'IN', // Tax Invoice only
+            receipt_only: 'RE', // Receipt only
+            tax_invoice_receipt: 'IR', // Invoice + Receipt
+        };
+
+        // Map payment type to Tranzila payment method (same as bills)
+        const paymentMethodMap: Record<string, number> = {
+            visa: 1,
+            cash: 5,
+            check: 3,
+            bank_transfer: 4,
+        };
+
+        const documentType = documentTypeMap[commissionData.commission_type] || 'IR';
+
+        // Build items array
+        let tranzilaItems: any[] = [];
+
+        if (documentType === 'IN' || documentType === 'IR') {
+            // Tax Invoice or Invoice+Receipt — use the manually entered items
+            const validItems = commissionItems.filter((i) => (i.item_description || '').trim() && (i.unit_price || 0) > 0);
+            tranzilaItems = validItems.map((item) => ({
+                type: 'I',
+                code: null,
+                name: item.item_description.trim(),
+                price_type: 'G', // Gross (includes VAT)
+                unit_price: item.unit_price,
+                units_number: item.quantity || 1,
+                unit_type: 1,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
+            }));
+
+            if (tranzilaItems.length === 0) {
+                throw new Error('Tax Invoice requires at least one item');
+            }
+        } else if (documentType === 'RE') {
+            // Receipt only — single item with provider name and total amount
+            const totalPaymentAmount = commissionPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+            if (totalPaymentAmount <= 0) {
+                throw new Error('Receipt requires at least one payment with amount > 0');
+            }
+            tranzilaItems = [
+                {
+                    type: 'I',
+                    code: null,
+                    name: provider.name || 'קבלה',
+                    price_type: 'G',
+                    unit_price: totalPaymentAmount,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                },
+            ];
+        }
+
+        // Build payments array (for RE and IR)
+        let tranzilaPayments: any[] = [];
+
+        if (documentType === 'RE' || documentType === 'IR') {
+            tranzilaPayments = commissionPayments
+                .filter((p) => p.amount && p.amount > 0)
+                .map((payment) => {
+                    const basePayment = {
+                        payment_method: paymentMethodMap[payment.payment_type] || 10,
+                        payment_date: commissionData.date || new Date().toISOString().split('T')[0],
+                        amount: payment.amount,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    };
+
+                    if (payment.payment_type === 'visa') {
+                        return {
+                            ...basePayment,
+                            cc_last_4_digits: payment.visa_last_four || null,
+                            cc_installments_number: payment.visa_installments || 1,
+                            cc_type: payment.visa_card_type || null,
+                            approval_number: payment.approval_number || null,
+                        };
+                    } else if (payment.payment_type === 'check') {
+                        return {
+                            ...basePayment,
+                            check_number: payment.check_number || null,
+                            check_bank_name: payment.check_bank_name || null,
+                            check_branch: payment.check_branch || null,
+                            check_account_number: payment.check_account_number || null,
+                            check_holder_name: payment.check_holder_name || null,
+                        };
+                    } else if (payment.payment_type === 'bank_transfer') {
+                        return {
+                            ...basePayment,
+                            bank: payment.transfer_bank_name || null,
+                        };
+                    }
+
+                    return basePayment;
+                });
+
+            if (tranzilaPayments.length === 0) {
+                throw new Error('Receipt requires at least one valid payment');
+            }
+        }
+
+        // VAT: 18% for invoices, 0% for receipt-only
+        const vatPercent = documentType === 'RE' ? 0 : 18;
+
+        const tranzilaRequestData = {
+            action: 'create_document',
+            data: {
+                document_type: documentType,
+                document_date: commissionData.date || new Date().toISOString().split('T')[0],
+                document_currency_code: 'ILS',
+                vat_percent: vatPercent,
+                action: 1, // Debit (normal document)
+                client_company: provider.name || '',
+                client_name: provider.name || '',
+                client_id: '',
+                client_email: 'no-reply@car-dash.com',
+                client_phone: provider.phone || '',
+                client_address_line_1: provider.address || null,
+                items: tranzilaItems,
+                payments: documentType === 'IN' ? [] : tranzilaPayments,
+                created_by_user: 'car-dash',
+                created_by_system: 'car-dash',
+            },
+        };
+
+        console.log('🧾 ============ TRANZILA COMMISSION REQUEST ============');
+        console.log('📋 Document Type:', documentType);
+        console.log('📝 Commission Type:', commissionData.commission_type);
+        console.log('📦 Items being sent:');
+        tranzilaItems.forEach((item, idx) => {
+            console.log(`   Item ${idx + 1}: ${item.name} - Price: ₪${item.unit_price} x ${item.units_number}`);
+        });
+        if (tranzilaPayments.length > 0) {
+            console.log('💳 Payments being sent:');
+            tranzilaPayments.forEach((payment, idx) => {
+                console.log(`   Payment ${idx + 1}: Method ${payment.payment_method} - Amount: ₪${payment.amount}`);
+            });
+        }
+        console.log('📄 Full Request Data:', JSON.stringify(tranzilaRequestData, null, 2));
+        console.log('==================================================');
+
+        // Call Tranzila API
+        const response = await fetch('/api/tranzila', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tranzilaRequestData),
+        });
+
+        const result = await response.json();
+
+        if (!result.ok || !result.response || result.response.status_code !== 0) {
+            const errorMsg = result.response?.status_msg || 'Unknown Tranzila error';
+            const statusCode = result.response?.status_code || 'N/A';
+            throw new Error(`Tranzila error (${statusCode}): ${errorMsg}`);
+        }
+
+        console.log('✅ Tranzila commission document created successfully:', result.response.document.number);
+        return result.response.document;
+    };
 
     const validateForm = () => {
         if (!providerId) {
@@ -148,6 +321,18 @@ const AddCommission = () => {
                 tax_amount = receiptTotalAmount - total;
             }
 
+            // Step 1: Call Tranzila FIRST — if it fails, nothing is saved to DB
+            const tranzilaDoc = await createTranzilaDocument(
+                {
+                    commission_type: commissionType,
+                    date: commissionDate,
+                },
+                items,
+                payments,
+                selectedProvider!,
+            );
+
+            // Step 2: Tranzila succeeded — now insert commission with Tranzila data
             const providerIdNum = typeof providerId === 'string' && providerId ? parseInt(providerId, 10) : providerId;
 
             const { data: commissionResult, error } = await supabase
@@ -161,6 +346,10 @@ const AddCommission = () => {
                     tax_amount,
                     total_with_tax,
                     free_text: freeText || null,
+                    tranzila_document_id: tranzilaDoc.id,
+                    tranzila_document_number: tranzilaDoc.number,
+                    tranzila_retrieval_key: tranzilaDoc.retrieval_key,
+                    tranzila_created_at: commissionDate ? new Date(commissionDate + 'T00:00:00').toISOString() : tranzilaDoc.created_at,
                 })
                 .select('id')
                 .single();
@@ -168,6 +357,7 @@ const AddCommission = () => {
             if (error) throw error;
             const commissionId = commissionResult.id;
 
+            // Step 3: Insert items
             if (commissionType === 'tax_invoice' || commissionType === 'tax_invoice_receipt') {
                 const validItems = items.filter((i) => (i.item_description || '').trim() && (i.unit_price || 0) > 0);
                 if (validItems.length > 0) {
@@ -183,6 +373,7 @@ const AddCommission = () => {
                 }
             }
 
+            // Step 4: Insert payments
             if (commissionType === 'receipt_only' || commissionType === 'tax_invoice_receipt') {
                 const paymentInserts = payments
                     .filter((p) => (p.amount || 0) > 0)
@@ -228,13 +419,7 @@ const AddCommission = () => {
             <div className="container mx-auto p-6 pb-24">
                 <div className="flex items-center gap-5 mb-6">
                     <div onClick={() => router.back()}>
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
                     </div>
@@ -362,83 +547,83 @@ const AddCommission = () => {
 
                             {/* Tax Invoice Details Table */}
                             <div className="panel">
-                            <div className="mb-5 flex items-center gap-3">
-                                <IconDollarSign className="w-5 h-5 text-primary" />
-                                <h5 className="text-lg font-semibold dark:text-white-light">{t('commission_type_tax_invoice')}</h5>
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{t('commission_tax_invoice_items_hint')}</p>
-                            <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                <div className="grid grid-cols-4 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
-                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('item_description')}</div>
-                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('price')}</div>
-                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('quantity')}</div>
-                                    <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('total')}</div>
+                                <div className="mb-5 flex items-center gap-3">
+                                    <IconDollarSign className="w-5 h-5 text-primary" />
+                                    <h5 className="text-lg font-semibold dark:text-white-light">{t('commission_type_tax_invoice')}</h5>
                                 </div>
-                                {items.map((item) => (
-                                    <div key={item.id} className="grid grid-cols-4 gap-4 mb-3 py-2 items-center">
-                                        <div className="text-right">
-                                            <input
-                                                type="text"
-                                                className="form-input text-sm"
-                                                value={item.item_description}
-                                                onChange={(e) => updateItem(item.id, 'item_description', e.target.value)}
-                                                placeholder={t('enter_item_description')}
-                                            />
-                                        </div>
-                                        <div className="text-center">
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                className="form-input text-sm text-center"
-                                                value={item.unit_price || ''}
-                                                onChange={(e) => updateItem(item.id, 'unit_price', e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="text-center flex items-center justify-center gap-2">
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                min="0"
-                                                className="form-input text-sm text-center w-20"
-                                                value={item.quantity || ''}
-                                                onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => removeItem(item.id)}
-                                                className="btn btn-outline-danger btn-sm p-1"
-                                                disabled={items.length <= 1}
-                                                title={t('delete')}
-                                            >
-                                                <IconTrash className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                        <div className="text-center">
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">₪{((item.unit_price || 0) * (item.quantity || 1)).toFixed(2)}</span>
-                                        </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{t('commission_tax_invoice_items_hint')}</p>
+                                <div className="bg-transparent rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                    <div className="grid grid-cols-4 gap-4 mb-4 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                        <div className="text-sm font-bold text-gray-700 dark:text-white text-right">{t('item_description')}</div>
+                                        <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('price')}</div>
+                                        <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('quantity')}</div>
+                                        <div className="text-sm font-bold text-gray-700 dark:text-white text-center">{t('total')}</div>
                                     </div>
-                                ))}
-                                <button type="button" onClick={addItem} className="btn btn-outline-primary btn-sm gap-2 mt-2">
-                                    <IconPlus className="w-4 h-4" />
-                                    {t('add_item')}
-                                </button>
+                                    {items.map((item) => (
+                                        <div key={item.id} className="grid grid-cols-4 gap-4 mb-3 py-2 items-center">
+                                            <div className="text-right">
+                                                <input
+                                                    type="text"
+                                                    className="form-input text-sm"
+                                                    value={item.item_description}
+                                                    onChange={(e) => updateItem(item.id, 'item_description', e.target.value)}
+                                                    placeholder={t('enter_item_description')}
+                                                />
+                                            </div>
+                                            <div className="text-center">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    className="form-input text-sm text-center"
+                                                    value={item.unit_price || ''}
+                                                    onChange={(e) => updateItem(item.id, 'unit_price', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="text-center flex items-center justify-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    className="form-input text-sm text-center w-20"
+                                                    value={item.quantity || ''}
+                                                    onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeItem(item.id)}
+                                                    className="btn btn-outline-danger btn-sm p-1"
+                                                    disabled={items.length <= 1}
+                                                    title={t('delete')}
+                                                >
+                                                    <IconTrash className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <div className="text-center">
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">₪{((item.unit_price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <button type="button" onClick={addItem} className="btn btn-outline-primary btn-sm gap-2 mt-2">
+                                        <IconPlus className="w-4 h-4" />
+                                        {t('add_item')}
+                                    </button>
+                                </div>
+                                <div className="border-t border-gray-300 dark:border-gray-600 mt-6 pt-4 space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('total_before_tax')}</span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{itemsTotalBeforeTax.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('tax_18_percent')}</span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{taxAmount.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
+                                        <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_with_tax')}</span>
+                                        <span className="text-lg font-bold text-primary">₪{totalWithTax.toFixed(2)}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="border-t border-gray-300 dark:border-gray-600 mt-6 pt-4 space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('total_before_tax')}</span>
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{itemsTotalBeforeTax.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('tax_18_percent')}</span>
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{taxAmount.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
-                                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">{t('total_with_tax')}</span>
-                                    <span className="text-lg font-bold text-primary">₪{totalWithTax.toFixed(2)}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </>
+                        </>
                     )}
 
                     {/* Receipt Only - Amount */}
@@ -478,11 +663,7 @@ const AddCommission = () => {
                                 <IconDollarSign className="w-5 h-5 text-primary" />
                                 <h5 className="text-lg font-semibold dark:text-white-light">{t('receipt_details')}</h5>
                             </div>
-                            <MultiplePaymentForm
-                                payments={payments}
-                                onPaymentsChange={setPayments}
-                                totalAmount={commissionType === 'receipt_only' ? receiptTotalAmount : totalAmountForPaymentForm}
-                            />
+                            <MultiplePaymentForm payments={payments} onPaymentsChange={setPayments} totalAmount={commissionType === 'receipt_only' ? receiptTotalAmount : totalAmountForPaymentForm} />
                         </div>
                     )}
 
