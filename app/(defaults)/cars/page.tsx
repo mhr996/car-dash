@@ -299,10 +299,14 @@ const CarsList = () => {
             .limit(1);
         if (findError) throw findError;
 
-        const existing = (existingLogs || [])[0] as { id: string } | undefined;
+        const existing = (existingLogs || [])[0] as { id: string; car?: Record<string, unknown> | null } | undefined;
         if (!existing?.id) return; // If no log exists, don't create a new one (per requirement)
 
+        // Preserve any enriched fields already stored on the log.car payload (e.g. source_customer/customer_details/provider_details).
+        const existingCarPayload = (existing.car && typeof existing.car === 'object' ? existing.car : {}) as Record<string, unknown>;
+
         const nextCarPayload: Record<string, unknown> = {
+            ...existingCarPayload,
             ...(updatedCar as unknown as Record<string, unknown>),
             status: 'returned_to_customer',
             returned_to_customer: true,

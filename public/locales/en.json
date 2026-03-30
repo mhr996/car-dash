@@ -1474,6 +1474,7 @@
     "date_to": "Date To",
     "received_from_client": "Received from Client",
     "returned_to_customer": "Returned to customer",
+  "returned_to_provider": "Returned to provider",
     "archived_exchange_tradein_note": "Trade-in from a cancelled exchange deal",
     "log_car_status_back_to_showroom": "Back in showroom (exchange deal cancelled)",
     "status_received_from_client": "Received from Client",

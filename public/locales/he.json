@@ -993,6 +993,7 @@
     "status_received_from_client": "התקבל מהלקוח",
     "received_from_client": "התקבל מהלקוח",
     "returned_to_customer": "הוחזר ללקוח",
+    "returned_to_provider": "הוחזר לספק",
     "archived_exchange_tradein_note": "רכב החלפה מעסקה שבוטלה",
     "log_car_status_back_to_showroom": "חזר למלאי המגרש (ביטול החלפה)",
     "in_inventory": "במלאי",

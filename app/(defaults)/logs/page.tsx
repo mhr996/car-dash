@@ -235,7 +235,7 @@ const LogsPage = () => {
 
         const car = log.car;
         const provider = car.providers || car.provider_details;
-        const customer = car.customers || car.customer_details;
+        const customer = car.customers || car.customer_details || car.source_customer;
 
         // Determine source name based on source_type
         let sourceName = t('not_available');
@@ -243,6 +243,9 @@ const LogsPage = () => {
             sourceName = provider?.name || car.provider || t('not_available');
         } else if (car.source_type === 'customer') {
             sourceName = customer?.name || t('not_available');
+        } else {
+            // Fallback: older logs might not have source_type but still include enriched details
+            sourceName = provider?.name || customer?.name || car.provider || t('not_available');
         }
 
         const purchaseReturned =
@@ -251,18 +254,30 @@ const LogsPage = () => {
             (car as { exchange_returned_to_showroom?: boolean }).exchange_returned_to_showroom === true ||
             (car as { deal_cancelled_showroom_restored?: boolean }).deal_cancelled_showroom_restored === true;
 
+        const returnedToLabel = purchaseReturned
+            ? car.source_type === 'provider'
+                ? t('returned_to_provider')
+                : t('returned_to_customer')
+            : null;
+
         const purchasePriceLine = purchaseReturned ? (
-            <div className="text-danger font-medium">({t('log_exchange_returned_brackets')})</div>
+            <div className="text-danger font-medium">{returnedToLabel}</div>
         ) : purchaseShowroomRestored ? (
             <div className="text-danger font-medium">({t('log_car_status_back_to_showroom')})</div>
         ) : (
             <div className="text-gray-500 dark:text-gray-400">₪{car.buy_price?.toLocaleString() || '0'}</div>
         );
 
+        // If this car was returned, show the return date chosen in the return popup.
+        // The return action updates the existing log row's created_at to the chosen date.
+        const displayDate = purchaseReturned ? log.created_at : car.created_at;
+
         return (
             <div className="text-sm">
-                <div className="font-medium">{formatDate(car.created_at) || t('not_available')}</div>
-                <div className="text-gray-500 dark:text-gray-400">{sourceName}</div>
+                <div className="font-medium">{formatDate(displayDate) || t('not_available')}</div>
+                <div className="text-gray-500 dark:text-gray-400">
+                    {sourceName}
+                </div>
                 {purchasePriceLine}
             </div>
         );

@@ -1487,6 +1487,7 @@
     "all": "الجميع",
     "received_from_client": "مستلمة من العميل",
     "returned_to_customer": "تم ارجاعها للزبون",
+  "returned_to_provider": "تم إرجاعها للمزود",
     "archived_exchange_tradein_note": "سيارة تبديل من صفقة أُلغيت",
     "log_car_status_back_to_showroom": "عادت لسيارات المعرض بعد إلغاء التبادل",
     "status_received_from_client": "مستلمة من العميل",
