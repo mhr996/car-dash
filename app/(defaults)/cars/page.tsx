@@ -3,6 +3,7 @@ import IconEdit from '@/components/icon/icon-edit';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
+import IconRestore from '@/components/icon/icon-restore';
 import { sortBy } from 'lodash';
 import { DataTableSortStatus, DataTable } from 'mantine-datatable';
 import Link from 'next/link';
@@ -11,7 +12,6 @@ import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
 import ConfirmModal from '@/components/modals/confirm-modal';
 import { getTranslation } from '@/i18n';
-import { logActivity } from '@/utils/activity-logger';
 import CarFilters, { CarFilters as CarFiltersType } from '@/components/car-filters/car-filters';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PermissionGuard } from '@/components/auth/permission-guard';
@@ -160,6 +160,9 @@ const CarsList = () => {
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
     const [carToDelete, setCarToDelete] = useState<Car | null>(null);
+    const [showReturnModal, setShowReturnModal] = useState(false);
+    const [carToReturn, setCarToReturn] = useState<Car | null>(null);
+    const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0]);
     const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
         visible: false,
@@ -280,15 +283,71 @@ const CarsList = () => {
             }
         }
     };
+
+    const requestReturnCar = (car: Car) => {
+        setCarToReturn(car);
+        setReturnDate(new Date().toISOString().split('T')[0]);
+        setShowReturnModal(true);
+    };
+
+    const updateExistingCarLogToReturned = async (carId: string, updatedCar: Car, createdAtIso: string) => {
+        const { data: existingLogs, error: findError } = await supabase
+            .from('logs')
+            .select('id, car')
+            .eq('car->>id', String(carId))
+            .order('created_at', { ascending: false })
+            .limit(1);
+        if (findError) throw findError;
+
+        const existing = (existingLogs || [])[0] as { id: string } | undefined;
+        if (!existing?.id) return; // If no log exists, don't create a new one (per requirement)
+
+        const nextCarPayload: Record<string, unknown> = {
+            ...(updatedCar as unknown as Record<string, unknown>),
+            status: 'returned_to_customer',
+            returned_to_customer: true,
+            car_returned: true,
+        };
+
+        const { error: upErr } = await supabase.from('logs').update({ car: nextCarPayload, created_at: createdAtIso }).eq('id', existing.id);
+        if (upErr) throw upErr;
+    };
+
+    const confirmReturnCar = async () => {
+        if (!carToReturn) return;
+        try {
+            const updatedCar: Car = {
+                ...carToReturn,
+                status: 'returned_to_customer',
+                public: false,
+            };
+
+            const { error } = await supabase
+                .from('cars')
+                .update({
+                    status: 'returned_to_customer',
+                    public: false,
+                })
+                .eq('id', carToReturn.id);
+            if (error) throw error;
+
+            const returnCreatedAt = `${returnDate}T00:00:00.000Z`;
+            await updateExistingCarLogToReturned(carToReturn.id, updatedCar, returnCreatedAt);
+
+            setItems((prev) => prev.map((c) => (c.id === carToReturn.id ? updatedCar : c)));
+            setAlert({ visible: true, message: t('car_returned_successfully'), type: 'success' });
+        } catch (error) {
+            console.error('Error returning car:', error);
+            setAlert({ visible: true, message: t('error_returning_car'), type: 'danger' });
+        } finally {
+            setShowReturnModal(false);
+            setCarToReturn(null);
+        }
+    };
+
     const confirmDeletion = async () => {
         if (!carToDelete) return;
         try {
-            // Log the activity before deletion (to preserve car data)
-            await logActivity({
-                type: 'car_deleted',
-                car: carToDelete,
-            });
-
             // Delete images from storage first
             if (carToDelete.images?.length) {
                 // Parse images if it's a string, otherwise use as array
@@ -753,6 +812,16 @@ const CarsList = () => {
                                     textAlignment: 'center' as const,
                                     render: (car: Car) => (
                                         <div className="mx-auto flex w-max items-center gap-4">
+                                            {activeTab === 'available' && (
+                                                <button
+                                                    type="button"
+                                                    className="flex hover:text-warning"
+                                                    onClick={() => requestReturnCar(car)}
+                                                    title={t('return_car')}
+                                                >
+                                                    <IconRestore className="h-4.5 w-4.5" />
+                                                </button>
+                                            )}
                                             {hasPermission('view_car_purchase_price') && (
                                                 <button
                                                     type="button"
@@ -884,6 +953,16 @@ const CarsList = () => {
                                                         <IconEye className="w-4 h-4 ltr:mr-1 rtl:ml-1" />
                                                         {t('view')}
                                                     </Link>
+                                                    {activeTab === 'available' && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-warning btn-sm"
+                                                            onClick={() => requestReturnCar(car)}
+                                                            title={t('return_car')}
+                                                        >
+                                                            <IconRestore className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                     {hasPermission('view_car_purchase_price') && (
                                                         <button
                                                             type="button"
@@ -943,6 +1022,59 @@ const CarsList = () => {
                     </div>
                 )}
             </div>
+
+            {showReturnModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg max-w-sm w-full">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('confirm_return_car')}</h3>
+                            <button
+                                onClick={() => setShowReturnModal(false)}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                disabled={!carToReturn}
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                                <p>{t('confirm_return_car_message')}</p>
+                            </div>
+
+                            <div>
+                                <label htmlFor="returnDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
+                                    {t('return_date')}
+                                </label>
+                                <input
+                                    id="returnDate"
+                                    type="date"
+                                    value={returnDate}
+                                    onChange={(e) => setReturnDate(e.target.value)}
+                                    className="form-input w-full"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+                            <button
+                                onClick={() => {
+                                    setShowReturnModal(false);
+                                    setCarToReturn(null);
+                                }}
+                                className="btn btn-outline-secondary"
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button onClick={confirmReturnCar} className="btn btn-warning" disabled={!carToReturn}>
+                                {t('return_car')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <ConfirmModal
                 isOpen={showConfirmModal}

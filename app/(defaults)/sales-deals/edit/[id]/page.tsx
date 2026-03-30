@@ -23,6 +23,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { applyExchangeDealCancellationSideEffects } from '@/utils/exchange-deal-cancel';
 import { patchDealCancelledInLogs } from '@/utils/deal-cancel-logs';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logActivity } from '@/utils/activity-logger';
 
 interface Bill extends BillWithPayments {
     amount: number;
@@ -1488,15 +1489,10 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             const isExchange = deal?.deal_type === 'exchange';
             const exchangeCustomerCarId = deal?.car_taken_from_client;
             const exchangeShowroomCarId = deal?.car_id;
-
             const dealUpdate: Record<string, unknown> = {
                 status: 'cancelled',
                 cancellation_reason: cancelReason.trim(),
             };
-            if (isExchange) {
-                dealUpdate.car_id = null;
-                dealUpdate.car_taken_from_client = null;
-            }
 
             const { error: dealError } = await supabase.from('deals').update(dealUpdate).eq('id', dealId);
 
@@ -1582,6 +1578,17 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     }
                 }
             }
+            // Also write a deal_updated entry at the chosen cancellation date
+            await logActivity({
+                type: 'deal_updated',
+                deal: {
+                    ...(deal || {}),
+                    id: dealId,
+                    status: 'cancelled',
+                    cancellation_reason: cancelReason.trim(),
+                },
+                customTimestamp: cancelledAtIso,
+            });
 
             // Update local state
             setForm((prev) => ({ ...prev, status: 'cancelled' }));
@@ -1590,7 +1597,6 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     ? {
                           ...prev,
                           status: 'cancelled',
-                          ...(isExchange ? { car_id: undefined, car_taken_from_client: undefined } : {}),
                       }
                     : null,
             );
@@ -4342,14 +4348,21 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
                         <div className="p-6 space-y-4">
                             <div className="text-sm text-gray-600 dark:text-gray-400">
-                                {bills && bills.length > 0 ? (
-                                    <div className="space-y-2">
-                                        <p className="font-medium text-amber-600 dark:text-amber-400">⚠️ {t('deal_has_bills_warning')}</p>
-                                        <p>{t('refund_bill_will_be_created')}</p>
-                                    </div>
-                                ) : (
-                                    <p>{t('deal_cancel_confirmation')}</p>
-                                )}
+                                <p>{t('deal_cancel_confirmation')}</p>
+                            </div>
+
+                            <div>
+                                <label htmlFor="cancelDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
+                                    {t('cancellation_date')}
+                                </label>
+                                <input
+                                    id="cancelDate"
+                                    type="date"
+                                    value={cancelDealDate}
+                                    onChange={(e) => setCancelDealDate(e.target.value)}
+                                    className="form-input w-full"
+                                    disabled={cancellingDeal}
+                                />
                             </div>
 
                             <div>
