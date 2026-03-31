@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { getTranslation } from '@/i18n';
 import { DataTable, DataTableSortStatus, DataTableColumn } from 'mantine-datatable';
-import IconEye from '@/components/icon/icon-eye';
+import IconPdf from '@/components/icon/icon-pdf';
+import { getPublicUrlFromPath } from '@/utils/file-upload';
 
 export interface CommissionProvider {
     id: number | string;
@@ -31,6 +32,7 @@ export interface Commission {
     created_at: string;
     tranzila_document_number?: string;
     tranzila_retrieval_key?: string;
+    pdf_path?: string | null;
     providers?: CommissionProvider;
     items?: Array<{ id: number; item_description: string; unit_price: number; quantity: number; total: number }>;
     payments?: CommissionPayment[];
@@ -133,12 +135,19 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
         setDownloadingPDF(comm.id);
         try {
             const tranzilaRetrievalKey = comm.tranzila_retrieval_key;
-            if (!tranzilaRetrievalKey) {
-                onAlert?.(t('bill_not_created_with_tranzila'), 'danger');
+            if (tranzilaRetrievalKey) {
+                const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
+                window.open(proxyUrl, '_blank');
                 return;
             }
-            const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
-            window.open(proxyUrl, '_blank');
+
+            const storagePath = comm.pdf_path;
+            if (storagePath) {
+                window.open(getPublicUrlFromPath(storagePath), '_blank');
+                return;
+            }
+
+            onAlert?.(t('bill_not_created_with_tranzila'), 'danger');
         } catch (error) {
             console.error('Error opening Tranzila PDF:', error);
             onAlert?.(t('error_downloading_pdf'), 'danger');
@@ -245,18 +254,18 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             textAlignment: 'center',
             render: (c: Commission) => (
                 <div className="mx-auto flex w-max items-center gap-4">
-                    {c.tranzila_retrieval_key && (
+                    {(c.tranzila_retrieval_key || c.pdf_path) && (
                         <button
                             type="button"
-                            className="flex hover:text-primary"
+                            className="flex hover:text-success"
                             onClick={() => handleViewTranzilaPdf(c)}
-                            title={t('view_tranzila_document')}
+                            title={t('download_pdf')}
                             disabled={downloadingPDF === c.id}
                         >
                             {downloadingPDF === c.id ? (
-                                <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-primary"></div>
+                                <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div>
                             ) : (
-                                <IconEye className="h-4.5 w-4.5" />
+                                <IconPdf className="h-4.5 w-4.5" />
                             )}
                         </button>
                     )}

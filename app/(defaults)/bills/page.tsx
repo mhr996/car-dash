@@ -155,7 +155,16 @@ const Bills = () => {
                         customer:customers!deals_customer_id_fkey(id, name, id_number),
                         seller:customers!deals_seller_id_fkey(id, name, id_number),
                         buyer:customers!deals_buyer_id_fkey(id, name, id_number),
-                        car:cars!deals_car_id_fkey(id, title, brand, year, buy_price, sale_price)
+                        car:cars!deals_car_id_fkey(
+                            id,
+                            title,
+                            brand,
+                            year,
+                            buy_price,
+                            sale_price,
+                            provider,
+                            providers!cars_provider_fkey(id, name)
+                        )
                     ),
                     payments:bill_payments(*)
                 `,
@@ -462,6 +471,11 @@ const Bills = () => {
                 <div className="flex flex-col">
                     <span className="font-medium">{bill.deal?.title}</span>
                     <span className="text-xs text-gray-500">{t(`deal_type_${bill.deal?.deal_type}`)}</span>
+                    {(() => {
+                        const car = (bill.deal as any)?.car;
+                        const providerName = car?.providers?.name;
+                        return providerName ? <span className="text-xs text-gray-500">{t('provider')}: {providerName}</span> : null;
+                    })()}
                 </div>
             ),
         },

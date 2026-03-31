@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import IconArrowLeft from '@/components/icon/icon-arrow-left';
 import IconEdit from '@/components/icon/icon-edit';
@@ -10,6 +10,8 @@ import IconCalendar from '@/components/icon/icon-calendar';
 import supabase from '@/lib/supabase';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
+import { DataTable, DataTableColumn } from 'mantine-datatable';
+import IconPdf from '@/components/icon/icon-pdf';
 
 interface Provider {
     id: string;
@@ -19,12 +21,88 @@ interface Provider {
     phone: string;
 }
 
+type ProviderBillRow = {
+    id: number;
+    created_at: string;
+    date?: string | null;
+    bill_type: string;
+    total_with_tax?: number | null;
+    total?: number | null;
+    customer_name: string;
+    tranzila_document_number?: string | null;
+    tranzila_retrieval_key?: string | null;
+    deal?: {
+        id?: string | number;
+        title?: string;
+        car?: {
+            provider?: number | string | null;
+            providers?: { id: number | string; name: string } | null;
+        } | null;
+    } | null;
+};
+
+type ProviderCommissionRow = {
+    id: number;
+    created_at: string;
+    date: string;
+    commission_type: string;
+    status: string;
+    total_with_tax: number;
+    tranzila_document_number?: string | null;
+    tranzila_retrieval_key?: string | null;
+};
+
+type ProviderDocRow =
+    | {
+          row_type: 'bill';
+          id: number;
+          created_at: string;
+          date?: string | null;
+          doc_type: string;
+          status?: string | null;
+          total_with_tax?: number | null;
+          total?: number | null;
+          customer_name?: string | null;
+          tranzila_document_number?: string | null;
+          tranzila_retrieval_key?: string | null;
+          deal_title?: string | null;
+      }
+    | {
+          row_type: 'commission';
+          id: number;
+          created_at: string;
+          date?: string | null;
+          doc_type: string;
+          status?: string | null;
+          total_with_tax?: number | null;
+          total?: number | null;
+          customer_name?: string | null;
+          tranzila_document_number?: string | null;
+          tranzila_retrieval_key?: string | null;
+          deal_title?: string | null;
+      };
+
 const ProviderPreview = () => {
     const { t } = getTranslation();
     const params = useParams();
     const router = useRouter();
     const [provider, setProvider] = useState<Provider | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadingRelations, setLoadingRelations] = useState(false);
+    const [providerDocs, setProviderDocs] = useState<ProviderDocRow[]>([]);
+    const [downloadingPdf, setDownloadingPdf] = useState<string | number | null>(null);
+    const isRtl = typeof document !== 'undefined' && document.documentElement?.dir === 'rtl';
+    const [isCompact, setIsCompact] = useState(false);
+
+    useEffect(() => {
+        const update = () => {
+            // "stack columns" on small screens
+            setIsCompact(window.innerWidth < 1024);
+        };
+        update();
+        window.addEventListener('resize', update);
+        return () => window.removeEventListener('resize', update);
+    }, []);
 
     useEffect(() => {
         const fetchProvider = async () => {
@@ -45,6 +123,235 @@ const ProviderPreview = () => {
             fetchProvider();
         }
     }, [params?.id]);
+
+    useEffect(() => {
+        const fetchRelations = async (providerId: string) => {
+            setLoadingRelations(true);
+            try {
+                const [commRes, billsRes] = await Promise.all([
+                    supabase
+                        .from('commissions')
+                        .select('id, created_at, date, commission_type, status, total_with_tax, tranzila_document_number, tranzila_retrieval_key')
+                        .eq('provider_id', providerId)
+                        .order('created_at', { ascending: false })
+                        .limit(200),
+                    supabase
+                        .from('bills')
+                        .select(
+                            `
+                            id,
+                            created_at,
+                            date,
+                            bill_type,
+                            total_with_tax,
+                            total,
+                            customer_name,
+                            tranzila_document_number,
+                            tranzila_retrieval_key,
+                            deal:deals(
+                                id,
+                                title,
+                                car:cars!deals_car_id_fkey(
+                                    provider,
+                                    providers!cars_provider_fkey(id, name)
+                                )
+                            )
+                        `,
+                        )
+                        .order('created_at', { ascending: false })
+                        .limit(400),
+                ]);
+
+                if (commRes.error) throw commRes.error;
+                if (billsRes.error) throw billsRes.error;
+
+                const commissions = (commRes.data || []) as ProviderCommissionRow[];
+                const filteredBills = ((billsRes.data || []) as ProviderBillRow[]).filter((b) => {
+                    const car = b.deal?.car;
+                    const pid = car?.providers?.id ?? car?.provider;
+                    return pid != null && String(pid) === String(providerId);
+                });
+
+                const billDocs: ProviderDocRow[] = filteredBills.map((b) => ({
+                    row_type: 'bill',
+                    id: b.id,
+                    created_at: b.created_at,
+                    date: b.date,
+                    doc_type: b.bill_type,
+                    status: null,
+                    total_with_tax: b.total_with_tax ?? null,
+                    total: b.total ?? null,
+                    customer_name: b.customer_name ?? null,
+                    tranzila_document_number: b.tranzila_document_number ?? null,
+                    tranzila_retrieval_key: b.tranzila_retrieval_key ?? null,
+                    deal_title: b.deal?.title ?? null,
+                }));
+
+                const commDocs: ProviderDocRow[] = commissions.map((c) => ({
+                    row_type: 'commission',
+                    id: c.id,
+                    created_at: c.created_at,
+                    date: c.date,
+                    doc_type: c.commission_type,
+                    status: c.status ?? null,
+                    total_with_tax: c.total_with_tax ?? null,
+                    total: null,
+                    customer_name: null,
+                    tranzila_document_number: c.tranzila_document_number ?? null,
+                    tranzila_retrieval_key: c.tranzila_retrieval_key ?? null,
+                    deal_title: null,
+                }));
+
+                const combined = [...billDocs, ...commDocs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                setProviderDocs(combined);
+            } catch (e) {
+                console.error('Error fetching provider relations:', e);
+            } finally {
+                setLoadingRelations(false);
+            }
+        };
+
+        if (provider?.id) fetchRelations(provider.id);
+    }, [provider?.id]);
+
+    const handleViewTranzilaPdf = async (row: ProviderDocRow) => {
+        const key = row.tranzila_retrieval_key;
+        if (!key) return;
+        setDownloadingPdf(row.id);
+        try {
+            const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(key)}`;
+            window.open(proxyUrl, '_blank');
+        } finally {
+            setDownloadingPdf(null);
+        }
+    };
+
+    const columns = useMemo((): DataTableColumn<ProviderDocRow>[] => {
+        const pdfButton = (r: ProviderDocRow) =>
+            r.tranzila_retrieval_key ? (
+                <button
+                    type="button"
+                    className="flex hover:text-success"
+                    onClick={() => handleViewTranzilaPdf(r)}
+                    title={t('download_pdf')}
+                    disabled={downloadingPdf === r.id}
+                >
+                    {downloadingPdf === r.id ? <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div> : <IconPdf className="h-4.5 w-4.5" />}
+                </button>
+            ) : (
+                <span className="text-gray-400">—</span>
+            );
+
+        const docTypeBadge = (r: ProviderDocRow) => {
+            if (r.row_type === 'bill') return <span className="badge badge-outline-info">{t(`bill_type_${r.doc_type}`)}</span>;
+            const mapped = r.doc_type === 'tax_invoice_receipt' ? 'both' : r.doc_type === 'receipt_only' ? 'receipt' : r.doc_type === 'tax_invoice' ? 'tax_invoice' : r.doc_type;
+            return <span className="badge badge-outline-info">{t(`commission_type_${mapped}`)}</span>;
+        };
+
+        if (isCompact) {
+            return [
+                {
+                    accessor: 'stacked',
+                    title: t('bills'),
+                    sortable: false,
+                    render: (r) => (
+                        <div className={`flex items-start justify-between gap-4 py-1 ${isRtl ? 'flex-row-reverse' : ''}`}>
+                            <div className={`min-w-0 ${isRtl ? 'text-right' : 'text-left'}`}>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-mono font-semibold">{r.tranzila_document_number || r.id}</span>
+                                    {docTypeBadge(r)}
+                                </div>
+                                <div className="mt-1 space-y-0.5 text-sm text-gray-600 dark:text-white-dark">
+                                    <div className="truncate">
+                                        <span className="text-xs text-gray-500 dark:text-[#888ea8]">{t('customer_name')}: </span>
+                                        {r.customer_name || '-'}
+                                    </div>
+                                    <div className="truncate">
+                                        <span className="text-xs text-gray-500 dark:text-[#888ea8]">{t('deal')}: </span>
+                                        {r.deal_title || '-'}
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-gray-500 dark:text-[#888ea8]">{t('total_amount')}: </span>
+                                        <span className="font-medium text-black dark:text-white-dark">₪{Number(r.total_with_tax ?? r.total ?? 0).toFixed(0)}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-gray-500 dark:text-[#888ea8]">{t('date')}: </span>
+                                        {new Date(r.date || r.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="shrink-0">{pdfButton(r)}</div>
+                        </div>
+                    ),
+                },
+            ];
+        }
+
+        const textAlignStart = isRtl ? ('right' as const) : ('left' as const);
+        const textAlignEnd = isRtl ? ('left' as const) : ('right' as const);
+
+        return [
+            {
+                accessor: 'tranzila_document_number',
+                title: t('invoice_number'),
+                width: 150,
+                textAlignment: textAlignStart,
+                render: (r) => <span className="font-mono whitespace-nowrap">{r.tranzila_document_number || r.id}</span>,
+            },
+            {
+                accessor: 'doc_type',
+                title: t('commission_document_type'),
+                width: 170,
+                textAlignment: textAlignStart,
+                render: (r) => <div className="whitespace-nowrap">{docTypeBadge(r)}</div>,
+            },
+            {
+                accessor: 'customer_name',
+                title: t('customer_name'),
+                width: 220,
+                textAlignment: textAlignStart,
+                render: (r) => <div className="truncate">{r.customer_name || '-'}</div>,
+            },
+            {
+                accessor: 'deal_title',
+                title: t('deal'),
+                width: 260,
+                textAlignment: textAlignStart,
+                render: (r) => <div className="truncate">{r.deal_title || '-'}</div>,
+            },
+            {
+                accessor: 'total_with_tax',
+                title: t('total_amount'),
+                width: 140,
+                textAlignment: textAlignEnd,
+                render: (r) => <span className="font-medium whitespace-nowrap">₪{Number(r.total_with_tax ?? r.total ?? 0).toFixed(0)}</span>,
+            },
+            {
+                accessor: 'date',
+                title: t('date'),
+                width: 140,
+                textAlignment: textAlignStart,
+                render: (r) =>
+                    (
+                        <span className="whitespace-nowrap">
+                            {new Date(r.date || r.created_at).toLocaleDateString('en-GB', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                            })}
+                        </span>
+                    ),
+            },
+            {
+                accessor: 'actions',
+                title: t('actions'),
+                sortable: false,
+                textAlignment: 'center',
+                width: 80,
+                render: (r) => pdfButton(r),
+            },
+        ];
+    }, [t, downloadingPdf, isCompact, isRtl]);
 
     if (loading) {
         return (
@@ -223,6 +530,32 @@ const ProviderPreview = () => {
                                     <span className="text-gray-600">{t('location')}:</span>
                                     <span className="font-medium">{provider.address}</span>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-6">
+                    <div className="panel border-white-light px-0 dark:border-[#1b2e4b]">
+                        <div className="mb-4.5 flex flex-col gap-5 px-5 md:flex-row md:items-center">
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-lg font-semibold">{t('bills')}</h3>
+                            </div>
+                        </div>
+
+                        <div className="invoice-table" dir={isRtl ? 'rtl' : 'ltr'}>
+                            <div className="datatables pagination-padding relative px-5 pb-5">
+                                <DataTable
+                                    records={providerDocs}
+                                    columns={columns}
+                                    highlightOnHover
+                                    striped
+                                    fetching={loadingRelations}
+                                    minHeight={420}
+                                    noRecordsText={t('no_records')}
+                                />
+
+                                {loadingRelations && <div className="absolute inset-0 z-10 flex items-center justify-center bg-white dark:bg-black-dark-light bg-opacity-60 backdrop-blur-sm" />}
                             </div>
                         </div>
                     </div>
