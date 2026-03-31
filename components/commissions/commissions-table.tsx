@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { getTranslation } from '@/i18n';
 import { DataTable, DataTableSortStatus, DataTableColumn } from 'mantine-datatable';
-import IconPdf from '@/components/icon/icon-pdf';
+import IconEye from '@/components/icon/icon-eye';
 
 export interface CommissionProvider {
     id: number | string;
@@ -129,7 +129,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
         return t('no_payment_yet');
     };
 
-    const handleDownloadPDF = async (comm: Commission) => {
+    const handleViewTranzilaPdf = async (comm: Commission) => {
         setDownloadingPDF(comm.id);
         try {
             const tranzilaRetrievalKey = comm.tranzila_retrieval_key;
@@ -140,7 +140,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             const proxyUrl = `/api/tranzila/download-pdf?key=${encodeURIComponent(tranzilaRetrievalKey)}`;
             window.open(proxyUrl, '_blank');
         } catch (error) {
-            console.error('Error downloading PDF:', error);
+            console.error('Error opening Tranzila PDF:', error);
             onAlert?.(t('error_downloading_pdf'), 'danger');
         } finally {
             setDownloadingPDF(null);
@@ -149,13 +149,12 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
 
     const columns: DataTableColumn<Commission>[] = [
         {
-            accessor: 'id',
-            title: t('commission_number'),
-            sortable: true,
-            render: (c: Commission) => (
-                <div className="text-sm font-mono">
-                    <span className="font-medium">{c.tranzila_document_number || String(c.id).padStart(6, '0')}</span>
-                </div>
+            accessor: 'operation_seq',
+            title: t('operation_number'),
+            sortable: false,
+            textAlignment: 'center',
+            render: (_c: Commission, index: number) => (
+                <span className="text-sm font-medium">{(page - 1) * pageSize + index + 1}</span>
             ),
         },
         {
@@ -171,7 +170,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
         },
         {
             accessor: 'commission_type',
-            title: t('commission_type'),
+            title: t('commission_document_type'),
             sortable: true,
             render: (c: Commission) => <span className="badge badge-outline-info">{getCommissionTypeLabel(c.commission_type)}</span>,
         },
@@ -210,6 +209,16 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             ),
         },
         {
+            accessor: 'tranzila_document_number',
+            title: t('invoice_number'),
+            sortable: true,
+            render: (c: Commission) => (
+                <div className="text-sm font-mono">
+                    <span className="font-medium">{c.tranzila_document_number ?? '—'}</span>
+                </div>
+            ),
+        },
+        {
             accessor: 'created_at',
             title: t('created_at'),
             sortable: true,
@@ -239,15 +248,15 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
                     {c.tranzila_retrieval_key && (
                         <button
                             type="button"
-                            className="flex hover:text-success"
-                            onClick={() => handleDownloadPDF(c)}
-                            title={t('download_pdf')}
+                            className="flex hover:text-primary"
+                            onClick={() => handleViewTranzilaPdf(c)}
+                            title={t('view_tranzila_document')}
                             disabled={downloadingPDF === c.id}
                         >
                             {downloadingPDF === c.id ? (
-                                <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div>
+                                <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-primary"></div>
                             ) : (
-                                <IconPdf className="h-4.5 w-4.5" />
+                                <IconEye className="h-4.5 w-4.5" />
                             )}
                         </button>
                     )}

@@ -70,11 +70,13 @@ const Commissions = () => {
             items.filter((comm) => {
                 const searchLower = activeFilters.search.toLowerCase();
                 const providerName = comm.providers?.name?.toLowerCase() || '';
+                const docNum = String(comm.tranzila_document_number || '').toLowerCase();
                 const matchesSearch =
                     !activeFilters.search ||
                     providerName.includes(searchLower) ||
                     comm.commission_type.toLowerCase().includes(searchLower) ||
-                    String(comm.id).includes(searchLower);
+                    String(comm.id).includes(searchLower) ||
+                    docNum.includes(searchLower);
 
                 const matchesType = !activeFilters.commissionType || comm.commission_type === activeFilters.commissionType;
                 const matchesProvider = !activeFilters.providerId || String(comm.provider_id) === String(activeFilters.providerId);
