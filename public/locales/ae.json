@@ -1517,6 +1517,8 @@
     "message_balance_add_payment_modal_title": "إضافة دفعة جديدة",
     "message_balance_messages_count": "عدد الرسائل",
     "message_balance_payment_amount": "سعر/قيمة الدفعة",
+    "message_balance_messages_count_hint": "أدخل عدد الرسائل التي تريد إضافتها في الرصيد",
+    "message_balance_manual_value_hint": "أدخل قيمة الرسائل يدويًا",
     "message_balance_messages_required": "الرجاء إدخال عدد رسائل صحيح أكبر من صفر",
     "message_balance_amount_required": "الرجاء إدخال قيمة صحيحة أكبر من صفر",
     "message_settings": "إعدادات الرسائل",

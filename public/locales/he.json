@@ -41,6 +41,8 @@
     "message_balance_add_payment_modal_title": "הוספת תשלום חדש",
     "message_balance_messages_count": "מספר הודעות",
     "message_balance_payment_amount": "סכום תשלום",
+    "message_balance_messages_count_hint": "הזן את מספר ההודעות להוספה ליתרה",
+    "message_balance_manual_value_hint": "הזן את ערך ההודעות ידנית",
     "message_balance_messages_required": "נא להזין מספר הודעות תקין גדול מאפס",
     "message_balance_amount_required": "נא להזין סכום תקין גדול מאפס",
     "message_settings": "הגדרות הודעות",

@@ -286,6 +286,7 @@ export default function MessageBalancePage() {
                                 value={form.messagesCount}
                                 onChange={(e) => setForm((prev) => ({ ...prev, messagesCount: e.target.value }))}
                             />
+                            <p className="mt-1 text-xs text-gray-500">{t('message_balance_messages_count_hint')}</p>
                         </div>
 
                         <div>
@@ -298,6 +299,7 @@ export default function MessageBalancePage() {
                                 value={form.amount}
                                 onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
                             />
+                            <p className="mt-1 text-xs text-gray-500">{t('message_balance_manual_value_hint')}</p>
                         </div>
 
                         <div>
