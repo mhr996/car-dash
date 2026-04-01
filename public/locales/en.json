@@ -48,7 +48,7 @@
     "message_balance_type_debt": "Debt",
     "message_balance_type_payment": "Payment",
     "message_balance_total_amount": "Financial Balance",
-    "message_balance_total_messages": "Total Messages",
+    "message_balance_total_messages": "Message Balance",
     "message_balance_sent_messages": "Total Sent Messages",
     "message_balance_add_balance_btn": "Add Balance",
     "message_balance_add_balance_modal_title": "Add New Balance",

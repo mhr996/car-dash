@@ -1512,7 +1512,7 @@
     "message_balance_type_debt": "دين",
     "message_balance_type_payment": "دفعة",
     "message_balance_total_amount": "الرصيد المالي",
-    "message_balance_total_messages": " عدد الرسائل",
+    "message_balance_total_messages": "رصيد عدد الرسائل",
     "message_balance_sent_messages": "إجمالي الرسائل المرسلة",
     "message_balance_add_balance_btn": "إضافة رصيد",
     "message_balance_add_balance_modal_title": "إضافة رصيد جديد",

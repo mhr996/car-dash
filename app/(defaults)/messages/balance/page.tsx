@@ -6,7 +6,7 @@ import { getTranslation } from '@/i18n';
 import IconPlus from '@/components/icon/icon-plus';
 import IconX from '@/components/icon/icon-x';
 
-type BalanceTab = 'overview' | 'history' | 'payments';
+type BalanceTab = 'overview' | 'payments';
 type TxDirection = 'positive' | 'negative';
 
 type MessageBalanceTransaction = {
@@ -202,7 +202,7 @@ export default function MessageBalancePage() {
             </div>
 
             <div className="flex gap-2 border-b border-gray-200 dark:border-[#191e3a]">
-                {(['overview', 'history', 'payments'] as BalanceTab[]).map((tab) => (
+                {(['overview', 'payments'] as BalanceTab[]).map((tab) => (
                     <button
                         key={tab}
                         type="button"
@@ -234,22 +234,20 @@ export default function MessageBalancePage() {
                 </div>
             )}
 
-            {(activeTab === 'history' || activeTab === 'payments') && (
+            {activeTab === 'payments' && (
                 <div className="panel overflow-hidden">
                     <div className="p-4 border-b border-gray-200 dark:border-[#191e3a] flex items-center justify-between">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('message_balance_history_tab')}</h3>
-                        {activeTab === 'payments' && (
-                            <div className="flex items-center gap-2">
-                                <button type="button" onClick={openAddBalanceModal} className="btn btn-danger btn-sm flex items-center gap-2">
-                                    <IconPlus className="w-4 h-4" />
-                                    {t('message_balance_add_balance_btn')}
-                                </button>
-                                <button type="button" onClick={openAddPaymentModal} className="btn btn-primary btn-sm flex items-center gap-2">
-                                    <IconPlus className="w-4 h-4" />
-                                    {t('message_balance_add_payment_btn')}
-                                </button>
-                            </div>
-                        )}
+                        <div className="flex items-center gap-2">
+                            <button type="button" onClick={openAddBalanceModal} className="btn btn-danger btn-sm flex items-center gap-2">
+                                <IconPlus className="w-4 h-4" />
+                                {t('message_balance_add_balance_btn')}
+                            </button>
+                            <button type="button" onClick={openAddPaymentModal} className="btn btn-primary btn-sm flex items-center gap-2">
+                                <IconPlus className="w-4 h-4" />
+                                {t('message_balance_add_payment_btn')}
+                            </button>
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
