@@ -114,8 +114,16 @@ const BillTypeSelect = ({
         }
 
         if (dealType === 'intermediary') {
-            // For intermediary deals, show tax_invoice_receipt, general, and optionally credit_note/refund_receipt
-            return types.filter((type) => type.value === 'tax_invoice_receipt' || type.value === 'general' || type.value === 'credit_note' || type.value === 'refund_receipt');
+            // For intermediary deals, show all bill types: tax_invoice, receipt_only, tax_invoice_receipt, general, and optionally credit_note/refund_receipt
+            return types.filter(
+                (type) =>
+                    type.value === 'tax_invoice' ||
+                    type.value === 'receipt_only' ||
+                    type.value === 'tax_invoice_receipt' ||
+                    type.value === 'general' ||
+                    type.value === 'credit_note' ||
+                    type.value === 'refund_receipt',
+            );
         } else {
             // For all other deal types, show tax_invoice, receipt_only, general, and optionally credit_note/refund_receipt
             return types.filter((type) => type.value === 'tax_invoice' || type.value === 'receipt_only' || type.value === 'general' || type.value === 'credit_note' || type.value === 'refund_receipt');
