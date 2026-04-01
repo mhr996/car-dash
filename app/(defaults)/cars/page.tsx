@@ -50,6 +50,7 @@ interface Car {
         name: string;
         address: string;
         phone: string;
+        id_number?: string;
     };
     source_customer_id?: number | null;
     source_customer?: {
@@ -297,12 +298,7 @@ const CarsList = () => {
     };
 
     const updateExistingCarLogToReturned = async (carId: string, updatedCar: Car, createdAtIso: string) => {
-        const { data: existingLogs, error: findError } = await supabase
-            .from('logs')
-            .select('id, car')
-            .eq('car->>id', String(carId))
-            .order('created_at', { ascending: false })
-            .limit(1);
+        const { data: existingLogs, error: findError } = await supabase.from('logs').select('id, car').eq('car->>id', String(carId)).order('created_at', { ascending: false }).limit(1);
         if (findError) throw findError;
 
         const existing = (existingLogs || [])[0] as { id: string; car?: Record<string, unknown> | null } | undefined;
@@ -823,12 +819,7 @@ const CarsList = () => {
                                     render: (car: Car) => (
                                         <div className="mx-auto flex w-max items-center gap-4">
                                             {activeTab === 'available' && (
-                                                <button
-                                                    type="button"
-                                                    className="flex hover:text-warning"
-                                                    onClick={() => requestReturnCar(car)}
-                                                    title={t('return_car')}
-                                                >
+                                                <button type="button" className="flex hover:text-warning" onClick={() => requestReturnCar(car)} title={t('return_car')}>
                                                     <IconRestore className="h-4.5 w-4.5" />
                                                 </button>
                                             )}
@@ -961,12 +952,7 @@ const CarsList = () => {
                                                         {t('view')}
                                                     </Link>
                                                     {activeTab === 'available' && (
-                                                        <button
-                                                            type="button"
-                                                            className="btn btn-outline-warning btn-sm"
-                                                            onClick={() => requestReturnCar(car)}
-                                                            title={t('return_car')}
-                                                        >
+                                                        <button type="button" className="btn btn-outline-warning btn-sm" onClick={() => requestReturnCar(car)} title={t('return_car')}>
                                                             <IconRestore className="w-4 h-4" />
                                                         </button>
                                                     )}
@@ -1035,11 +1021,7 @@ const CarsList = () => {
                     <div className="bg-white dark:bg-gray-800 rounded-lg max-w-sm w-full">
                         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('confirm_return_car')}</h3>
-                            <button
-                                onClick={() => setShowReturnModal(false)}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                                disabled={!carToReturn}
-                            >
+                            <button onClick={() => setShowReturnModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" disabled={!carToReturn}>
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -1055,13 +1037,7 @@ const CarsList = () => {
                                 <label htmlFor="returnDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                                     {t('return_date')}
                                 </label>
-                                <input
-                                    id="returnDate"
-                                    type="date"
-                                    value={returnDate}
-                                    onChange={(e) => setReturnDate(e.target.value)}
-                                    className="form-input w-full"
-                                />
+                                <input id="returnDate" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="form-input w-full" />
                             </div>
                         </div>
 

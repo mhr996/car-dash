@@ -21,6 +21,7 @@ interface Provider {
     name: string;
     phone?: string;
     address?: string;
+    id_number?: string;
 }
 
 interface Customer {

@@ -47,6 +47,7 @@ interface Car {
         name: string;
         address: string;
         phone: string;
+        id_number?: string;
     };
     customers?: {
         id: string;
