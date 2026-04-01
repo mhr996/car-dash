@@ -28,6 +28,7 @@ interface ProviderInfo {
     name: string;
     address?: string;
     phone?: string;
+    id_number?: string;
 }
 
 const AddCommission = () => {
@@ -60,7 +61,7 @@ const AddCommission = () => {
         const fetchProvider = async () => {
             const { data } = await supabase
                 .from('providers')
-                .select('id, name, address, phone')
+                .select('id, name, address, phone, id_number')
                 .eq('id', parseInt(providerId, 10) || providerId)
                 .single();
             setSelectedProvider(data || null);
@@ -220,7 +221,7 @@ const AddCommission = () => {
                 action: 1, // Debit (normal document)
                 client_company: provider.name || '',
                 client_name: provider.name || '',
-                client_id: '',
+                client_id: provider.id_number || '',
                 client_email: 'no-reply@car-dash.com',
                 client_phone: provider.phone || '',
                 client_address_line_1: provider.address || null,
@@ -461,7 +462,7 @@ const AddCommission = () => {
                         <div className="space-y-4">
                             <ProviderSelect defaultValue={providerId} onChange={(e) => setProviderId(e.target.value)} className="form-select text-white-dark w-full" />
                             {selectedProvider && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg border">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg border">
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('provider')}</label>
                                         <p className="text-sm text-gray-900 dark:text-white">{selectedProvider.name}</p>
@@ -473,6 +474,10 @@ const AddCommission = () => {
                                     <div>
                                         <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('phone')}</label>
                                         <p className="text-sm text-gray-900 dark:text-white">{selectedProvider.phone || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('provider_id_number')}</label>
+                                        <p className="text-sm text-gray-900 dark:text-white">{selectedProvider.id_number || '-'}</p>
                                     </div>
                                 </div>
                             )}
@@ -528,7 +533,7 @@ const AddCommission = () => {
                                 </div>
                                 <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                                     <h6 className="font-semibold text-blue-800 dark:text-blue-200 mb-3">{t('provider_details')}</h6>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                                         <div>
                                             <span className="text-blue-600 dark:text-blue-300 font-medium">{t('provider')}:</span>
                                             <p className="text-blue-800 dark:text-blue-100">{selectedProvider.name}</p>
@@ -540,6 +545,10 @@ const AddCommission = () => {
                                         <div>
                                             <span className="text-blue-600 dark:text-blue-300 font-medium">{t('address')}:</span>
                                             <p className="text-blue-800 dark:text-blue-100">{selectedProvider.address || '-'}</p>
+                                        </div>
+                                        <div>
+                                            <span className="text-blue-600 dark:text-blue-300 font-medium">{t('provider_id_number')}:</span>
+                                            <p className="text-blue-800 dark:text-blue-100">{selectedProvider.id_number || '-'}</p>
                                         </div>
                                     </div>
                                 </div>

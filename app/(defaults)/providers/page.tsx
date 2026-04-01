@@ -20,6 +20,7 @@ interface Provider {
     name: string;
     address: string;
     phone: string;
+    id_number?: string;
 }
 
 const ProvidersList = () => {
@@ -102,7 +103,10 @@ const ProvidersList = () => {
         setInitialRecords(
             items.filter((item) => {
                 return (
-                    item.name?.toLowerCase().includes(search.toLowerCase()) || item.address?.toLowerCase().includes(search.toLowerCase()) || item.phone?.toLowerCase().includes(search.toLowerCase())
+                    item.name?.toLowerCase().includes(search.toLowerCase()) ||
+                    item.address?.toLowerCase().includes(search.toLowerCase()) ||
+                    item.phone?.toLowerCase().includes(search.toLowerCase()) ||
+                    item.id_number?.toLowerCase().includes(search.toLowerCase())
                 );
             }),
         );
@@ -219,6 +223,12 @@ const ProvidersList = () => {
                                     sortable: true,
                                 },
                                 {
+                                    accessor: 'id_number',
+                                    title: t('provider_id_number'),
+                                    sortable: true,
+                                    render: ({ id_number }) => <span>{id_number || '-'}</span>,
+                                },
+                                {
                                     accessor: 'created_at',
                                     title: t('created_at'),
                                     sortable: true,
@@ -299,6 +309,10 @@ const ProvidersList = () => {
                                                 <div>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('provider_phone')}</p>
                                                     <p className="font-semibold text-sm">{provider.phone}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('provider_id_number')}</p>
+                                                    <p className="font-semibold text-sm">{provider.id_number || '-'}</p>
                                                 </div>
                                             </div>
                                             <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">

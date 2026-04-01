@@ -8,12 +8,7 @@ type JsonLogRow = {
     car?: { id?: string | number } | null;
 };
 
-async function fetchRelevantLogs(
-    db: SupabaseClient,
-    dealId: string,
-    customerCarId: string | null | undefined,
-    showroomCarId: string | null | undefined,
-): Promise<JsonLogRow[]> {
+async function fetchRelevantLogs(db: SupabaseClient, dealId: string, customerCarId: string | null | undefined, showroomCarId: string | null | undefined): Promise<JsonLogRow[]> {
     const byId = new Map<string, JsonLogRow>();
     const merge = (rows: JsonLogRow[] | null) => {
         for (const r of rows || []) byId.set(r.id, r);
@@ -105,14 +100,10 @@ export async function applyExchangeDealCancellationSideEffects(
             throw carErr;
         }
         if (!updatedCar) {
-            throw new Error(
-                'Could not update customer trade-in car (no row or RLS blocked read/write). Use API with SUPABASE_SERVICE_ROLE_KEY or fix RLS on cars.',
-            );
+            throw new Error('Could not update customer trade-in car (no row or RLS blocked read/write). Use API with SUPABASE_SERVICE_ROLE_KEY or fix RLS on cars.');
         }
         if (updatedCar.status !== 'returned_to_customer') {
-            throw new Error(
-                'cars.status must allow returned_to_customer. Run the SQL in migrations/supabase_exchange_cancel.sql or relax cars_status_check.',
-            );
+            throw new Error('cars.status must allow returned_to_customer. Run the SQL in migrations/supabase_exchange_cancel.sql or relax cars_status_check.');
         }
     }
 
@@ -171,7 +162,7 @@ export async function applyExchangeDealCancellationSideEffects(
             .select(
                 `
                 *,
-                providers:providers!cars_provider_fkey(id, name, address, phone)
+                providers:providers!cars_provider_fkey(id, name, address, phone, id_number)
             `,
             )
             .eq('id', showroomCarId)

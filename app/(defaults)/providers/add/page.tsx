@@ -15,6 +15,7 @@ const AddProvider = () => {
         name: '',
         address: '',
         phone: '',
+        id_number: '',
     });
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -41,6 +42,10 @@ const AddProvider = () => {
             setAlert({ visible: true, message: t('phone_required'), type: 'danger' });
             return false;
         }
+        if (!form.id_number.trim()) {
+            setAlert({ visible: true, message: t('provider_id_number_required'), type: 'danger' });
+            return false;
+        }
         return true;
     };
 
@@ -56,6 +61,7 @@ const AddProvider = () => {
                 name: form.name.trim(),
                 address: form.address.trim(),
                 phone: form.phone.trim(),
+                id_number: form.id_number.trim(),
             };
 
             const { data, error } = await supabase.from('providers').insert([providerData]).select();
@@ -143,6 +149,23 @@ const AddProvider = () => {
                                 {t('provider_phone')} <span className="text-red-500">*</span>
                             </label>
                             <input type="tel" id="phone" name="phone" value={form.phone} onChange={handleInputChange} className="form-input" placeholder={t('enter_provider_phone')} required />
+                        </div>
+
+                        {/* ID Number */}
+                        <div>
+                            <label htmlFor="id_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                {t('provider_id_number')} <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                id="id_number"
+                                name="id_number"
+                                value={form.id_number}
+                                onChange={handleInputChange}
+                                className="form-input"
+                                placeholder={t('enter_provider_id_number')}
+                                required
+                            />
                         </div>
                     </div>
 

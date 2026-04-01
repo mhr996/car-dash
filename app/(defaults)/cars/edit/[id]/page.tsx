@@ -155,7 +155,7 @@ const EditCar = () => {
     useEffect(() => {
         const fetchCar = async () => {
             try {
-                const { data, error } = await supabase.from('cars').select('*, providers(id, name, address, phone), customers(id, name, phone, age, id_number)').eq('id', carId).single();
+                const { data, error } = await supabase.from('cars').select('*, providers(id, name, address, phone, id_number), customers(id, name, phone, age, id_number)').eq('id', carId).single();
 
                 if (error) throw error;
 

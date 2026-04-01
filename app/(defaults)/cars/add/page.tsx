@@ -107,7 +107,7 @@ const AddCar = () => {
                 .select(
                     `
                     *,
-                    providers(id, name),
+                    providers(id, name, id_number),
                     source_customer:customers!cars_source_customer_id_fkey(id, name, phone)
                 `,
                 )
@@ -116,16 +116,9 @@ const AddCar = () => {
             if (error) return;
 
             // السيارات المؤرشفة = لها صف في deals
-            const { data: carsWithDeals } = await supabase
-                .from('cars')
-                .select('id, deals:deals!deals_car_id_fkey(id)')
-                .ilike('car_number', carNumberTrimmed);
+            const { data: carsWithDeals } = await supabase.from('cars').select('id, deals:deals!deals_car_id_fkey(id)').ilike('car_number', carNumberTrimmed);
 
-            const archivedIds = new Set(
-                (carsWithDeals || [])
-                    .filter((c: any) => c.deals && Array.isArray(c.deals) && c.deals.length > 0)
-                    .map((c: any) => c.id),
-            );
+            const archivedIds = new Set((carsWithDeals || []).filter((c: any) => c.deals && Array.isArray(c.deals) && c.deals.length > 0).map((c: any) => c.id));
 
             const archivedCar = (cars || []).find((c: any) => archivedIds.has(c.id));
             if (!archivedCar) return;
@@ -489,12 +482,8 @@ const AddCar = () => {
         setSaving(true);
         try {
             // Check if car_number exists in available cars (not archived) - prevent 409 duplicate
-            const { data: existingCars } = await supabase
-                .from('cars')
-                .select('id, car_number, deals:deals!deals_car_id_fkey(id)')
-                .ilike('car_number', form.car_number.trim());
-            const hasAvailableWithSameNumber =
-                existingCars?.some((car: any) => !car.deals || (Array.isArray(car.deals) && car.deals.length === 0));
+            const { data: existingCars } = await supabase.from('cars').select('id, car_number, deals:deals!deals_car_id_fkey(id)').ilike('car_number', form.car_number.trim());
+            const hasAvailableWithSameNumber = existingCars?.some((car: any) => !car.deals || (Array.isArray(car.deals) && car.deals.length === 0));
             if (hasAvailableWithSameNumber) {
                 setAlert({ visible: true, message: t('car_number_duplicate_available'), type: 'danger' });
                 setSaving(false);
@@ -567,7 +556,8 @@ const AddCar = () => {
                         id,
                         name,
                         address,
-                        phone
+                        phone,
+                        id_number
                     )
                 `,
                 )
@@ -588,11 +578,7 @@ const AddCar = () => {
             }, 1500);
         } catch (error: any) {
             console.error(error);
-            const isDuplicate =
-                error?.code === '23505' ||
-                error?.status === 409 ||
-                error?.message?.includes('duplicate') ||
-                error?.message?.includes('unique');
+            const isDuplicate = error?.code === '23505' || error?.status === 409 || error?.message?.includes('duplicate') || error?.message?.includes('unique');
             const message = isDuplicate ? t('car_number_duplicate_available') : error instanceof Error ? error.message : t('error_adding_car');
             setAlert({
                 visible: true,

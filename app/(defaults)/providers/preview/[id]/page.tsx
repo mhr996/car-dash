@@ -19,6 +19,7 @@ interface Provider {
     name: string;
     address: string;
     phone: string;
+    id_number?: string;
 }
 
 type ProviderBillRow = {
@@ -454,6 +455,12 @@ const ProviderPreview = () => {
                                             </a>
                                         </span>
                                     </div>
+
+                                    <div className="flex items-center">
+                                        <IconUser className="w-5 h-5 text-gray-400 ltr:mr-3 rtl:ml-3" />
+                                        <span className="text-sm text-gray-600 ltr:mr-2 rtl:ml-2">{t('provider_id_number')}:</span>
+                                        <span className="font-medium">{provider.id_number || '-'}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -499,6 +506,10 @@ const ProviderPreview = () => {
                                     <span className="font-medium font-mono">{provider.id}</span>
                                 </div>
                                 <div className="flex justify-between">
+                                    <span className="text-gray-600">{t('provider_id_number')}:</span>
+                                    <span className="font-medium">{provider.id_number || '-'}</span>
+                                </div>
+                                <div className="flex justify-between">
                                     <span className="text-gray-600">{t('created_at')}:</span>
                                     <span className="font-medium">
                                         {new Date(provider.created_at).toLocaleDateString('en-GB', {
@@ -525,6 +536,10 @@ const ProviderPreview = () => {
                                 <div className="flex justify-between">
                                     <span className="text-gray-600">{t('contact')}:</span>
                                     <span className="font-medium">{provider.phone}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">{t('provider_id_number')}:</span>
+                                    <span className="font-medium">{provider.id_number || '-'}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-600">{t('location')}:</span>

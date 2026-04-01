@@ -79,7 +79,9 @@ function labelForCarInventoryStatus(t: (key: string) => string, raw: string | un
 }
 
 function carStatusBadgeClass(status: string | undefined | null): string {
-    const s = String(status ?? '').trim().toLowerCase();
+    const s = String(status ?? '')
+        .trim()
+        .toLowerCase();
     if (s === 'new') return 'badge-outline-success';
     if (s === 'used') return 'badge-outline-info';
     if (s === 'received_from_client') return 'badge-outline-warning';
@@ -88,7 +90,11 @@ function carStatusBadgeClass(status: string | undefined | null): string {
 }
 
 function carIsReturnedToCustomerArchive(car: Car): boolean {
-    return String(car.status ?? '').trim().toLowerCase() === 'returned_to_customer';
+    return (
+        String(car.status ?? '')
+            .trim()
+            .toLowerCase() === 'returned_to_customer'
+    );
 }
 
 function carHasActiveSaleDeal(car: Car): boolean {
@@ -177,7 +183,7 @@ const CarsList = () => {
                     .select(
                         `
                         *, 
-                        providers(id, name, address, phone),
+                        providers(id, name, address, phone, id_number),
                         source_customer:customers!cars_source_customer_id_fkey(id, name, phone),
                         deals!deals_car_id_fkey(id, title, deal_type, status, customer_name, created_at)
                     `,
@@ -453,7 +459,7 @@ const CarsList = () => {
                 companyAddress: companyInfo.address || '',
                 companyPhone: companyInfo.phone || '',
                 sellerName: car.providers?.name || '',
-                sellerTaxNumber: '',
+                sellerTaxNumber: car.providers?.id_number || '',
                 sellerPhone: car.providers?.phone || '',
                 sellerAddress: car.providers?.address || '',
                 buyerName: companyInfo.name,
@@ -890,10 +896,7 @@ const CarsList = () => {
                                                     className="w-full h-full object-cover"
                                                 />
                                                 <div className="absolute top-2 right-2 flex gap-2">
-                                                    <span
-                                                        className={`badge ${carStatusBadgeClass(car.status)} bg-white dark:bg-gray-800`}
-                                                        title={t('car_status')}
-                                                    >
+                                                    <span className={`badge ${carStatusBadgeClass(car.status)} bg-white dark:bg-gray-800`} title={t('car_status')}>
                                                         {labelForCarInventoryStatus(t, car.status)}
                                                     </span>
                                                 </div>

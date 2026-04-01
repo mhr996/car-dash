@@ -80,7 +80,11 @@ const CarDealPreview = () => {
             if (!params?.id) return;
 
             try {
-                const { data, error } = await supabase.from('cars').select('*, providers(id, name, address, phone), customers(id, name, phone, age, id_number)').eq('id', params.id).single();
+                const { data, error } = await supabase
+                    .from('cars')
+                    .select('*, providers(id, name, address, phone, id_number), customers(id, name, phone, age, id_number)')
+                    .eq('id', params.id)
+                    .single();
 
                 if (error) {
                     console.error('Error fetching car:', error);
@@ -421,6 +425,14 @@ const CarDealPreview = () => {
                                             </div>
                                         </div>
                                     )}
+
+                                    <div className="flex items-start gap-3">
+                                        <IconCreditCard className="w-5 h-5 text-info mt-0.5" />
+                                        <div className="flex-1">
+                                            <p className="text-xs text-gray-500">{t('provider_id_number')}</p>
+                                            <p className="font-medium">{car.providers.id_number || '-'}</p>
+                                        </div>
+                                    </div>
 
                                     <div className="flex items-start gap-3">
                                         <IconCreditCard className="w-5 h-5 text-info mt-0.5" />

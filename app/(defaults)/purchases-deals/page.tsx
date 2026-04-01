@@ -97,7 +97,7 @@ const CarDealsPage = () => {
                 companyAddress: companyInfo.address || '',
                 companyPhone: companyInfo.phone || '',
                 sellerName: car.source_type === 'provider' ? car.provider?.name || '' : car.source_customer?.name || '',
-                sellerTaxNumber: '',
+                sellerTaxNumber: car.source_type === 'provider' ? car.provider?.id_number || '' : '',
                 sellerPhone: car.source_type === 'provider' ? car.provider?.phone || '' : car.source_customer?.phone || '',
                 sellerAddress: car.source_type === 'provider' ? car.provider?.address || '' : '',
                 buyerName: companyInfo.name,
@@ -160,7 +160,7 @@ const CarDealsPage = () => {
                     source_type,
                     created_at,
                     contract_image,
-                    provider:providers(id, name, phone, address),
+                    provider:providers(id, name, phone, address, id_number),
                     source_customer:customers!cars_source_customer_id_fkey(id, name, phone)
                 `,
                 )

@@ -9,6 +9,7 @@ interface Provider {
     name: string;
     address?: string;
     phone?: string;
+    id_number?: string;
 }
 
 interface ProviderSelectProps {
@@ -54,7 +55,8 @@ const ProviderSelect = ({ defaultValue, className = 'form-select text-white-dark
         return (
             provider.name.toLowerCase().includes(searchLower) ||
             (provider.address || '').toLowerCase().includes(searchLower) ||
-            (provider.phone || '').toLowerCase().includes(searchLower)
+            (provider.phone || '').toLowerCase().includes(searchLower) ||
+            (provider.id_number || '').toLowerCase().includes(searchLower)
         );
     });
 
@@ -99,9 +101,8 @@ const ProviderSelect = ({ defaultValue, className = 'form-select text-white-dark
                                     <span className="truncate">{selected.phone}</span>
                                 </div>
                             )}
-                            {selected.address && (
-                                <span className="truncate">{selected.address}</span>
-                            )}
+                            {selected.id_number && <span className="truncate">{selected.id_number}</span>}
+                            {selected.address && <span className="truncate">{selected.address}</span>}
                         </div>
                     </div>
                 </div>
@@ -172,12 +173,9 @@ const ProviderSelect = ({ defaultValue, className = 'form-select text-white-dark
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <h4 className={`font-semibold text-gray-900 dark:text-white ${isSelected ? 'text-primary' : ''}`}>{provider.name}</h4>
-                                                {provider.phone && (
-                                                    <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{provider.phone}</div>
-                                                )}
-                                                {provider.address && (
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{provider.address}</div>
-                                                )}
+                                                {provider.phone && <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{provider.phone}</div>}
+                                                {provider.id_number && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{provider.id_number}</div>}
+                                                {provider.address && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{provider.address}</div>}
                                             </div>
                                         </div>
                                     </div>

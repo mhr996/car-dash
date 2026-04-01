@@ -11,6 +11,7 @@ interface Provider {
     name: string;
     address: string;
     phone: string;
+    id_number?: string;
 }
 
 const EditProvider = () => {
@@ -27,6 +28,7 @@ const EditProvider = () => {
         name: '',
         address: '',
         phone: '',
+        id_number: '',
     });
 
     const [alert, setAlert] = useState<{ visible: boolean; message: string; type: 'success' | 'danger' }>({
@@ -48,6 +50,7 @@ const EditProvider = () => {
                         name: data.name || '',
                         address: data.address || '',
                         phone: data.phone || '',
+                        id_number: data.id_number || '',
                     });
                 }
             } catch (error) {
@@ -81,6 +84,10 @@ const EditProvider = () => {
             setAlert({ visible: true, message: t('phone_required'), type: 'danger' });
             return false;
         }
+        if (!form.id_number.trim()) {
+            setAlert({ visible: true, message: t('provider_id_number_required'), type: 'danger' });
+            return false;
+        }
         return true;
     };
 
@@ -96,6 +103,7 @@ const EditProvider = () => {
                 name: form.name.trim(),
                 address: form.address.trim(),
                 phone: form.phone.trim(),
+                id_number: form.id_number.trim(),
             };
 
             const { error } = await supabase.from('providers').update(providerData).eq('id', providerId);
@@ -203,6 +211,23 @@ const EditProvider = () => {
                                 {t('provider_phone')} <span className="text-red-500">*</span>
                             </label>
                             <input type="tel" id="phone" name="phone" value={form.phone} onChange={handleInputChange} className="form-input" placeholder={t('enter_provider_phone')} required />
+                        </div>
+
+                        {/* ID Number */}
+                        <div>
+                            <label htmlFor="id_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                {t('provider_id_number')} <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                id="id_number"
+                                name="id_number"
+                                value={form.id_number}
+                                onChange={handleInputChange}
+                                className="form-input"
+                                placeholder={t('enter_provider_id_number')}
+                                required
+                            />
                         </div>
                     </div>
 

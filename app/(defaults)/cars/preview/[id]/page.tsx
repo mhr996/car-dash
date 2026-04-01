@@ -84,7 +84,11 @@ const CarPreview = () => {
             if (!params?.id) return;
 
             try {
-                const { data, error } = await supabase.from('cars').select('*, providers(id, name, address, phone), customers(id, name, phone, age, id_number)').eq('id', params.id).single();
+                const { data, error } = await supabase
+                    .from('cars')
+                    .select('*, providers(id, name, address, phone, id_number), customers(id, name, phone, age, id_number)')
+                    .eq('id', params.id)
+                    .single();
 
                 if (error) {
                     console.error('Error fetching car:', error);
@@ -201,7 +205,7 @@ const CarPreview = () => {
             sellerName = car.providers.name;
             sellerAddress = car.providers.address || '';
             sellerPhone = car.providers.phone || '';
-            sellerTaxNumber = '[Provider Tax Number - To Be Filled]';
+            sellerTaxNumber = car.providers.id_number || '';
         } else {
             // Fallback to provider string if no detailed info
             sellerName = car.provider || '[Seller Name - To Be Filled]';
@@ -557,6 +561,11 @@ const CarPreview = () => {
                                                         <div>{car.providers.name}</div>
                                                         <div className="text-xs text-gray-500">{car.providers.address}</div>
                                                         <div className="text-xs text-gray-500">{car.providers.phone}</div>
+                                                        {car.providers.id_number && (
+                                                            <div className="text-xs text-gray-500">
+                                                                {t('provider_id_number')}: {car.providers.id_number}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ) : (

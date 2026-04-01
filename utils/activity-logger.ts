@@ -58,7 +58,8 @@ const getCarDetails = async (carId: string) => {
                     id,
                     name,
                     address,
-                    phone
+                    phone,
+                    id_number
                 )
             `,
             )

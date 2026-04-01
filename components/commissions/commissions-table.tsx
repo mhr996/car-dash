@@ -10,6 +10,7 @@ export interface CommissionProvider {
     name: string;
     address?: string;
     phone?: string;
+    id_number?: string;
 }
 
 export interface CommissionPayment {
@@ -199,11 +200,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             accessor: 'payment_amount',
             title: t('payment_amount'),
             sortable: true,
-            render: (c: Commission) => (
-                <span className="font-medium">
-                    {c.commission_type === 'tax_invoice' ? t('not_applicable') : getPaymentAmount(c)}
-                </span>
-            ),
+            render: (c: Commission) => <span className="font-medium">{c.commission_type === 'tax_invoice' ? t('not_applicable') : getPaymentAmount(c)}</span>,
         },
         {
             accessor: 'bank_transfer_details',
