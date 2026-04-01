@@ -163,9 +163,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             title: t('operation_number'),
             sortable: false,
             textAlignment: 'center',
-            render: (_c: Commission, index: number) => (
-                <span className="text-sm font-medium">{(page - 1) * pageSize + index + 1}</span>
-            ),
+            render: (_c: Commission, index: number) => <span className="text-sm font-medium">{(page - 1) * pageSize + index + 1}</span>,
         },
         {
             accessor: 'provider_name',
@@ -252,18 +250,8 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             render: (c: Commission) => (
                 <div className="mx-auto flex w-max items-center gap-4">
                     {(c.tranzila_retrieval_key || c.pdf_path) && (
-                        <button
-                            type="button"
-                            className="flex hover:text-success"
-                            onClick={() => handleViewTranzilaPdf(c)}
-                            title={t('download_pdf')}
-                            disabled={downloadingPDF === c.id}
-                        >
-                            {downloadingPDF === c.id ? (
-                                <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div>
-                            ) : (
-                                <IconPdf className="h-4.5 w-4.5" />
-                            )}
+                        <button type="button" className="flex hover:text-success" onClick={() => handleViewTranzilaPdf(c)} title={t('download_pdf')} disabled={downloadingPDF === c.id}>
+                            {downloadingPDF === c.id ? <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div> : <IconPdf className="h-4.5 w-4.5" />}
                         </button>
                     )}
                 </div>
