@@ -212,7 +212,6 @@ export default function MessageBalancePage() {
                         }`}
                     >
                         {tab === 'overview' && t('message_balance_overview_tab')}
-                        {tab === 'history' && t('message_balance_history_tab')}
                         {tab === 'payments' && t('message_balance_add_payment_tab')}
                     </button>
                 ))}
