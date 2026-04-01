@@ -32,6 +32,7 @@ export default function MessageBalancePage() {
         messagesCount: '',
         amount: '',
         note: '',
+        paymentMethod: 'cash',
     });
     const [saving, setSaving] = useState(false);
     const [errorText, setErrorText] = useState('');
@@ -95,7 +96,7 @@ export default function MessageBalancePage() {
 
     const resetForm = () => {
         setErrorText('');
-        setForm({ messagesCount: '', amount: '', note: '' });
+        setForm({ messagesCount: '', amount: '', note: '', paymentMethod: 'cash' });
     };
 
     const openAddPaymentModal = () => {
@@ -110,10 +111,11 @@ export default function MessageBalancePage() {
 
     const submitTransaction = async (direction: TxDirection) => {
         setErrorText('');
-        const rawMessages = Number(form.messagesCount);
         const rawAmount = Number(form.amount);
+        const isPayment = direction === 'positive';
+        const rawMessages = isPayment ? 0 : Number(form.messagesCount);
 
-        if (!Number.isFinite(rawMessages) || rawMessages <= 0) {
+        if (!isPayment && (!Number.isFinite(rawMessages) || rawMessages <= 0)) {
             setErrorText(t('message_balance_messages_required'));
             return;
         }
@@ -123,13 +125,18 @@ export default function MessageBalancePage() {
             return;
         }
 
+        const composedNote =
+            direction === 'positive'
+                ? `PM::${form.paymentMethod}::${form.note || ''}`
+                : form.note || null;
+
         setSaving(true);
-        const sign = direction === 'negative' ? -1 : 1;
+        const sign = 1;
         const txPayload = {
             messages_count: rawMessages * sign,
             amount: rawAmount * sign,
             transaction_type: direction,
-            note: form.note || null,
+            note: composedNote,
         };
 
         try {
@@ -162,6 +169,29 @@ export default function MessageBalancePage() {
         } finally {
             setSaving(false);
         }
+    };
+
+    const getPaymentMethodFromNote = (tx: MessageBalanceTransaction) => {
+        if (tx.transaction_type !== 'positive') return '-';
+        const note = tx.note || '';
+        if (note.startsWith('PM::')) {
+            const parts = note.split('::');
+            const method = parts[1] || 'cash';
+            if (method === 'visa') return t('visa');
+            if (method === 'bank_transfer') return t('bank_transfer');
+            if (method === 'check') return t('check');
+            return t('cash');
+        }
+        return '-';
+    };
+
+    const getPlainNote = (tx: MessageBalanceTransaction) => {
+        const note = tx.note || '';
+        if (note.startsWith('PM::')) {
+            const parts = note.split('::');
+            return parts.slice(2).join('::') || '-';
+        }
+        return note || '-';
     };
 
     return (
@@ -227,22 +257,23 @@ export default function MessageBalancePage() {
                             <thead>
                                 <tr className="bg-gray-50 dark:bg-[#191e3a] border-b border-gray-200 dark:border-[#191e3a]">
                                     <th className="p-3 text-start">{t('date')}</th>
-                                    <th className="p-3 text-start">{t('direction')}</th>
+                                    <th className="p-3 text-start">{t('message_balance_type')}</th>
                                     <th className="p-3 text-start">{t('message_balance_total_messages')}</th>
                                     <th className="p-3 text-start">{t('amount')}</th>
+                                    <th className="p-3 text-start">{t('payment_method')}</th>
                                     <th className="p-3 text-start">{t('description')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td className="p-6 text-center text-gray-500" colSpan={5}>
+                                        <td className="p-6 text-center text-gray-500" colSpan={6}>
                                             {t('loading')}
                                         </td>
                                     </tr>
                                 ) : transactions.length === 0 ? (
                                     <tr>
-                                        <td className="p-6 text-center text-gray-500" colSpan={5}>
+                                        <td className="p-6 text-center text-gray-500" colSpan={6}>
                                             {t('no_records')}
                                         </td>
                                     </tr>
@@ -252,12 +283,13 @@ export default function MessageBalancePage() {
                                             <td className="p-3">{new Date(tx.created_at).toLocaleString()}</td>
                                             <td className="p-3">
                                                 <span className={`badge ${tx.transaction_type === 'negative' ? 'badge-outline-danger' : 'badge-outline-success'}`}>
-                                                    {tx.transaction_type === 'negative' ? t('deduction') : t('addition')}
+                                                    {tx.transaction_type === 'negative' ? t('message_balance_type_debt') : t('message_balance_type_payment')}
                                                 </span>
                                             </td>
-                                            <td className={`p-3 font-semibold ${tx.messages_count < 0 ? 'text-danger' : 'text-success'}`}>{tx.messages_count}</td>
-                                            <td className={`p-3 font-semibold ${tx.amount < 0 ? 'text-danger' : 'text-success'}`}>{formatAmount(tx.amount)}</td>
-                                            <td className="p-3">{tx.note || '-'}</td>
+                                            <td className={`p-3 font-semibold ${tx.transaction_type === 'negative' ? 'text-danger' : 'text-success'}`}>{tx.messages_count}</td>
+                                            <td className={`p-3 font-semibold ${tx.transaction_type === 'negative' ? 'text-danger' : 'text-success'}`}>{formatAmount(tx.amount)}</td>
+                                            <td className="p-3">{getPaymentMethodFromNote(tx)}</td>
+                                            <td className="p-3">{getPlainNote(tx)}</td>
                                         </tr>
                                     ))
                                 )}
@@ -278,18 +310,6 @@ export default function MessageBalancePage() {
                         </div>
 
                         <div>
-                            <label className="block mb-1 text-sm">{t('message_balance_messages_count')}</label>
-                            <input
-                                type="number"
-                                className="form-input w-full"
-                                min={1}
-                                value={form.messagesCount}
-                                onChange={(e) => setForm((prev) => ({ ...prev, messagesCount: e.target.value }))}
-                            />
-                            <p className="mt-1 text-xs text-gray-500">{t('message_balance_messages_count_hint')}</p>
-                        </div>
-
-                        <div>
                             <label className="block mb-1 text-sm">{t('message_balance_payment_amount')}</label>
                             <input
                                 type="number"
@@ -299,7 +319,17 @@ export default function MessageBalancePage() {
                                 value={form.amount}
                                 onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
                             />
-                            <p className="mt-1 text-xs text-gray-500">{t('message_balance_manual_value_hint')}</p>
+                            <p className="mt-1 text-xs text-gray-500">{t('message_balance_payment_amount_hint')}</p>
+                        </div>
+
+                        <div>
+                            <label className="block mb-1 text-sm">{t('payment_method')}</label>
+                            <select className="form-select w-full" value={form.paymentMethod} onChange={(e) => setForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}>
+                                <option value="cash">{t('cash')}</option>
+                                <option value="visa">{t('visa')}</option>
+                                <option value="bank_transfer">{t('bank_transfer')}</option>
+                                <option value="check">{t('check')}</option>
+                            </select>
                         </div>
 
                         <div>
