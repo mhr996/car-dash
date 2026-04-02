@@ -1746,13 +1746,17 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
                 // Always update the car's sale_price to match the deal's selling_price
                 // Also set the car as private since sold cars should not be publicly visible
-                const { error: carUpdateError } = await supabase
-                    .from('cars')
-                    .update({
-                        sale_price: newSellingPrice,
-                        public: false,
-                    })
-                    .eq('id', selectedCar.id);
+                const carUpdateFields: any = {
+                    sale_price: newSellingPrice,
+                    public: false,
+                };
+                // For intermediary deals, update buy_price to match selling price
+                // because the dealership didn't actually buy the car
+                if (dealType === 'intermediary' || dealType === 'financing_assistance_intermediary') {
+                    carUpdateFields.buy_price = newSellingPrice;
+                }
+
+                const { error: carUpdateError } = await supabase.from('cars').update(carUpdateFields).eq('id', selectedCar.id);
 
                 if (carUpdateError) {
                     console.error('Error updating car sale price and public status:', carUpdateError);
@@ -4324,9 +4328,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 <button type="submit" className="btn btn-primary" disabled={saving || Object.keys(newAttachments).length === 0}>
                                     {saving ? t('updating_attachments') : t('update_attachments')}
                                 </button>
-                                {Object.keys(newAttachments).length === 0 && (
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">{t('select_attachments_to_update')}</span>
-                                )}
+                                {Object.keys(newAttachments).length === 0 && <span className="text-sm text-gray-500 dark:text-gray-400">{t('select_attachments_to_update')}</span>}
                             </div>
                         )}
                     </div>
@@ -4355,14 +4357,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 <label htmlFor="cancelDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                                     {t('cancellation_date')}
                                 </label>
-                                <input
-                                    id="cancelDate"
-                                    type="date"
-                                    value={cancelDealDate}
-                                    onChange={(e) => setCancelDealDate(e.target.value)}
-                                    className="form-input w-full"
-                                    disabled={cancellingDeal}
-                                />
+                                <input id="cancelDate" type="date" value={cancelDealDate} onChange={(e) => setCancelDealDate(e.target.value)} className="form-input w-full" disabled={cancellingDeal} />
                             </div>
 
                             <div>
@@ -4384,11 +4379,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                             <button onClick={() => setShowCancelModal(false)} className="btn btn-outline-secondary" disabled={cancellingDeal}>
                                 {t('cancel')}
                             </button>
-                            <button
-                                onClick={handleCancelDealConfirm}
-                                className="btn btn-danger"
-                                disabled={cancellingDeal || !cancelReason.trim() || !cancelDealDate}
-                            >
+                            <button onClick={handleCancelDealConfirm} className="btn btn-danger" disabled={cancellingDeal || !cancelReason.trim() || !cancelDealDate}>
                                 {cancellingDeal ? t('cancelling') : t('confirm_cancel_deal')}
                             </button>
                         </div>

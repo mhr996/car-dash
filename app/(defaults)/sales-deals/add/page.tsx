@@ -594,15 +594,18 @@ const AddDeal = () => {
                 }
 
                 if (sellingPrice && sellingPrice > 0) {
-                    // Always update the car's sale_price to match the deal's selling_price
-                    // Also set the car as private since sold cars should not be publicly visible
-                    const { error: carUpdateError } = await supabase
-                        .from('cars')
-                        .update({
-                            sale_price: sellingPrice,
-                            public: false,
-                        })
-                        .eq('id', selectedCar.id);
+                    // For intermediary deals, update buy_price to match selling price
+                    // because the dealership didn't actually buy the car - the seller set a requested price
+                    // and the actual sale price is what matters (no profit/loss for dealership on the car itself)
+                    const carUpdateFields: any = {
+                        sale_price: sellingPrice,
+                        public: false,
+                    };
+                    if (dealType === 'intermediary' || dealType === 'financing_assistance_intermediary') {
+                        carUpdateFields.buy_price = sellingPrice;
+                    }
+
+                    const { error: carUpdateError } = await supabase.from('cars').update(carUpdateFields).eq('id', selectedCar.id);
 
                     if (carUpdateError) {
                         console.error('Error updating car sale price and public status:', carUpdateError);
@@ -832,11 +835,15 @@ const AddDeal = () => {
             setAlert({ message: t('deal_added_successfully'), type: 'success' });
 
             // Log the activity with full deal data
+            // For intermediary deals, reflect the updated buy_price in the log
+            const carForLog =
+                (dealType === 'intermediary' || dealType === 'financing_assistance_intermediary') && dealData.selling_price ? { ...selectedCar, buy_price: dealData.selling_price } : selectedCar;
+
             const dealLogData = {
                 ...dealData,
                 id: dealId,
                 customer: selectedCustomer,
-                car: selectedCar,
+                car: carForLog,
             };
 
             await logActivity({

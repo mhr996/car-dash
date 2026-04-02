@@ -345,17 +345,10 @@ const AddBill = () => {
                 // Allow tax invoices with amount of 0 (when buy price >= sale price)
                 const dealAmount = deal.amount || 0;
 
-                const buyPrice = deal.car.buy_price || 0;
-                const formLossAmount = deal.loss_amount || 0;
-
-                // For Financing Assistance Intermediary deals, skip the buy price item and use car's sale price
+                const isIntermediary = deal.deal_type === 'intermediary';
                 const isFinancingAssistanceIntermediary = deal.deal_type === 'financing_assistance_intermediary';
-                const salePrice = isFinancingAssistanceIntermediary ? deal.car.sale_price || 0 : deal.selling_price || 0;
 
-                // Calculate the actual loss: if buy price > sale price, the difference is the loss
-                const rawProfit = salePrice - buyPrice - formLossAmount;
-                const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
-
+                // Car info line - always included
                 items.push({
                     type: 'I',
                     code: null,
@@ -368,8 +361,28 @@ const AddBill = () => {
                     to_doc_currency_exchange_rate: 1,
                 });
 
-                // Only add buy price for non-financing assistance intermediary deals
-                if (!isFinancingAssistanceIntermediary) {
+                if (isIntermediary || isFinancingAssistanceIntermediary) {
+                    // Intermediary deals: no buy/sell/loss - only commission
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'עמלה',
+                        price_type: 'G',
+                        unit_price: dealAmount,
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                } else {
+                    // Regular deals: include buy price, sell price, loss, and commission
+                    const buyPrice = deal.car.buy_price || 0;
+                    const formLossAmount = deal.loss_amount || 0;
+                    const salePrice = deal.selling_price || 0;
+
+                    const rawProfit = salePrice - buyPrice - formLossAmount;
+                    const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
+
                     items.push({
                         type: 'I',
                         code: null,
@@ -381,45 +394,45 @@ const AddBill = () => {
                         currency_code: 'ILS',
                         to_doc_currency_exchange_rate: 1,
                     });
-                }
 
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
-                    price_type: 'G',
-                    unit_price: dealAmount === 0 ? salePrice : 0,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-
-                if (calculatedLoss > 0) {
                     items.push({
                         type: 'I',
                         code: null,
-                        name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
+                        name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
                         price_type: 'G',
-                        unit_price: 0,
+                        unit_price: dealAmount === 0 ? salePrice : 0,
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+
+                    if (calculatedLoss > 0) {
+                        items.push({
+                            type: 'I',
+                            code: null,
+                            name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
+                            price_type: 'G',
+                            unit_price: 0,
+                            units_number: 1,
+                            unit_type: 1,
+                            currency_code: 'ILS',
+                            to_doc_currency_exchange_rate: 1,
+                        });
+                    }
+
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'עמלה',
+                        price_type: 'G',
+                        unit_price: dealAmount,
                         units_number: 1,
                         unit_type: 1,
                         currency_code: 'ILS',
                         to_doc_currency_exchange_rate: 1,
                     });
                 }
-
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: 'עמלה',
-                    price_type: 'G',
-                    unit_price: dealAmount,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
             } else if (billData.bill_type === 'credit_note') {
                 // CREDIT NOTE - for cancelling/reversing invoices
                 // Uses IR document type but with canceldoc parameter
@@ -462,17 +475,10 @@ const AddBill = () => {
                     throw new Error('Invoice+Receipt requires at least one payment');
                 }
 
-                const buyPrice = deal.car.buy_price || 0;
-                const formLossAmount = deal.loss_amount || 0;
-
-                // For Financing Assistance Intermediary deals, skip the buy price item and use car's sale price
+                const isIntermediary = deal.deal_type === 'intermediary';
                 const isFinancingAssistanceIntermediary = deal.deal_type === 'financing_assistance_intermediary';
-                const salePrice = isFinancingAssistanceIntermediary ? deal.car.sale_price || 0 : deal.selling_price || 0;
 
-                // Calculate the actual loss: if buy price > sale price, the difference is the loss
-                const rawProfit = salePrice - buyPrice - formLossAmount;
-                const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
-
+                // Car info line - always included
                 items.push({
                     type: 'I',
                     code: null,
@@ -485,8 +491,28 @@ const AddBill = () => {
                     to_doc_currency_exchange_rate: 1,
                 });
 
-                // Only add buy price for non-financing assistance intermediary deals
-                if (!isFinancingAssistanceIntermediary) {
+                if (isIntermediary || isFinancingAssistanceIntermediary) {
+                    // Intermediary deals: no buy/sell/loss - only commission
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'עמלה',
+                        price_type: 'G',
+                        unit_price: dealAmount,
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+                } else {
+                    // Regular deals: include buy price, sell price, loss, and commission
+                    const buyPrice = deal.car.buy_price || 0;
+                    const formLossAmount = deal.loss_amount || 0;
+                    const salePrice = deal.selling_price || 0;
+
+                    const rawProfit = salePrice - buyPrice - formLossAmount;
+                    const calculatedLoss = rawProfit < 0 ? Math.abs(rawProfit) : formLossAmount;
+
                     items.push({
                         type: 'I',
                         code: null,
@@ -498,46 +524,45 @@ const AddBill = () => {
                         currency_code: 'ILS',
                         to_doc_currency_exchange_rate: 1,
                     });
-                }
 
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
-                    price_type: 'G',
-                    unit_price: dealAmount === 0 ? salePrice : 0,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
-
-                // Add loss item if there's any loss (either from form or calculated from negative profit)
-                if (calculatedLoss > 0) {
                     items.push({
                         type: 'I',
                         code: null,
-                        name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
+                        name: `מחיר מכירה: ₪${salePrice.toLocaleString()}`,
                         price_type: 'G',
-                        unit_price: 0,
+                        unit_price: dealAmount === 0 ? salePrice : 0,
+                        units_number: 1,
+                        unit_type: 1,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    });
+
+                    if (calculatedLoss > 0) {
+                        items.push({
+                            type: 'I',
+                            code: null,
+                            name: `סכום הפסד: ₪${calculatedLoss.toLocaleString()}`,
+                            price_type: 'G',
+                            unit_price: 0,
+                            units_number: 1,
+                            unit_type: 1,
+                            currency_code: 'ILS',
+                            to_doc_currency_exchange_rate: 1,
+                        });
+                    }
+
+                    items.push({
+                        type: 'I',
+                        code: null,
+                        name: 'עמלה',
+                        price_type: 'G',
+                        unit_price: dealAmount,
                         units_number: 1,
                         unit_type: 1,
                         currency_code: 'ILS',
                         to_doc_currency_exchange_rate: 1,
                     });
                 }
-
-                items.push({
-                    type: 'I',
-                    code: null,
-                    name: 'עמלה',
-                    price_type: 'G',
-                    unit_price: dealAmount,
-                    units_number: 1,
-                    unit_type: 1,
-                    currency_code: 'ILS',
-                    to_doc_currency_exchange_rate: 1,
-                });
             } else if (documentType === 'RE') {
                 // RECEIPT ONLY - requires payments
                 if (!payments.length || totalPaymentAmount <= 0) {

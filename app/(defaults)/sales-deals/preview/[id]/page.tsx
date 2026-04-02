@@ -817,10 +817,12 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                         <div className="text-center">-</div>
                                     </div>
 
-                                    {/* Row 2: Buy Price */}
+                                    {/* Row 2: Buy Price / Requested Price */}
                                     {hasPermission('view_car_purchase_price') && (
                                         <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('buy_price')}</div>
+                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                {deal.deal_type === 'intermediary' || deal.deal_type === 'financing_assistance_intermediary' ? t('requested_price') : t('buy_price')}
+                                            </div>
                                             <div className="text-center">
                                                 <span className="text-sm text-gray-700 dark:text-gray-300">₪{car.buy_price?.toFixed(0) || '0.00'}</span>
                                             </div>
@@ -834,10 +836,12 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                         </div>
                                     </div>
 
-                                    {/* Row 4: Deal Amount */}
+                                    {/* Row 4: Deal Amount / Commission Amount */}
                                     {hasPermission('view_car_purchase_price') && (
                                         <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('deal_amount')}</div>
+                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                {deal.deal_type === 'intermediary' || deal.deal_type === 'financing_assistance_intermediary' ? t('company_commission_amount') : t('deal_amount')}
+                                            </div>
                                             <div className="text-center">
                                                 <span className="text-sm text-gray-700 dark:text-gray-300">₪{deal.amount?.toFixed(0) || '0.00'}</span>
                                             </div>
