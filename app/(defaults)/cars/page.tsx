@@ -184,7 +184,7 @@ const CarsList = () => {
                     .select(
                         `
                         *, 
-                        providers(id, name, address, phone, id_number),
+                        providers(id, name, address, phone),
                         source_customer:customers!cars_source_customer_id_fkey(id, name, phone),
                         deals!deals_car_id_fkey(id, title, deal_type, status, customer_name, created_at)
                     `,
