@@ -521,7 +521,8 @@ const AddCar = () => {
             if (!data || data.length === 0) {
                 throw new Error('Failed to create car record');
             }
-            const newCarId = data[0].id;
+            const insertedRow = data[0];
+            const newCarId = insertedRow.id;
 
             // Now upload images using the car ID as folder name
             const { imageUrls, colorData, contractImageUrl } = await uploadImages(newCarId);
@@ -564,13 +565,11 @@ const AddCar = () => {
                 .eq('id', newCarId)
                 .single();
 
-            // Log the activity with complete car data including created_at
-            if (!fetchError && completeCarData) {
-                await logActivity({
-                    type: 'car_added',
-                    car: completeCarData,
-                });
-            }
+            const carForLog = !fetchError && completeCarData ? completeCarData : { ...insertedRow, ...updateData };
+            await logActivity({
+                type: 'car_added',
+                car: carForLog,
+            });
 
             // Redirect to cars list after a short delay
             setTimeout(() => {

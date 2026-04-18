@@ -12,6 +12,7 @@ import CustomerSelect from '@/components/customer-select/customer-select';
 import TypeSelect from '@/components/type-select/type-select';
 import CreateCustomerModal from '@/components/modals/create-customer-modal';
 import supabase from '@/lib/supabase';
+import { logActivity } from '@/utils/activity-logger';
 
 interface Car {
     id: string;
@@ -431,6 +432,28 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
             const { data, error } = await supabase.from('cars').insert([carData]).select().single();
 
             if (error) throw error;
+
+            const { data: completeCarData, error: fetchError } = await supabase
+                .from('cars')
+                .select(
+                    `
+                    *,
+                    providers!cars_provider_fkey (
+                        id,
+                        name,
+                        address,
+                        phone,
+                        id_number
+                    )
+                `,
+                )
+                .eq('id', data.id)
+                .single();
+
+            await logActivity({
+                type: 'car_added',
+                car: !fetchError && completeCarData ? completeCarData : data,
+            });
 
             onCarCreated(data);
             handleClose();
