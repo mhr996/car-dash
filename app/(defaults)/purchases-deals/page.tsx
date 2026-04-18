@@ -161,7 +161,7 @@ const CarDealsPage = () => {
                     source_type,
                     created_at,
                     contract_image,
-                    provider:providers(id, name, phone, address, id_number),
+                    provider:providers!cars_provider_fkey(id, name, phone, address, id_number),
                     source_customer:customers!cars_source_customer_id_fkey(id, name, phone)
                 `,
                 )

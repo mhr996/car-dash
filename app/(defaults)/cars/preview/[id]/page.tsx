@@ -87,7 +87,13 @@ const CarPreview = () => {
             try {
                 const { data, error } = await supabase
                     .from('cars')
-                    .select('*, providers(id, name, address, phone, id_number), customers(id, name, phone, age, id_number)')
+                    .select(
+                        `
+                        *,
+                        providers!cars_provider_fkey(id, name, address, phone, id_number),
+                        customers!cars_source_customer_id_fkey(id, name, phone, age, id_number)
+                    `,
+                    )
                     .eq('id', params.id)
                     .single();
 

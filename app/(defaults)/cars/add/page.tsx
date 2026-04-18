@@ -107,7 +107,7 @@ const AddCar = () => {
                 .select(
                     `
                     *,
-                    providers(id, name, id_number),
+                    providers!cars_provider_fkey(id, name, id_number),
                     source_customer:customers!cars_source_customer_id_fkey(id, name, phone)
                 `,
                 )
