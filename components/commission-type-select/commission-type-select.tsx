@@ -4,6 +4,7 @@ import IconCaretDown from '@/components/icon/icon-caret-down';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconReceipt from '@/components/icon/icon-receipt';
 import IconInvoice from '@/components/icon/icon-invoice';
+import IconMinusCircle from '@/components/icon/icon-minus-circle';
 import { getTranslation } from '@/i18n';
 
 interface CommissionTypeSelectProps {
@@ -12,6 +13,8 @@ interface CommissionTypeSelectProps {
     defaultValue?: string;
     className?: string;
     onChange?: (commissionType: string) => void;
+    showCreditNote?: boolean;
+    showRefundReceipt?: boolean;
 }
 
 const commissionTypes = [
@@ -23,6 +26,7 @@ const commissionTypes = [
         color: 'text-blue-600 dark:text-blue-400',
         bgColor: 'bg-blue-50 dark:bg-blue-900/20',
         borderColor: 'border-blue-200 dark:border-blue-800',
+        category: 'normal',
     },
     {
         value: 'receipt_only',
@@ -32,6 +36,7 @@ const commissionTypes = [
         color: 'text-green-600 dark:text-green-400',
         bgColor: 'bg-green-50 dark:bg-green-900/20',
         borderColor: 'border-green-200 dark:border-green-800',
+        category: 'normal',
     },
     {
         value: 'tax_invoice_receipt',
@@ -41,14 +46,49 @@ const commissionTypes = [
         color: 'text-purple-600 dark:text-purple-400',
         bgColor: 'bg-purple-50 dark:bg-purple-900/20',
         borderColor: 'border-purple-200 dark:border-purple-800',
+        category: 'normal',
+    },
+    {
+        value: 'credit_note',
+        labelKey: 'commission_type_credit_note',
+        descKey: 'commission_type_credit_note_desc',
+        icon: IconMinusCircle,
+        color: 'text-red-600 dark:text-red-400',
+        bgColor: 'bg-red-50 dark:bg-red-900/20',
+        borderColor: 'border-red-200 dark:border-red-800',
+        category: 'cancel',
+    },
+    {
+        value: 'refund_receipt',
+        labelKey: 'commission_type_refund_receipt',
+        descKey: 'commission_type_refund_receipt_desc',
+        icon: IconMinusCircle,
+        color: 'text-pink-600 dark:text-pink-400',
+        bgColor: 'bg-pink-50 dark:bg-pink-900/20',
+        borderColor: 'border-pink-200 dark:border-pink-800',
+        category: 'cancel',
     },
 ];
 
-const CommissionTypeSelect = ({ defaultValue = '', className = 'form-select text-white-dark', onChange, name = 'commission_type', id }: CommissionTypeSelectProps) => {
+const CommissionTypeSelect = ({
+    defaultValue = '',
+    className = 'form-select text-white-dark',
+    onChange,
+    name = 'commission_type',
+    id,
+    showCreditNote = false,
+    showRefundReceipt = false,
+}: CommissionTypeSelectProps) => {
     const { t } = getTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [selectedType, setSelectedType] = useState(defaultValue);
     const wrapperRef = useRef<HTMLDivElement>(null);
+
+    const filteredTypes = commissionTypes.filter((type) => {
+        if (type.value === 'credit_note' && !showCreditNote) return false;
+        if (type.value === 'refund_receipt' && !showRefundReceipt) return false;
+        return true;
+    });
 
     useEffect(() => {
         setSelectedType(defaultValue);
@@ -105,7 +145,7 @@ const CommissionTypeSelect = ({ defaultValue = '', className = 'form-select text
             {isOpen && (
                 <div className="absolute z-50 mt-2 w-full rounded-lg border border-gray-200 dark:border-[#374151] bg-white dark:bg-black shadow-lg shadow-black/10 dark:shadow-black/50">
                     <div className="max-h-60 overflow-y-auto p-2">
-                        {commissionTypes.map((type) => {
+                        {filteredTypes.map((type) => {
                             const IconComponent = type.icon;
                             return (
                                 <div

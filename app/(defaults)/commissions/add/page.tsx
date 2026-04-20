@@ -11,6 +11,7 @@ import IconTrash from '@/components/icon/icon-trash';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconUser from '@/components/icon/icon-user';
 import IconCalendar from '@/components/icon/icon-calendar';
+import IconMinusCircle from '@/components/icon/icon-minus-circle';
 import ProviderSelect from '@/components/provider-select/provider-select';
 import CommissionTypeSelect from '@/components/commission-type-select/commission-type-select';
 import { MultiplePaymentForm } from '@/components/forms/multiple-payment-form';
@@ -53,9 +54,18 @@ const AddCommission = () => {
     // للم receipt_only - المبلغ يدوي
     const [receiptAmount, setReceiptAmount] = useState('');
 
+    // Cancel fields - for credit notes and refund receipts
+    const [cancelCommissionId, setCancelCommissionId] = useState('');
+    const [cancelTranzilaDocId, setCancelTranzilaDocId] = useState('');
+    const [cancelTranzilaDocNumber, setCancelTranzilaDocNumber] = useState('');
+    const [cancelAmount, setCancelAmount] = useState('');
+    const [cancelDescription, setCancelDescription] = useState('');
+    const [providerCommissions, setProviderCommissions] = useState<any[]>([]);
+
     useEffect(() => {
         if (!providerId) {
             setSelectedProvider(null);
+            setProviderCommissions([]);
             return;
         }
         const fetchProvider = async () => {
@@ -66,7 +76,18 @@ const AddCommission = () => {
                 .single();
             setSelectedProvider(data || null);
         };
+        const fetchProviderCommissions = async () => {
+            const { data } = await supabase
+                .from('commissions')
+                .select('id, commission_type, total_with_tax, tranzila_document_id, tranzila_document_number, date, created_at')
+                .eq('provider_id', parseInt(providerId, 10) || providerId)
+                .in('commission_type', ['tax_invoice', 'receipt_only', 'tax_invoice_receipt'])
+                .not('tranzila_document_number', 'is', null)
+                .order('created_at', { ascending: false });
+            setProviderCommissions(data || []);
+        };
         fetchProvider();
+        fetchProviderCommissions();
     }, [providerId]);
 
     const addItem = () => {
@@ -97,6 +118,10 @@ const AddCommission = () => {
         commissionData: {
             commission_type: string;
             date: string;
+            cancel_tranzila_doc_number?: string;
+            cancel_tranzila_doc_id?: string;
+            cancel_amount?: number;
+            cancel_description?: string;
         },
         commissionItems: CommissionItem[],
         commissionPayments: BillPayment[],
@@ -107,6 +132,8 @@ const AddCommission = () => {
             tax_invoice: 'IN', // Tax Invoice only
             receipt_only: 'RE', // Receipt only
             tax_invoice_receipt: 'IR', // Invoice + Receipt
+            credit_note: 'IN', // Credit Note - uses IN (Tax Invoice) with canceldoc=Y
+            refund_receipt: 'RE', // Refund Receipt - uses RE (Receipt) with canceldoc=Y
         };
 
         // Map payment type to Tranzila payment method (same as bills)
@@ -118,11 +145,68 @@ const AddCommission = () => {
         };
 
         const documentType = documentTypeMap[commissionData.commission_type] || 'IR';
+        const isCreditNote = commissionData.commission_type === 'credit_note';
+        const isRefundReceipt = commissionData.commission_type === 'refund_receipt';
+        const isCancelDocument = isCreditNote || isRefundReceipt;
 
         // Build items array
         let tranzilaItems: any[] = [];
 
-        if (documentType === 'IN' || documentType === 'IR') {
+        if (isCreditNote) {
+            // CREDIT NOTE - for cancelling/reversing tax invoices
+            const creditAmount = commissionData.cancel_amount || 0;
+            if (creditAmount <= 0) {
+                throw new Error('Credit Note requires a positive amount to reverse');
+            }
+
+            let itemName = 'הודעת זיכוי';
+            if (commissionData.cancel_description) {
+                itemName = `הודעת זיכוי - ${commissionData.cancel_description}`;
+            } else if (provider.name) {
+                itemName = `הודעת זיכוי - ${provider.name}`;
+            }
+
+            tranzilaItems = [
+                {
+                    type: 'I',
+                    code: null,
+                    name: itemName,
+                    price_type: 'G',
+                    unit_price: creditAmount,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                },
+            ];
+        } else if (isRefundReceipt) {
+            // REFUND RECEIPT - for cancelling/reversing receipts
+            const refundAmount = commissionData.cancel_amount || 0;
+            if (refundAmount <= 0) {
+                throw new Error('Refund Receipt requires a positive amount to reverse');
+            }
+
+            let itemName = 'קבלה החזר';
+            if (commissionData.cancel_description) {
+                itemName = `קבלה החזר - ${commissionData.cancel_description}`;
+            } else if (provider.name) {
+                itemName = `קבלה החזר - ${provider.name}`;
+            }
+
+            tranzilaItems = [
+                {
+                    type: 'I',
+                    code: null,
+                    name: itemName,
+                    price_type: 'G',
+                    unit_price: refundAmount,
+                    units_number: 1,
+                    unit_type: 1,
+                    currency_code: 'ILS',
+                    to_doc_currency_exchange_rate: 1,
+                },
+            ];
+        } else if (documentType === 'IN' || documentType === 'IR') {
             // Tax Invoice or Invoice+Receipt — use the manually entered items
             const validItems = commissionItems.filter((i) => (i.item_description || '').trim() && (i.unit_price || 0) > 0);
             tranzilaItems = validItems.map((item) => ({
@@ -161,10 +245,10 @@ const AddCommission = () => {
             ];
         }
 
-        // Build payments array (for RE and IR)
+        // Build payments array (for RE and IR) — skip for cancel documents
         let tranzilaPayments: any[] = [];
 
-        if (documentType === 'RE' || documentType === 'IR') {
+        if (!isCancelDocument && (documentType === 'RE' || documentType === 'IR')) {
             tranzilaPayments = commissionPayments
                 .filter((p) => p.amount && p.amount > 0)
                 .map((payment) => {
@@ -208,8 +292,60 @@ const AddCommission = () => {
             }
         }
 
-        // VAT: 18% for invoices, 0% for receipt-only
-        const vatPercent = documentType === 'RE' ? 0 : 18;
+        // VAT: 18% for invoices and credit notes, 0% for receipt-only and refund receipts
+        const vatPercent = isCreditNote ? 18 : documentType === 'RE' ? 0 : 18;
+
+        // Build Tranzila request - handle payments differently for cancel documents
+        let tranzilaPaymentsForRequest: any[] = [];
+
+        if (isCreditNote) {
+            // Credit notes don't need payments - they're reversals
+            tranzilaPaymentsForRequest = [];
+        } else if (isRefundReceipt && commissionData.cancel_tranzila_doc_id) {
+            // For refund receipts, fetch original document from Tranzila to get payment details
+            console.log('🔍 Fetching original receipt from Tranzila, document_id:', commissionData.cancel_tranzila_doc_id);
+
+            const tranzilaDocResponse = await fetch('/api/tranzila', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get_document',
+                    data: { document_id: commissionData.cancel_tranzila_doc_id },
+                }),
+            });
+
+            const tranzilaDocResult = await tranzilaDocResponse.json();
+            console.log('📄 Tranzila document response:', tranzilaDocResult);
+
+            if (!tranzilaDocResult.ok) {
+                throw new Error(`Failed to fetch original receipt from Tranzila: ${tranzilaDocResult.error || 'Unknown error'}`);
+            }
+
+            const originalDocument = tranzilaDocResult.response?.documents?.[0] || tranzilaDocResult.response?.document;
+            if (!originalDocument) {
+                throw new Error('Original receipt not found in Tranzila. Cannot create refund receipt.');
+            }
+
+            const originalPayments = originalDocument?.payments || [];
+            if (originalPayments.length === 0) {
+                throw new Error('Original receipt has no payment information. Cannot create refund receipt.');
+            }
+
+            // Map original payments to refund payments with same details
+            tranzilaPaymentsForRequest = originalPayments.map((payment: any) => ({
+                payment_method: payment.payment_method || 10,
+                payment_date: payment.payment_date || commissionData.date || new Date().toISOString().split('T')[0],
+                amount: payment.amount || 0,
+                currency_code: payment.currency_code || 'ILS',
+                to_doc_currency_exchange_rate: payment.to_doc_currency_exchange_rate || 1,
+                description: `החזר עבור קבלה #${commissionData.cancel_tranzila_doc_number || ''}`,
+            }));
+        } else if (isRefundReceipt && !commissionData.cancel_tranzila_doc_id) {
+            throw new Error('Refund receipt requires selecting an original receipt to refund.');
+        } else {
+            // Normal document - use the provided payments
+            tranzilaPaymentsForRequest = documentType === 'IN' ? [] : tranzilaPayments;
+        }
 
         const tranzilaRequestData = {
             action: 'create_document',
@@ -218,7 +354,8 @@ const AddCommission = () => {
                 document_date: commissionData.date || new Date().toISOString().split('T')[0],
                 document_currency_code: 'ILS',
                 vat_percent: vatPercent,
-                action: 1, // Debit (normal document)
+                // action: 1 = debit (normal document), 3 = credit (refund/credit note)
+                action: isCancelDocument ? 3 : 1,
                 client_company: provider.name || '',
                 client_name: provider.name || '',
                 client_id: provider.id_number || '',
@@ -226,22 +363,34 @@ const AddCommission = () => {
                 client_phone: provider.phone || '',
                 client_address_line_1: provider.address || null,
                 items: tranzilaItems,
-                payments: documentType === 'IN' ? [] : tranzilaPayments,
+                payments: tranzilaPaymentsForRequest,
                 created_by_user: 'car-dash',
                 created_by_system: 'car-dash',
+                // Cancel document parameters
+                ...(isCancelDocument && commissionData.cancel_tranzila_doc_number
+                    ? {
+                          canceldoc: 'Y',
+                          cancel_document_number: commissionData.cancel_tranzila_doc_number,
+                      }
+                    : {}),
             },
         };
 
         console.log('🧾 ============ TRANZILA COMMISSION REQUEST ============');
         console.log('📋 Document Type:', documentType);
         console.log('📝 Commission Type:', commissionData.commission_type);
+        if (isCancelDocument) {
+            console.log('🔄 This is a CANCEL document (credit note / refund receipt)');
+            console.log('🔄 Cancel Doc Number:', commissionData.cancel_tranzila_doc_number);
+            console.log('🔄 Cancel Doc ID:', commissionData.cancel_tranzila_doc_id);
+        }
         console.log('📦 Items being sent:');
         tranzilaItems.forEach((item, idx) => {
             console.log(`   Item ${idx + 1}: ${item.name} - Price: ₪${item.unit_price} x ${item.units_number}`);
         });
-        if (tranzilaPayments.length > 0) {
+        if (tranzilaPaymentsForRequest.length > 0) {
             console.log('💳 Payments being sent:');
-            tranzilaPayments.forEach((payment, idx) => {
+            tranzilaPaymentsForRequest.forEach((payment, idx) => {
                 console.log(`   Payment ${idx + 1}: Method ${payment.payment_method} - Amount: ₪${payment.amount}`);
             });
         }
@@ -277,6 +426,38 @@ const AddCommission = () => {
             return false;
         }
 
+        // Credit note validation
+        if (commissionType === 'credit_note') {
+            if (!cancelCommissionId) {
+                setAlert({ message: t('select_commission_to_cancel'), type: 'danger' });
+                return false;
+            }
+            const amount = parseFloat(cancelAmount) || 0;
+            if (amount <= 0) {
+                setAlert({ message: t('cancel_amount_required'), type: 'danger' });
+                return false;
+            }
+            return true;
+        }
+
+        // Refund receipt validation
+        if (commissionType === 'refund_receipt') {
+            if (!cancelCommissionId) {
+                setAlert({ message: t('select_commission_to_cancel'), type: 'danger' });
+                return false;
+            }
+            const amount = parseFloat(cancelAmount) || 0;
+            if (amount <= 0) {
+                setAlert({ message: t('cancel_amount_required'), type: 'danger' });
+                return false;
+            }
+            if (!cancelTranzilaDocId) {
+                setAlert({ message: t('original_tranzila_doc_required'), type: 'danger' });
+                return false;
+            }
+            return true;
+        }
+
         if (commissionType === 'tax_invoice' || commissionType === 'tax_invoice_receipt') {
             const hasValidItem = items.some((i) => (i.item_description || '').trim() && (i.unit_price || 0) > 0);
             if (!hasValidItem) {
@@ -308,11 +489,25 @@ const AddCommission = () => {
 
         setSaving(true);
         try {
+            const isCancelDoc = commissionType === 'credit_note' || commissionType === 'refund_receipt';
+
             let total = 0;
             let tax_amount = 0;
             let total_with_tax = 0;
 
-            if (commissionType === 'tax_invoice' || commissionType === 'tax_invoice_receipt') {
+            if (isCancelDoc) {
+                // For cancel documents, use the cancel amount
+                total_with_tax = parseFloat(cancelAmount) || 0;
+                if (commissionType === 'credit_note') {
+                    // Credit notes have 18% VAT
+                    total = total_with_tax / 1.18;
+                    tax_amount = total_with_tax - total;
+                } else {
+                    // Refund receipts have 0% VAT
+                    total = total_with_tax;
+                    tax_amount = 0;
+                }
+            } else if (commissionType === 'tax_invoice' || commissionType === 'tax_invoice_receipt') {
                 total = itemsTotalBeforeTax;
                 tax_amount = taxAmount;
                 total_with_tax = totalWithTax;
@@ -327,6 +522,10 @@ const AddCommission = () => {
                 {
                     commission_type: commissionType,
                     date: commissionDate,
+                    cancel_tranzila_doc_number: cancelTranzilaDocNumber || undefined,
+                    cancel_tranzila_doc_id: cancelTranzilaDocId || undefined,
+                    cancel_amount: parseFloat(cancelAmount) || undefined,
+                    cancel_description: cancelDescription || undefined,
                 },
                 items,
                 payments,
@@ -351,6 +550,13 @@ const AddCommission = () => {
                     tranzila_document_number: tranzilaDoc.number,
                     tranzila_retrieval_key: tranzilaDoc.retrieval_key,
                     tranzila_created_at: commissionDate ? new Date(commissionDate + 'T00:00:00').toISOString() : tranzilaDoc.created_at,
+                    ...(isCancelDoc
+                        ? {
+                              cancel_tranzila_doc_number: cancelTranzilaDocNumber || null,
+                              cancel_tranzila_doc_id: cancelTranzilaDocId || null,
+                              cancel_commission_id: cancelCommissionId ? parseInt(cancelCommissionId, 10) : null,
+                          }
+                        : {}),
                 })
                 .select('id')
                 .single();
@@ -358,8 +564,8 @@ const AddCommission = () => {
             if (error) throw error;
             const commissionId = commissionResult.id;
 
-            // Step 3: Insert items
-            if (commissionType === 'tax_invoice' || commissionType === 'tax_invoice_receipt') {
+            // Step 3: Insert items (skip for cancel documents)
+            if (!isCancelDoc && (commissionType === 'tax_invoice' || commissionType === 'tax_invoice_receipt')) {
                 const validItems = items.filter((i) => (i.item_description || '').trim() && (i.unit_price || 0) > 0);
                 if (validItems.length > 0) {
                     const itemInserts = validItems.map((item, idx) => ({
@@ -374,8 +580,8 @@ const AddCommission = () => {
                 }
             }
 
-            // Step 4: Insert payments
-            if (commissionType === 'receipt_only' || commissionType === 'tax_invoice_receipt') {
+            // Step 4: Insert payments (skip for cancel documents)
+            if (!isCancelDoc && (commissionType === 'receipt_only' || commissionType === 'tax_invoice_receipt')) {
                 const paymentInserts = payments
                     .filter((p) => (p.amount || 0) > 0)
                     .map((p) => ({
@@ -417,7 +623,7 @@ const AddCommission = () => {
 
     return (
         <PermissionGuard permission="manage_commissions">
-            <div className="container mx-auto p-6 pb-24">
+            <div className="container mx-auto p-6 pb-96">
                 <div className="flex items-center gap-5 mb-6">
                     <div onClick={() => router.back()}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 mb-4 cursor-pointer text-primary rtl:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -492,7 +698,20 @@ const AddCommission = () => {
                                 <h5 className="text-lg font-semibold dark:text-white-light">{t('commission_type')}</h5>
                             </div>
                             <div className="space-y-4">
-                                <CommissionTypeSelect defaultValue={commissionType} onChange={setCommissionType} />
+                                <CommissionTypeSelect
+                                    defaultValue={commissionType}
+                                    onChange={(type) => {
+                                        setCommissionType(type);
+                                        // Reset cancel fields when type changes
+                                        setCancelCommissionId('');
+                                        setCancelTranzilaDocId('');
+                                        setCancelTranzilaDocNumber('');
+                                        setCancelAmount('');
+                                        setCancelDescription('');
+                                    }}
+                                    showCreditNote={true}
+                                    showRefundReceipt={true}
+                                />
                             </div>
                         </div>
                     )}
@@ -523,6 +742,159 @@ const AddCommission = () => {
                     )}
 
                     {/* Provider Information + Tax Invoice Section (مثل Customer Information + Tax Invoice في الفواتير) */}
+
+                    {/* Select Commission to Cancel - Credit Note */}
+                    {commissionType === 'credit_note' && (
+                        <div className="panel">
+                            <div className="mb-5 flex items-center gap-3">
+                                <IconMinusCircle className="w-5 h-5 text-red-500" />
+                                <div>
+                                    <h5 className="text-lg font-semibold dark:text-white-light">{t('select_commission_to_cancel')}</h5>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_commission_to_cancel_credit_desc')}</p>
+                                </div>
+                            </div>
+                            {providerCommissions.filter((c) => c.commission_type === 'tax_invoice').length > 0 ? (
+                                <select
+                                    value={cancelCommissionId}
+                                    onChange={(e) => {
+                                        const selected = providerCommissions.find((c) => c.id.toString() === e.target.value);
+                                        setCancelCommissionId(e.target.value);
+                                        setCancelTranzilaDocId(selected?.tranzila_document_id || '');
+                                        setCancelTranzilaDocNumber(selected?.tranzila_document_number || '');
+                                        setCancelAmount(selected ? (selected.total_with_tax || 0).toString() : '');
+                                        setCancelDescription(selected ? `${t('credit_note_for_commission')} #${selected.tranzila_document_number}` : '');
+                                    }}
+                                    className="form-select bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all duration-200"
+                                >
+                                    <option value="">{t('select_commission_to_cancel_placeholder')}</option>
+                                    {providerCommissions
+                                        .filter((c) => c.commission_type === 'tax_invoice')
+                                        .map((comm) => (
+                                            <option key={comm.id} value={comm.id}>
+                                                #{comm.tranzila_document_number} - {t('commission_type_tax_invoice')} - ₪{(comm.total_with_tax || 0).toLocaleString()} -{' '}
+                                                {new Date(comm.date || comm.created_at).toLocaleDateString('en-GB')}
+                                            </option>
+                                        ))}
+                                </select>
+                            ) : (
+                                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                    <p className="text-yellow-700 dark:text-yellow-300 text-sm">{t('no_commissions_to_cancel')}</p>
+                                </div>
+                            )}
+
+                            {/* Cancel Amount & Description */}
+                            {cancelCommissionId && (
+                                <div className="mt-4 space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {t('cancel_amount')} <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="flex">
+                                            <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border border-r-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
+                                                ₪
+                                            </span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={cancelAmount}
+                                                onChange={(e) => setCancelAmount(e.target.value)}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('cancel_description')}</label>
+                                        <input
+                                            type="text"
+                                            value={cancelDescription}
+                                            onChange={(e) => setCancelDescription(e.target.value)}
+                                            className="form-input"
+                                            placeholder={t('cancel_description_placeholder')}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Select Commission to Cancel - Refund Receipt */}
+                    {commissionType === 'refund_receipt' && (
+                        <div className="panel">
+                            <div className="mb-5 flex items-center gap-3">
+                                <IconMinusCircle className="w-5 h-5 text-pink-500" />
+                                <div>
+                                    <h5 className="text-lg font-semibold dark:text-white-light">{t('select_receipt_to_refund')}</h5>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{t('select_commission_to_cancel_refund_desc')}</p>
+                                </div>
+                            </div>
+                            {providerCommissions.filter((c) => c.commission_type === 'receipt_only' || c.commission_type === 'tax_invoice_receipt').length > 0 ? (
+                                <select
+                                    value={cancelCommissionId}
+                                    onChange={(e) => {
+                                        const selected = providerCommissions.find((c) => c.id.toString() === e.target.value);
+                                        setCancelCommissionId(e.target.value);
+                                        setCancelTranzilaDocId(selected?.tranzila_document_id || '');
+                                        setCancelTranzilaDocNumber(selected?.tranzila_document_number || '');
+                                        setCancelAmount(selected ? (selected.total_with_tax || 0).toString() : '');
+                                        setCancelDescription(selected ? `${t('refund_receipt_for_commission')} #${selected.tranzila_document_number}` : '');
+                                    }}
+                                    className="form-select bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all duration-200"
+                                >
+                                    <option value="">{t('select_receipt_to_refund_placeholder')}</option>
+                                    {providerCommissions
+                                        .filter((c) => c.commission_type === 'receipt_only' || c.commission_type === 'tax_invoice_receipt')
+                                        .map((comm) => (
+                                            <option key={comm.id} value={comm.id}>
+                                                #{comm.tranzila_document_number} - {comm.commission_type === 'receipt_only' ? t('commission_type_receipt') : t('commission_type_both')} - ₪
+                                                {(comm.total_with_tax || 0).toLocaleString()} - {new Date(comm.date || comm.created_at).toLocaleDateString('en-GB')}
+                                            </option>
+                                        ))}
+                                </select>
+                            ) : (
+                                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                    <p className="text-yellow-700 dark:text-yellow-300 text-sm">{t('no_receipts_to_refund')}</p>
+                                </div>
+                            )}
+
+                            {/* Cancel Amount & Description */}
+                            {cancelCommissionId && (
+                                <div className="mt-4 space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            {t('cancel_amount')} <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="flex">
+                                            <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border border-r-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
+                                                ₪
+                                            </span>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={cancelAmount}
+                                                onChange={(e) => setCancelAmount(e.target.value)}
+                                                className="form-input ltr:rounded-l-none rtl:rounded-r-none"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('cancel_description')}</label>
+                                        <input
+                                            type="text"
+                                            value={cancelDescription}
+                                            onChange={(e) => setCancelDescription(e.target.value)}
+                                            className="form-input"
+                                            placeholder={t('cancel_description_placeholder')}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {(commissionType === 'tax_invoice' || commissionType === 'tax_invoice_receipt') && selectedProvider && (
                         <>
                             {/* Provider Information Display - أسفل التاريخ مثل معلومات العميل */}

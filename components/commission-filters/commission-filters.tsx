@@ -85,11 +85,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ options, value, onChange, p
                     <div className="max-h-60 overflow-y-auto">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((option) => (
-                                <div
-                                    key={option.value}
-                                    className="cursor-pointer px-4 py-2 hover:bg-gray-100 dark:text-white-dark dark:hover:bg-[#191e3a]"
-                                    onClick={() => handleSelect(option.value)}
-                                >
+                                <div key={option.value} className="cursor-pointer px-4 py-2 hover:bg-gray-100 dark:text-white-dark dark:hover:bg-[#191e3a]" onClick={() => handleSelect(option.value)}>
                                     {option.label}
                                 </div>
                             ))
@@ -155,6 +151,8 @@ const CommissionFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilte
         { value: 'tax_invoice', label: t('commission_type_tax_invoice') },
         { value: 'receipt_only', label: t('commission_type_receipt') },
         { value: 'tax_invoice_receipt', label: t('commission_type_both') },
+        { value: 'credit_note', label: t('commission_type_credit_note') },
+        { value: 'refund_receipt', label: t('commission_type_refund_receipt') },
     ];
 
     const paymentTypeOptions = [
@@ -174,9 +172,7 @@ const CommissionFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilte
                     <button type="button" className="btn btn-secondary gap-2" onClick={() => setIsExpanded(!isExpanded)}>
                         <IconFilter className="w-4 h-4" />
                         {t('filters')}
-                        {hasActiveFilters && (
-                            <span className="badge bg-primary text-white rounded-full text-xs px-2">{Object.values(filters).filter((v) => v !== '').length}</span>
-                        )}
+                        {hasActiveFilters && <span className="badge bg-primary text-white rounded-full text-xs px-2">{Object.values(filters).filter((v) => v !== '').length}</span>}
                     </button>
                     {hasActiveFilters && (
                         <button type="button" className="btn btn-outline-danger gap-2" onClick={handleClearFilters}>
@@ -200,11 +196,23 @@ const CommissionFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilte
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('commission_type')}</label>
-                            <CustomSelect options={commissionTypeOptions} value={filters.commissionType} onChange={(v) => handleInputChange('commissionType', v)} placeholder={t('all')} className="form-select" />
+                            <CustomSelect
+                                options={commissionTypeOptions}
+                                value={filters.commissionType}
+                                onChange={(v) => handleInputChange('commissionType', v)}
+                                placeholder={t('all')}
+                                className="form-select"
+                            />
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('payment_type')}</label>
-                            <CustomSelect options={paymentTypeOptions} value={filters.paymentType} onChange={(v) => handleInputChange('paymentType', v)} placeholder={t('all')} className="form-select" />
+                            <CustomSelect
+                                options={paymentTypeOptions}
+                                value={filters.paymentType}
+                                onChange={(v) => handleInputChange('paymentType', v)}
+                                placeholder={t('all')}
+                                className="form-select"
+                            />
                         </div>
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('amount_from')}</label>

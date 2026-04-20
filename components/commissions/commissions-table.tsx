@@ -32,8 +32,12 @@ export interface Commission {
     free_text?: string;
     created_at: string;
     tranzila_document_number?: string;
+    tranzila_document_id?: string;
     tranzila_retrieval_key?: string;
     pdf_path?: string | null;
+    cancel_tranzila_doc_number?: string;
+    cancel_tranzila_doc_id?: string;
+    cancel_commission_id?: number;
     providers?: CommissionProvider;
     items?: Array<{ id: number; item_description: string; unit_price: number; quantity: number; total: number }>;
     payments?: CommissionPayment[];
@@ -79,8 +83,23 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
                 return t('commission_type_receipt');
             case 'tax_invoice_receipt':
                 return t('commission_type_both');
+            case 'credit_note':
+                return t('commission_type_credit_note');
+            case 'refund_receipt':
+                return t('commission_type_refund_receipt');
             default:
                 return type;
+        }
+    };
+
+    const getCommissionTypeBadgeClass = (type: string) => {
+        switch (type) {
+            case 'credit_note':
+                return 'badge-outline-danger';
+            case 'refund_receipt':
+                return 'badge bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400';
+            default:
+                return 'badge-outline-info';
         }
     };
 
@@ -98,7 +117,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
     };
 
     const getPaymentTypeLabel = (comm: Commission) => {
-        if (comm.commission_type === 'tax_invoice') return t('not_applicable');
+        if (comm.commission_type === 'tax_invoice' || comm.commission_type === 'credit_note' || comm.commission_type === 'refund_receipt') return t('not_applicable');
         if (comm.payments && comm.payments.length > 0) {
             if (comm.payments.length === 1) {
                 const p = comm.payments[0];
@@ -121,7 +140,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
     };
 
     const getPaymentAmount = (comm: Commission) => {
-        if (comm.commission_type === 'tax_invoice') return t('not_applicable');
+        if (comm.commission_type === 'tax_invoice' || comm.commission_type === 'credit_note' || comm.commission_type === 'refund_receipt') return t('not_applicable');
         if (comm.payments && comm.payments.length > 0) {
             const total = comm.payments.reduce((s, p) => s + (p.amount || 0), 0);
             if (comm.payments.length === 1) {
@@ -180,7 +199,7 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             accessor: 'commission_type',
             title: t('commission_document_type'),
             sortable: true,
-            render: (c: Commission) => <span className="badge badge-outline-info">{getCommissionTypeLabel(c.commission_type)}</span>,
+            render: (c: Commission) => <span className={`badge ${getCommissionTypeBadgeClass(c.commission_type)}`}>{getCommissionTypeLabel(c.commission_type)}</span>,
         },
         {
             accessor: 'total_with_tax',
@@ -198,7 +217,11 @@ const CommissionsTable: React.FC<CommissionsTableProps> = ({
             accessor: 'payment_amount',
             title: t('payment_amount'),
             sortable: true,
-            render: (c: Commission) => <span className="font-medium">{c.commission_type === 'tax_invoice' ? t('not_applicable') : getPaymentAmount(c)}</span>,
+            render: (c: Commission) => (
+                <span className="font-medium">
+                    {c.commission_type === 'tax_invoice' || c.commission_type === 'credit_note' || c.commission_type === 'refund_receipt' ? t('not_applicable') : getPaymentAmount(c)}
+                </span>
+            ),
         },
         {
             accessor: 'bank_transfer_details',
