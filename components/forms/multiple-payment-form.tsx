@@ -147,19 +147,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ payment, onUpdate, onRemove, 
                 </div>
             </div>
 
-            {/* Visa Card Details */}
+            {/* Visa Card Details - fields match Tranzila API (payment_method 1) */}
             {payment.payment_type === 'visa' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('card_type')}</label>
-                        <input
-                            type="text"
-                            value={payment.visa_card_type || ''}
-                            onChange={(e) => handleInputChange('visa_card_type', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_card_type')}
-                        />
-                    </div>
                     <div>
                         <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('last_four_digits')}</label>
                         <input
@@ -182,36 +172,46 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ payment, onUpdate, onRemove, 
                             placeholder="1"
                         />
                     </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('approval_number')}</label>
-                        <input
-                            type="text"
-                            value={payment.approval_number || ''}
-                            onChange={(e) => handleInputChange('approval_number', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_approval_number')}
-                        />
-                    </div>
                 </div>
             )}
 
-            {/* Bank Transfer Details */}
+            {/* Bank Transfer Details - fields match Tranzila API (payment_method 4) */}
             {payment.payment_type === 'bank_transfer' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('bank_transfer_details')}</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('bank_name')}</label>
                         <input
                             type="text"
                             value={payment.transfer_bank_name || ''}
                             onChange={(e) => handleInputChange('transfer_bank_name', e.target.value)}
                             className="form-input"
-                            placeholder={t('enter_bank_transfer_details')}
+                            placeholder={t('enter_bank_name')}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('branch')}</label>
+                        <input
+                            type="text"
+                            value={payment.transfer_branch || ''}
+                            onChange={(e) => handleInputChange('transfer_branch', e.target.value)}
+                            className="form-input"
+                            placeholder={t('enter_branch')}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('account_number')}</label>
+                        <input
+                            type="text"
+                            value={payment.transfer_account_number || ''}
+                            onChange={(e) => handleInputChange('transfer_account_number', e.target.value)}
+                            className="form-input"
+                            placeholder={t('enter_account_number')}
                         />
                     </div>
                 </div>
             )}
 
-            {/* Check Details */}
+            {/* Check Details - fields match Tranzila API (payment_method 3) */}
             {payment.payment_type === 'check' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
@@ -235,16 +235,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ payment, onUpdate, onRemove, 
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('branch_number')}</label>
-                        <input
-                            type="text"
-                            value={payment.check_branch_number || ''}
-                            onChange={(e) => handleInputChange('check_branch_number', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_branch_number')}
-                        />
-                    </div>
-                    <div>
                         <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('account_number')}</label>
                         <input
                             type="text"
@@ -262,16 +252,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ payment, onUpdate, onRemove, 
                             onChange={(e) => handleInputChange('check_number', e.target.value)}
                             className="form-input"
                             placeholder={t('enter_check_number')}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('check_holder')}</label>
-                        <input
-                            type="text"
-                            value={payment.check_holder_name || ''}
-                            onChange={(e) => handleInputChange('check_holder_name', e.target.value)}
-                            className="form-input"
-                            placeholder={t('enter_check_holder')}
                         />
                     </div>
                 </div>

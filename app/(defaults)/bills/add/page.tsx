@@ -593,57 +593,55 @@ const AddBill = () => {
                 throw new Error(`Unsupported document type: ${documentType}`);
             }
 
-            // Prepare payments array with all payment details
-            const tranzilaPayments =
-                payments.length > 0
-                    ? payments
-                          .filter((payment) => payment.amount && payment.amount > 0) // Filter out payments with 0 or invalid amounts
-                          .map((payment) => {
-                              const basePayment = {
-                                  payment_method: paymentMethodMap[payment.payment_type] || 1,
-                                  payment_date: billData.date || new Date().toISOString().split('T')[0],
-                                  amount: payment.amount,
-                                  currency_code: 'ILS',
-                                  to_doc_currency_exchange_rate: 1,
-                              };
+            // Prepare payments array with all payment details.
+            // Tranzila is a production billing API — no fallbacks. Receipts (RE/IR) must have
+            // at least one valid payment; this is already enforced by form validation.
+            const tranzilaPayments = payments
+                .filter((payment) => payment.amount && payment.amount > 0)
+                .map((payment) => {
+                    const methodCode = paymentMethodMap[payment.payment_type];
+                    if (!methodCode) {
+                        throw new Error(`Unsupported payment type: ${payment.payment_type}`);
+                    }
+                    const basePayment = {
+                        payment_method: methodCode,
+                        payment_date: billData.date || new Date().toISOString().split('T')[0],
+                        amount: payment.amount,
+                        currency_code: 'ILS',
+                        to_doc_currency_exchange_rate: 1,
+                    };
 
-                              // Add payment-type-specific fields
-                              if (payment.payment_type === 'visa') {
-                                  return {
-                                      ...basePayment,
-                                      cc_last_4_digits: payment.visa_last_four || null,
-                                      cc_installments_number: payment.visa_installments || 1,
-                                      cc_type: payment.visa_card_type || null,
-                                      approval_number: payment.approval_number || null,
-                                  };
-                              } else if (payment.payment_type === 'check') {
-                                  return {
-                                      ...basePayment,
-                                      check_number: payment.check_number || null,
-                                      check_bank_name: payment.check_bank_name || null,
-                                      check_branch: payment.check_branch || null,
-                                      check_account_number: payment.check_account_number || null,
-                                      check_holder_name: payment.check_holder_name || null,
-                                  };
-                              } else if (payment.payment_type === 'bank_transfer') {
-                                  return {
-                                      ...basePayment,
-                                      bank: payment.transfer_bank_name || null,
-                                  };
-                              }
+                    // Map UI fields to Tranzila API fields per documented schema.
+                    // See: https://docs.tranzila.com/docs/invoices/e9f00t8lnhw3k-create-document
+                    if (payment.payment_type === 'visa') {
+                        // payment_method 1 - Credit Card
+                        const visaFields: Record<string, any> = {};
+                        if (payment.visa_last_four) visaFields.cc_last_4_digits = payment.visa_last_four;
+                        // Tranzila requires cc_installments_number >= 2; omit for single-payment (Regular)
+                        if (payment.visa_installments && payment.visa_installments >= 2) {
+                            visaFields.cc_installments_number = payment.visa_installments;
+                        }
+                        return { ...basePayment, ...visaFields };
+                    } else if (payment.payment_type === 'check') {
+                        // payment_method 3 - Cheque
+                        const chequeFields: Record<string, any> = {};
+                        if (payment.check_bank_name) chequeFields.bank = payment.check_bank_name;
+                        if (payment.check_branch) chequeFields.bank_branch = payment.check_branch;
+                        if (payment.check_account_number) chequeFields.bank_account = payment.check_account_number;
+                        if (payment.check_number) chequeFields.cheque_number = payment.check_number;
+                        return { ...basePayment, ...chequeFields };
+                    } else if (payment.payment_type === 'bank_transfer') {
+                        // payment_method 4 - Bank Transfer
+                        const transferFields: Record<string, any> = {};
+                        if (payment.transfer_bank_name) transferFields.bank = payment.transfer_bank_name;
+                        if (payment.transfer_branch) transferFields.bank_branch = payment.transfer_branch;
+                        if (payment.transfer_account_number) transferFields.bank_account = payment.transfer_account_number;
+                        return { ...basePayment, ...transferFields };
+                    }
 
-                              // Cash or other payment types
-                              return basePayment;
-                          })
-                    : [
-                          {
-                              payment_method: 1, // Default to credit card
-                              payment_date: billData.date || new Date().toISOString().split('T')[0],
-                              amount: parseFloat(billData.total_with_tax) || 0,
-                              currency_code: 'ILS',
-                              to_doc_currency_exchange_rate: 1,
-                          },
-                      ];
+                    // payment_method 5 - Cash: no extra fields per Tranzila API
+                    return basePayment;
+                });
 
             // Validate payments only for receipts (RE, IR) - but NOT for credit notes
             // Tax invoices (IN) don't require payment confirmation
@@ -932,24 +930,14 @@ const AddBill = () => {
                     amount: payment.amount,
                     created_at: billDate ? new Date(billDate + 'T00:00:00').toISOString() : new Date().toISOString(),
                     visa_installments: payment.visa_installments || null,
-                    visa_card_type: payment.visa_card_type || null,
                     visa_last_four: payment.visa_last_four || null,
-                    approval_number: payment.approval_number || null,
-                    bank_name: payment.bank_name || null,
-                    bank_branch: payment.bank_branch || null,
-                    transfer_amount: payment.transfer_amount || null,
                     transfer_bank_name: payment.transfer_bank_name || null,
                     transfer_branch: payment.transfer_branch || null,
                     transfer_account_number: payment.transfer_account_number || null,
-                    transfer_branch_number: payment.transfer_branch_number || null,
-                    transfer_number: payment.transfer_number || null,
-                    transfer_holder_name: payment.transfer_holder_name || null,
                     check_bank_name: payment.check_bank_name || null,
                     check_branch: payment.check_branch || null,
-                    check_branch_number: payment.check_branch_number || null,
                     check_account_number: payment.check_account_number || null,
                     check_number: payment.check_number || null,
-                    check_holder_name: payment.check_holder_name || null,
                 }));
 
                 const { error: paymentsError } = await supabase.from('bill_payments').insert(paymentInserts);

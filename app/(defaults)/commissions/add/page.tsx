@@ -51,9 +51,6 @@ const AddCommission = () => {
     // سند القبض - مدفوعات
     const [payments, setPayments] = useState<BillPayment[]>([{ payment_type: 'cash', amount: 0 }]);
 
-    // للم receipt_only - المبلغ يدوي
-    const [receiptAmount, setReceiptAmount] = useState('');
-
     // Cancel fields - for credit notes and refund receipts
     const [cancelCommissionId, setCancelCommissionId] = useState('');
     const [cancelTranzilaDocId, setCancelTranzilaDocId] = useState('');
@@ -109,8 +106,8 @@ const AddCommission = () => {
     const taxAmount = itemsTotalBeforeTax * 0.18;
     const totalWithTax = itemsTotal;
 
-    const receiptTotalAmount = parseFloat(receiptAmount) || 0;
-    const totalAmountForPaymentForm = commissionType === 'receipt_only' ? receiptTotalAmount : commissionType === 'tax_invoice_receipt' ? totalWithTax : 0;
+    const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalAmountForPaymentForm = commissionType === 'tax_invoice_receipt' ? totalWithTax : totalPaid;
 
     // ==================== Tranzila Integration ====================
     // Calls Tranzila API first — returns document info. DB insert only happens after success.
@@ -252,38 +249,47 @@ const AddCommission = () => {
             tranzilaPayments = commissionPayments
                 .filter((p) => p.amount && p.amount > 0)
                 .map((payment) => {
+                    const methodCode = paymentMethodMap[payment.payment_type];
+                    if (!methodCode) {
+                        throw new Error(`Unsupported payment type: ${payment.payment_type}`);
+                    }
                     const basePayment = {
-                        payment_method: paymentMethodMap[payment.payment_type] || 10,
+                        payment_method: methodCode,
                         payment_date: commissionData.date || new Date().toISOString().split('T')[0],
                         amount: payment.amount,
                         currency_code: 'ILS',
                         to_doc_currency_exchange_rate: 1,
                     };
 
+                    // Map UI fields to Tranzila API fields per documented schema.
+                    // See: https://docs.tranzila.com/docs/invoices/e9f00t8lnhw3k-create-document
                     if (payment.payment_type === 'visa') {
-                        return {
-                            ...basePayment,
-                            cc_last_4_digits: payment.visa_last_four || null,
-                            cc_installments_number: payment.visa_installments || 1,
-                            cc_type: payment.visa_card_type || null,
-                            approval_number: payment.approval_number || null,
-                        };
+                        // payment_method 1 - Credit Card
+                        const visaFields: Record<string, any> = {};
+                        if (payment.visa_last_four) visaFields.cc_last_4_digits = payment.visa_last_four;
+                        // Tranzila requires cc_installments_number >= 2; omit for single-payment (Regular)
+                        if (payment.visa_installments && payment.visa_installments >= 2) {
+                            visaFields.cc_installments_number = payment.visa_installments;
+                        }
+                        return { ...basePayment, ...visaFields };
                     } else if (payment.payment_type === 'check') {
-                        return {
-                            ...basePayment,
-                            check_number: payment.check_number || null,
-                            check_bank_name: payment.check_bank_name || null,
-                            check_branch: payment.check_branch || null,
-                            check_account_number: payment.check_account_number || null,
-                            check_holder_name: payment.check_holder_name || null,
-                        };
+                        // payment_method 3 - Cheque
+                        const chequeFields: Record<string, any> = {};
+                        if (payment.check_bank_name) chequeFields.bank = payment.check_bank_name;
+                        if (payment.check_branch) chequeFields.bank_branch = payment.check_branch;
+                        if (payment.check_account_number) chequeFields.bank_account = payment.check_account_number;
+                        if (payment.check_number) chequeFields.cheque_number = payment.check_number;
+                        return { ...basePayment, ...chequeFields };
                     } else if (payment.payment_type === 'bank_transfer') {
-                        return {
-                            ...basePayment,
-                            bank: payment.transfer_bank_name || null,
-                        };
+                        // payment_method 4 - Bank Transfer
+                        const transferFields: Record<string, any> = {};
+                        if (payment.transfer_bank_name) transferFields.bank = payment.transfer_bank_name;
+                        if (payment.transfer_branch) transferFields.bank_branch = payment.transfer_branch;
+                        if (payment.transfer_account_number) transferFields.bank_account = payment.transfer_account_number;
+                        return { ...basePayment, ...transferFields };
                     }
 
+                    // payment_method 5 - Cash: no extra fields per Tranzila API
                     return basePayment;
                 });
 
@@ -466,15 +472,7 @@ const AddCommission = () => {
             }
         }
 
-        if (commissionType === 'receipt_only') {
-            if (receiptTotalAmount <= 0) {
-                setAlert({ message: t('amount_required'), type: 'danger' });
-                return false;
-            }
-        }
-
         if (commissionType === 'receipt_only' || commissionType === 'tax_invoice_receipt') {
-            const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0);
             if (totalPaid <= 0) {
                 setAlert({ message: t('payment_amount_required'), type: 'danger' });
                 return false;
@@ -511,10 +509,10 @@ const AddCommission = () => {
                 total = itemsTotalBeforeTax;
                 tax_amount = taxAmount;
                 total_with_tax = totalWithTax;
-            } else {
-                total_with_tax = receiptTotalAmount;
-                total = receiptTotalAmount / 1.18;
-                tax_amount = receiptTotalAmount - total;
+            } else if (commissionType === 'receipt_only') {
+                total_with_tax = totalPaid;
+                total = totalPaid;
+                tax_amount = 0;
             }
 
             // Step 1: Call Tranzila FIRST — if it fails, nothing is saved to DB
@@ -589,19 +587,12 @@ const AddCommission = () => {
                         payment_type: p.payment_type,
                         amount: p.amount,
                         visa_installments: p.visa_installments || null,
-                        visa_card_type: p.visa_card_type || null,
                         visa_last_four: p.visa_last_four || null,
-                        approval_number: p.approval_number || null,
-                        bank_name: p.bank_name || null,
-                        bank_branch: p.bank_branch || null,
                         transfer_bank_name: p.transfer_bank_name || null,
                         transfer_branch: p.transfer_branch || null,
                         transfer_account_number: p.transfer_account_number || null,
-                        transfer_number: p.transfer_number || null,
-                        transfer_holder_name: p.transfer_holder_name || null,
                         check_bank_name: p.check_bank_name || null,
                         check_number: p.check_number || null,
-                        check_holder_name: p.check_holder_name || null,
                         check_branch: p.check_branch || null,
                         check_account_number: p.check_account_number || null,
                     }));
@@ -1007,36 +998,6 @@ const AddCommission = () => {
                         </>
                     )}
 
-                    {/* Receipt Only - Amount */}
-                    {commissionType === 'receipt_only' && (
-                        <div className="panel">
-                            <div className="mb-5 flex items-center gap-3">
-                                <IconDollarSign className="w-5 h-5 text-primary" />
-                                <h5 className="text-lg font-semibold dark:text-white-light">{t('commission_type_receipt')}</h5>
-                            </div>
-                            <div>
-                                <label htmlFor="receipt_amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    {t('total_with_tax')} <span className="text-red-500">*</span>
-                                </label>
-                                <div className="flex">
-                                    <span className="inline-flex items-center px-3 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 border border-r-0 border-gray-300 dark:border-gray-600 ltr:rounded-l-md rtl:rounded-r-md">
-                                        ₪
-                                    </span>
-                                    <input
-                                        type="number"
-                                        id="receipt_amount"
-                                        step="0.01"
-                                        min="0"
-                                        value={receiptAmount}
-                                        onChange={(e) => setReceiptAmount(e.target.value)}
-                                        className="form-input ltr:rounded-l-none rtl:rounded-r-none"
-                                        placeholder="0.00"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* Receipt Section - مثل الفواتير */}
                     {(commissionType === 'receipt_only' || commissionType === 'tax_invoice_receipt') && (
                         <div className="panel">
@@ -1044,7 +1005,7 @@ const AddCommission = () => {
                                 <IconDollarSign className="w-5 h-5 text-primary" />
                                 <h5 className="text-lg font-semibold dark:text-white-light">{t('receipt_details')}</h5>
                             </div>
-                            <MultiplePaymentForm payments={payments} onPaymentsChange={setPayments} totalAmount={commissionType === 'receipt_only' ? receiptTotalAmount : totalAmountForPaymentForm} />
+                            <MultiplePaymentForm payments={payments} onPaymentsChange={setPayments} totalAmount={totalAmountForPaymentForm} />
                         </div>
                     )}
 
