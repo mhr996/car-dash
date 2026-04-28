@@ -189,13 +189,13 @@ const PaymentForm: React.FC<PaymentFormProps> = ({ payment, onUpdate, onRemove, 
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('branch')}</label>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('confirmation_number')}</label>
                         <input
                             type="text"
                             value={payment.transfer_branch || ''}
                             onChange={(e) => handleInputChange('transfer_branch', e.target.value)}
                             className="form-input"
-                            placeholder={t('enter_branch')}
+                            placeholder={t('enter_confirmation_number')}
                         />
                     </div>
                     <div>

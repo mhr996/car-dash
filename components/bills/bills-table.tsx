@@ -298,9 +298,28 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                         )}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                                        {(bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') && (bill.bill_payments || bill.payments)
-                                            ? (bill.bill_payments || bill.payments).find((payment: any) => payment.payment_type === 'bank_transfer')?.transfer_bank_name || '-'
-                                            : '-'}
+                                        {(() => {
+                                            if (bill.bill_type !== 'receipt_only' && bill.bill_type !== 'tax_invoice_receipt') return '-';
+                                            const payments = bill.bill_payments || bill.payments;
+                                            if (!payments) return '-';
+                                            const transferPayment = payments.find((payment: any) => payment.payment_type === 'bank_transfer');
+                                            if (!transferPayment) return '-';
+                                            const lines: { label: string; value: string }[] = [];
+                                            if (transferPayment.transfer_bank_name) lines.push({ label: t('bank_name'), value: transferPayment.transfer_bank_name });
+                                            if (transferPayment.transfer_branch) lines.push({ label: t('confirmation_number'), value: transferPayment.transfer_branch });
+                                            if (transferPayment.transfer_account_number) lines.push({ label: t('account_number'), value: transferPayment.transfer_account_number });
+                                            if (lines.length === 0) return '-';
+                                            return (
+                                                <div className="flex flex-col gap-0.5">
+                                                    {lines.map((line, idx) => (
+                                                        <div key={idx} className="text-xs">
+                                                            <span className="text-gray-500 dark:text-gray-400">{line.label}:</span>{' '}
+                                                            <span className="text-gray-900 dark:text-gray-100 font-medium">{line.value}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(bill.created_at)}</td>
                                     <td className="px-4 py-3 text-center">

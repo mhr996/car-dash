@@ -1202,6 +1202,8 @@
     "enter_bank_name": "Enter bank name",
     "branch": "Branch",
     "enter_branch": "Enter branch",
+    "confirmation_number": "Confirmation Number",
+    "enter_confirmation_number": "Enter confirmation number",
     "account_number": "Account Number",
     "enter_account_number": "Enter account number",
     "transfer_number": "Transfer Number",

@@ -1180,6 +1180,8 @@
     "enter_bank_name": "أدخل اسم البنك",
     "branch": "الفرع",
     "enter_branch": "أدخل الفرع",
+    "confirmation_number": "رقم التأكيد",
+    "enter_confirmation_number": "أدخل رقم التأكيد",
     "account_number": "رقم الحساب",
     "enter_account_number": "أدخل رقم الحساب",
     "transfer_number": "رقم الحوالة",

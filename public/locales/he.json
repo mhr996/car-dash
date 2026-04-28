@@ -1778,6 +1778,8 @@
     "approval_number": "מספר אישור",
     "bank_name": "שם הבנק",
     "branch": "סניף",
+    "confirmation_number": "מספר אישור העברה",
+    "enter_confirmation_number": "הזן מספר אישור העברה",
     "branch_number": "מספר סניף",
     "brand_required": "מותג נדרש",
     "car_status_required": "מצב רכב נדרש",
