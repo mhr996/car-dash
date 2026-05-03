@@ -316,7 +316,7 @@ const AddCommission = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'get_document',
-                    data: { document_id: commissionData.cancel_tranzila_doc_id },
+                    data: { document_number: commissionData.cancel_tranzila_doc_number },
                 }),
             });
 

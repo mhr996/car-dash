@@ -268,19 +268,19 @@ async function getDocument(data: any = {}) {
     try {
         const headers = generateTranzilaAuthHeaders();
 
-        if (!data.document_id) {
-            return NextResponse.json({ error: 'Missing document_id' }, { status: 400 });
+        if (!data.document_number) {
+            return NextResponse.json({ error: 'Missing document_number' }, { status: 400 });
         }
 
         console.log('📄 ============ TRANZILA GET DOCUMENT REQUEST ============');
-        console.log('🎯 Document ID:', data.document_id);
+        console.log('🎯 Document Number:', data.document_number);
         console.log('==================================================');
 
         // Use search_documents endpoint to get document details in JSON format
         // The get_document endpoint returns PDF which is not useful for extracting data
         const searchPayload = {
             terminal_name: TRANZILA_CONFIG.terminal,
-            document_id: parseInt(data.document_id),
+            document_number: parseInt(data.document_number),
             response_language: 'eng',
         };
 

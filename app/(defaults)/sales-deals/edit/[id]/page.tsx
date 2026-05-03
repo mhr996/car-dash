@@ -566,7 +566,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'get_document',
-                    data: { document_id: billData.cancel_tranzila_doc_id },
+                    data: { document_number: billData.cancel_tranzila_doc_number },
                 }),
             });
 
