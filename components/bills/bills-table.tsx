@@ -346,7 +346,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                                     onClick={() => onTestGetDocument(bill)}
                                                     className="inline-flex items-center gap-1 px-3 py-1 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors duration-200 text-xs"
                                                     title="Test Tranzila GET"
-                                                    disabled={testingGetDocumentBillId === bill.id || !bill.tranzila_document_number}
+                                                    disabled={testingGetDocumentBillId === bill.id || !bill.tranzila_document_id}
                                                 >
                                                     {testingGetDocumentBillId === bill.id ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div> : null}
                                                     Test GET

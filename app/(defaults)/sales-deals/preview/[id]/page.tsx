@@ -124,8 +124,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     };
 
     const handleTestGetDocument = async (bill: any) => {
-        if (!bill?.tranzila_document_number) {
-            setAlert({ visible: true, message: 'This bill has no Tranzila document number.', type: 'danger' });
+        if (!bill?.tranzila_document_id) {
+            setAlert({ visible: true, message: 'This bill has no Tranzila document ID.', type: 'danger' });
             return;
         }
 
@@ -136,7 +136,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'get_document',
-                    data: { document_number: bill.tranzila_document_number },
+                    data: { document_id: bill.tranzila_document_id },
                 }),
             });
 
@@ -149,13 +149,13 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
 
             setAlert({
                 visible: true,
-                message: `Tranzila GET test passed for document #${bill.tranzila_document_number}`,
+                message: `Tranzila GET test passed for doc ID #${bill.tranzila_document_id}`,
                 type: 'success',
             });
         } catch (error: any) {
             setAlert({
                 visible: true,
-                message: `Tranzila GET test failed for #${bill.tranzila_document_number}: ${error?.message || 'Unknown error'}`,
+                message: `Tranzila GET test failed for doc ID #${bill.tranzila_document_id}: ${error?.message || 'Unknown error'}`,
                 type: 'danger',
             });
         } finally {

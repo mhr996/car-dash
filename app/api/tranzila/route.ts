@@ -268,19 +268,28 @@ async function getDocument(data: any = {}) {
     try {
         const headers = generateTranzilaAuthHeaders();
 
-        if (!data.document_number) {
-            return NextResponse.json({ error: 'Missing document_number' }, { status: 400 });
+        const hasDocumentId = !!data.document_id;
+        const hasDocumentNumber = !!data.document_number;
+
+        if (!hasDocumentId && !hasDocumentNumber) {
+            return NextResponse.json({ error: 'Missing document_id or document_number' }, { status: 400 });
         }
 
         console.log('📄 ============ TRANZILA GET DOCUMENT REQUEST ============');
-        console.log('🎯 Document Number:', data.document_number);
+        if (hasDocumentId) {
+            console.log('🎯 Document ID:', data.document_id);
+        }
+        if (hasDocumentNumber) {
+            console.log('🎯 Document Number:', data.document_number);
+        }
         console.log('==================================================');
 
         // Use search_documents endpoint to get document details in JSON format
         // The get_document endpoint returns PDF which is not useful for extracting data
         const searchPayload = {
             terminal_name: TRANZILA_CONFIG.terminal,
-            document_number: parseInt(data.document_number),
+            ...(hasDocumentId ? { document_id: parseInt(data.document_id) } : {}),
+            ...(hasDocumentNumber ? { document_number: parseInt(data.document_number) } : {}),
             response_language: 'eng',
         };
 
