@@ -884,6 +884,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const [selectedBill, setSelectedBill] = useState<any>(null);
     const [showBillModal, setShowBillModal] = useState(false);
     const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
+    const [testingGetDocumentBillId, setTestingGetDocumentBillId] = useState<string | null>(null);
 
     // Register Order states
     const [registerOrderForm, setRegisterOrderForm] = useState({
@@ -1625,6 +1626,44 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             setAlert({ message: t('error_downloading_pdf'), type: 'danger' });
         } finally {
             setDownloadingPDF(null);
+        }
+    };
+
+    const handleTestGetDocument = async (bill: any) => {
+        if (!bill?.tranzila_document_number) {
+            setAlert({ message: 'This bill has no Tranzila document number.', type: 'danger' });
+            return;
+        }
+
+        setTestingGetDocumentBillId(bill.id);
+        try {
+            const response = await fetch('/api/tranzila', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'get_document',
+                    data: { document_number: bill.tranzila_document_number },
+                }),
+            });
+
+            const result = await response.json();
+            const originalDocument = result?.response?.documents?.[0] || result?.response?.document;
+
+            if (!result?.ok || !originalDocument) {
+                throw new Error(result?.error || 'Document not found in Tranzila');
+            }
+
+            setAlert({
+                message: `Tranzila GET test passed for document #${bill.tranzila_document_number}`,
+                type: 'success',
+            });
+        } catch (error: any) {
+            setAlert({
+                message: `Tranzila GET test failed for #${bill.tranzila_document_number}: ${error?.message || 'Unknown error'}`,
+                type: 'danger',
+            });
+        } finally {
+            setTestingGetDocumentBillId(null);
         }
     };
 
@@ -4281,7 +4320,9 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 bills={bills}
                                 loading={loadingBills}
                                 onDownloadPDF={handleDownloadPDF}
+                                onTestGetDocument={handleTestGetDocument}
                                 downloadingPDF={downloadingPDF}
+                                testingGetDocumentBillId={testingGetDocumentBillId}
                                 readOnly={false}
                                 deal={deal}
                                 car={selectedCar}
