@@ -557,59 +557,35 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
         if (isCreditNote) {
             // Credit notes don't need payments
             tranzilaRequestData.payments = [];
-        } else if (isRefundReceipt && billData.cancel_tranzila_doc_id) {
-            // For refund receipts, fetch original document from Tranzila to get payment details
-            console.log('🔍 Fetching original receipt from Tranzila, document_id:', billData.cancel_tranzila_doc_id);
-
-            const tranzilaDocResponse = await fetch('/api/tranzila', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'get_document',
-                    data: { document_number: billData.cancel_tranzila_doc_number },
-                }),
-            });
-
-            const tranzilaDocResult = await tranzilaDocResponse.json();
-            console.log('📄 Tranzila document response:', tranzilaDocResult);
-
-            // Validate the response
-            if (!tranzilaDocResult.ok) {
-                throw new Error(`Failed to fetch original receipt from Tranzila: ${tranzilaDocResult.error || 'Unknown error'}`);
+        } else if (isRefundReceipt) {
+            if (!billData.cancel_bill_id) {
+                throw new Error('Refund receipt requires selecting an original receipt to refund.');
             }
 
-            // Extract payments from the Tranzila document
-            const originalDocument = tranzilaDocResult.response?.documents?.[0] || tranzilaDocResult.response?.document;
-
-            if (!originalDocument) {
-                throw new Error('Original receipt not found in Tranzila. Cannot create refund receipt.');
-            }
-
-            const originalPayments = originalDocument?.payments || [];
+            // Use payments already loaded with the bills state — no need to call Tranzila
+            // (get_document only returns a PDF, not JSON payment data)
+            const originalBill = bills.find((b: any) => b.id.toString() === billData.cancel_bill_id);
+            const originalPayments: any[] = originalBill?.payments || [];
 
             if (originalPayments.length === 0) {
                 throw new Error('Original receipt has no payment information. Cannot create refund receipt.');
             }
 
-            // Map original payments to refund payments with same details
             tranzilaRequestData.payments = originalPayments.map((payment: any) => ({
-                payment_method: payment.payment_method || 10,
-                payment_date: payment.payment_date || billData.date || new Date().toISOString().split('T')[0],
-                amount: payment.amount || 0,
-                currency_code: payment.currency_code || 'ILS',
-                to_doc_currency_exchange_rate: payment.to_doc_currency_exchange_rate || 1,
-                description: `החזר עבור קבלה #${billData.cancel_tranzila_doc_number || ''}`,
+                payment_method: paymentMethodMap[payment.payment_type],
+                payment_date: billData.date,
+                amount: payment.amount,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
             }));
-        } else if (isRefundReceipt && !billData.cancel_tranzila_doc_id) {
-            throw new Error('Refund receipt requires selecting an original receipt to refund.');
         }
 
         // For credit notes and refund receipts, add cancellation parameters
-        // canceldoc: 'Y' marks this as a credit/cancellation document
-        // cancel_document_number: references the original document being cancelled (type 1 relation)
+        // related_document_number + relation_type 1 = cancelling by document number (per Tranzila docs)
         if ((isCreditNote || isRefundReceipt) && billData.cancel_tranzila_doc_number) {
             tranzilaRequestData.canceldoc = 'Y';
-            tranzilaRequestData.cancel_document_number = billData.cancel_tranzila_doc_number;
+            tranzilaRequestData.related_document_number = parseInt(billData.cancel_tranzila_doc_number);
+            tranzilaRequestData.relation_type = 1;
         }
 
         const response = await fetch('/api/tranzila', {
@@ -884,7 +860,6 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const [selectedBill, setSelectedBill] = useState<any>(null);
     const [showBillModal, setShowBillModal] = useState(false);
     const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
-    const [testingGetDocumentBillId, setTestingGetDocumentBillId] = useState<string | null>(null);
 
     // Register Order states
     const [registerOrderForm, setRegisterOrderForm] = useState({
@@ -1626,44 +1601,6 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             setAlert({ message: t('error_downloading_pdf'), type: 'danger' });
         } finally {
             setDownloadingPDF(null);
-        }
-    };
-
-    const handleTestGetDocument = async (bill: any) => {
-        if (!bill?.tranzila_document_id) {
-            setAlert({ message: 'This bill has no Tranzila document ID.', type: 'danger' });
-            return;
-        }
-
-        setTestingGetDocumentBillId(bill.id);
-        try {
-            const response = await fetch('/api/tranzila', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'get_document',
-                    data: { document_id: bill.tranzila_document_id },
-                }),
-            });
-
-            const result = await response.json();
-            const originalDocument = result?.response?.documents?.[0] || result?.response?.document;
-
-            if (!result?.ok || !originalDocument) {
-                throw new Error(result?.error || 'Document not found in Tranzila');
-            }
-
-            setAlert({
-                message: `Tranzila GET test passed for doc ID #${bill.tranzila_document_id}`,
-                type: 'success',
-            });
-        } catch (error: any) {
-            setAlert({
-                message: `Tranzila GET test failed for doc ID #${bill.tranzila_document_id}: ${error?.message || 'Unknown error'}`,
-                type: 'danger',
-            });
-        } finally {
-            setTestingGetDocumentBillId(null);
         }
     };
 
@@ -4320,9 +4257,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 bills={bills}
                                 loading={loadingBills}
                                 onDownloadPDF={handleDownloadPDF}
-                                onTestGetDocument={handleTestGetDocument}
                                 downloadingPDF={downloadingPDF}
-                                testingGetDocumentBillId={testingGetDocumentBillId}
                                 readOnly={false}
                                 deal={deal}
                                 car={selectedCar}

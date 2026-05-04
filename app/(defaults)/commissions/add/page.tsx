@@ -307,47 +307,30 @@ const AddCommission = () => {
         if (isCreditNote) {
             // Credit notes don't need payments - they're reversals
             tranzilaPaymentsForRequest = [];
-        } else if (isRefundReceipt && commissionData.cancel_tranzila_doc_id) {
-            // For refund receipts, fetch original document from Tranzila to get payment details
-            console.log('🔍 Fetching original receipt from Tranzila, document_id:', commissionData.cancel_tranzila_doc_id);
-
-            const tranzilaDocResponse = await fetch('/api/tranzila', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'get_document',
-                    data: { document_number: commissionData.cancel_tranzila_doc_number },
-                }),
-            });
-
-            const tranzilaDocResult = await tranzilaDocResponse.json();
-            console.log('📄 Tranzila document response:', tranzilaDocResult);
-
-            if (!tranzilaDocResult.ok) {
-                throw new Error(`Failed to fetch original receipt from Tranzila: ${tranzilaDocResult.error || 'Unknown error'}`);
+        } else if (isRefundReceipt) {
+            if (!cancelCommissionId) {
+                throw new Error('Refund receipt requires selecting an original receipt to refund.');
             }
 
-            const originalDocument = tranzilaDocResult.response?.documents?.[0] || tranzilaDocResult.response?.document;
-            if (!originalDocument) {
-                throw new Error('Original receipt not found in Tranzila. Cannot create refund receipt.');
+            // Fetch original commission payments from our DB.
+            // Tranzila's get_document endpoint returns only a PDF, not JSON payment data.
+            console.log('🔍 Fetching original commission payments from DB, commission_id:', cancelCommissionId);
+            const { data: originalPaymentsData, error: paymentsError } = await supabase
+                .from('commission_payments')
+                .select('payment_type, amount')
+                .eq('commission_id', parseInt(cancelCommissionId, 10));
+
+            if (paymentsError || !originalPaymentsData || originalPaymentsData.length === 0) {
+                throw new Error('Original receipt has no payment information in DB. Cannot create refund receipt.');
             }
 
-            const originalPayments = originalDocument?.payments || [];
-            if (originalPayments.length === 0) {
-                throw new Error('Original receipt has no payment information. Cannot create refund receipt.');
-            }
-
-            // Map original payments to refund payments with same details
-            tranzilaPaymentsForRequest = originalPayments.map((payment: any) => ({
-                payment_method: payment.payment_method || 10,
-                payment_date: payment.payment_date || commissionData.date || new Date().toISOString().split('T')[0],
-                amount: payment.amount || 0,
-                currency_code: payment.currency_code || 'ILS',
-                to_doc_currency_exchange_rate: payment.to_doc_currency_exchange_rate || 1,
-                description: `החזר עבור קבלה #${commissionData.cancel_tranzila_doc_number || ''}`,
+            tranzilaPaymentsForRequest = originalPaymentsData.map((payment: any) => ({
+                payment_method: paymentMethodMap[payment.payment_type],
+                payment_date: commissionData.date,
+                amount: payment.amount,
+                currency_code: 'ILS',
+                to_doc_currency_exchange_rate: 1,
             }));
-        } else if (isRefundReceipt && !commissionData.cancel_tranzila_doc_id) {
-            throw new Error('Refund receipt requires selecting an original receipt to refund.');
         } else {
             // Normal document - use the provided payments
             tranzilaPaymentsForRequest = documentType === 'IN' ? [] : tranzilaPayments;
@@ -373,10 +356,12 @@ const AddCommission = () => {
                 created_by_user: 'car-dash',
                 created_by_system: 'car-dash',
                 // Cancel document parameters
+                // related_document_number + relation_type 1 = cancelling by document number (per Tranzila docs)
                 ...(isCancelDocument && commissionData.cancel_tranzila_doc_number
                     ? {
                           canceldoc: 'Y',
-                          cancel_document_number: commissionData.cancel_tranzila_doc_number,
+                          related_document_number: parseInt(commissionData.cancel_tranzila_doc_number),
+                          relation_type: 1,
                       }
                     : {}),
             },

@@ -89,7 +89,6 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
     const [paymentNotes, setPaymentNotes] = useState<string>('');
     const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
-    const [testingGetDocumentBillId, setTestingGetDocumentBillId] = useState<string | null>(null);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [customerSignature, setCustomerSignature] = useState<string | null>(null);
     const [isSigning, setIsSigning] = useState(false);
@@ -120,46 +119,6 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             setAlert({ visible: true, message: t('error_downloading_pdf'), type: 'danger' });
         } finally {
             setDownloadingPDF(null);
-        }
-    };
-
-    const handleTestGetDocument = async (bill: any) => {
-        if (!bill?.tranzila_document_id) {
-            setAlert({ visible: true, message: 'This bill has no Tranzila document ID.', type: 'danger' });
-            return;
-        }
-
-        setTestingGetDocumentBillId(bill.id);
-        try {
-            const response = await fetch('/api/tranzila', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'get_document',
-                    data: { document_id: bill.tranzila_document_id },
-                }),
-            });
-
-            const result = await response.json();
-            const originalDocument = result?.response?.documents?.[0] || result?.response?.document;
-
-            if (!result?.ok || !originalDocument) {
-                throw new Error(result?.error || 'Document not found in Tranzila');
-            }
-
-            setAlert({
-                visible: true,
-                message: `Tranzila GET test passed for doc ID #${bill.tranzila_document_id}`,
-                type: 'success',
-            });
-        } catch (error: any) {
-            setAlert({
-                visible: true,
-                message: `Tranzila GET test failed for doc ID #${bill.tranzila_document_id}: ${error?.message || 'Unknown error'}`,
-                type: 'danger',
-            });
-        } finally {
-            setTestingGetDocumentBillId(null);
         }
     };
     useEffect(() => {
@@ -1311,9 +1270,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                             carTakenFromClient={carTakenFromClient}
                             selectedCustomer={customer}
                             onDownloadPDF={handleDownloadPDF}
-                            onTestGetDocument={handleTestGetDocument}
                             downloadingPDF={downloadingPDF}
-                            testingGetDocumentBillId={testingGetDocumentBillId}
                             registerOrders={registerOrders}
                             bankTransferOrders={bankTransferOrders}
                         />

@@ -161,27 +161,16 @@ async function createDocument(data: any = {}) {
         };
 
         // For credit notes / cancellation documents:
-        // 1. Set canceldoc to 'Y' to mark as credit document
-        // 2. Add document relation to reference the original document being cancelled
+        // Per official Tranzila docs, use top-level fields:
+        //   canceldoc: 'Y'
+        //   related_document_number: <integer>  (the original document's number)
+        //   relation_type: 1  (1 = by document number, 2 = by document id)
         if (data.canceldoc === 'Y') {
             payload.canceldoc = 'Y';
 
-            // Add document relation if provided
-            // Type 1 = by document number, Type 2 = by document id
-            if (data.cancel_document_number) {
-                payload.document_relations = [
-                    {
-                        type: 1, // Cancelling by document number
-                        number: data.cancel_document_number,
-                    },
-                ];
-            } else if (data.cancel_document_id) {
-                payload.document_relations = [
-                    {
-                        type: 2, // Cancelling by document id
-                        id: data.cancel_document_id,
-                    },
-                ];
+            if (data.related_document_number) {
+                payload.related_document_number = data.related_document_number;
+                payload.relation_type = data.relation_type;
             }
         }
 
@@ -195,7 +184,8 @@ async function createDocument(data: any = {}) {
         console.log('💳 Payments count:', payload.payments.length);
         if (payload.canceldoc) {
             console.log('🔄 This is a CREDIT/CANCELLATION document');
-            console.log('🔄 Document relations:', JSON.stringify(payload.document_relations, null, 2));
+            console.log('🔄 related_document_number:', payload.related_document_number);
+            console.log('🔄 relation_type:', payload.relation_type);
         }
         console.log('==================================================');
 
@@ -260,60 +250,63 @@ export async function GET() {
 }
 
 /**
- * Get document details from Tranzila
- * Used for fetching original receipt data when creating refund receipts
- * Uses search_documents endpoint as get_document returns PDF
+ * Get document from Tranzila.
+ * Per official docs, get_document returns application/pdf on success
+ * and application/json on error. We use Content-Type to detect success.
  */
 async function getDocument(data: any = {}) {
     try {
         const headers = generateTranzilaAuthHeaders();
 
-        const hasDocumentId = !!data.document_id;
-        const hasDocumentNumber = !!data.document_number;
-
-        if (!hasDocumentId && !hasDocumentNumber) {
-            return NextResponse.json({ error: 'Missing document_id or document_number' }, { status: 400 });
+        if (!data.document_id) {
+            return NextResponse.json({ error: 'Missing document_id' }, { status: 400 });
         }
 
         console.log('📄 ============ TRANZILA GET DOCUMENT REQUEST ============');
-        if (hasDocumentId) {
-            console.log('🎯 Document ID:', data.document_id);
-        }
-        if (hasDocumentNumber) {
-            console.log('🎯 Document Number:', data.document_number);
-        }
+        console.log('🎯 Document ID:', data.document_id);
         console.log('==================================================');
 
-        // Use search_documents endpoint to get document details in JSON format
-        // The get_document endpoint returns PDF which is not useful for extracting data
-        const searchPayload = {
+        const payload = {
             terminal_name: TRANZILA_CONFIG.terminal,
-            ...(hasDocumentId ? { document_id: parseInt(data.document_id) } : {}),
-            ...(hasDocumentNumber ? { document_number: parseInt(data.document_number) } : {}),
+            document_id: parseInt(data.document_id),
             response_language: 'eng',
         };
 
-        const searchUrl = `${TRANZILA_CONFIG.billingApiUrl}/search_documents`;
-        const searchResponse = await fetch(searchUrl, {
+        const docUrl = `${TRANZILA_CONFIG.billingApiUrl}/get_document`;
+        const docResponse = await fetch(docUrl, {
             method: 'POST',
             headers: {
                 ...headers,
                 'Content-Type': 'application/json',
+                Accept: 'application/pdf, application/json',
             },
-            body: JSON.stringify(searchPayload),
+            body: JSON.stringify(payload),
         });
 
-        let searchResult: any = null;
+        const contentType = docResponse.headers.get('content-type') || '';
+
+        if (contentType.includes('application/pdf')) {
+            // Success — Tranzila returned the PDF
+            console.log('✅ Document found (PDF response received)');
+            return NextResponse.json({
+                ok: true,
+                status: docResponse.status,
+                response: { status_code: 0, status_msg: 'Document found' },
+            });
+        }
+
+        // Error — Tranzila returned JSON with status_code / status_msg
+        let errorResult: any = null;
         try {
-            searchResult = await searchResponse.json();
+            errorResult = await docResponse.json();
         } catch {}
 
-        console.log('Search document response:', JSON.stringify(searchResult, null, 2));
+        console.log('❌ Get document error:', JSON.stringify(errorResult, null, 2));
 
         return NextResponse.json({
-            ok: searchResponse.ok && searchResult?.status_code === 0,
-            status: searchResponse.status,
-            response: searchResult,
+            ok: false,
+            status: docResponse.status,
+            response: errorResult,
         });
     } catch (e: any) {
         console.error('Error getting document:', e);

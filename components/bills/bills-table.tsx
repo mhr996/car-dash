@@ -11,9 +11,7 @@ interface BillsTableProps {
     bills: any[];
     loading?: boolean;
     onDownloadPDF?: (bill: any) => void;
-    onTestGetDocument?: (bill: any) => void;
     downloadingPDF?: string | null;
-    testingGetDocumentBillId?: string | null;
     readOnly?: boolean; // For preview mode
     className?: string;
     deal?: any; // Deal information for exchange deals
@@ -28,9 +26,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
     bills,
     loading = false,
     onDownloadPDF,
-    onTestGetDocument,
     downloadingPDF,
-    testingGetDocumentBillId,
     readOnly = false,
     className = '',
     deal,
@@ -338,18 +334,6 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                                 >
                                                     {downloadingPDF === bill.id ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div> : <IconPdf className="w-3 h-3" />}
                                                     PDF
-                                                </button>
-                                            )}
-                                            {onTestGetDocument && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onTestGetDocument(bill)}
-                                                    className="inline-flex items-center gap-1 px-3 py-1 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors duration-200 text-xs"
-                                                    title="Test Tranzila GET"
-                                                    disabled={testingGetDocumentBillId === bill.id || !bill.tranzila_document_id}
-                                                >
-                                                    {testingGetDocumentBillId === bill.id ? <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div> : null}
-                                                    Test GET
                                                 </button>
                                             )}
                                         </div>
