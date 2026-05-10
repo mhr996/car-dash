@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import IconEdit from '@/components/icon/icon-edit';
 import IconEye from '@/components/icon/icon-eye';
 import IconPlus from '@/components/icon/icon-plus';
@@ -449,7 +449,7 @@ const CarsList = () => {
 
             const contract: CarContract = {
                 dealType: 'normal',
-                dealDate: new Date(car.created_at).toLocaleDateString('he-IL'),
+                dealDate: new Date(car.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }),
                 companyName: companyInfo.name,
                 companyTaxNumber: companyInfo.tax_number || '',
                 companyAddress: companyInfo.address || '',
@@ -766,7 +766,7 @@ const CarsList = () => {
                                                       <div className="text-sm">
                                                           <div className="font-medium">{deal.title}</div>
                                                           <div className="text-gray-500">{deal.customer_name}</div>
-                                                          <div className="text-xs text-gray-400">{new Date(deal.created_at).toLocaleDateString()}</div>
+                                                          <div className="text-xs text-gray-400">{new Date(deal.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })}</div>
                                                       </div>
                                                   );
                                               },

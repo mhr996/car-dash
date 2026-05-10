@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -939,7 +939,7 @@ const AddDeal = () => {
                                 {selectedCustomer.birth_date && (
                                     <div>
                                         <span className="text-blue-600 dark:text-blue-300 font-medium">{t('birth_date')}:</span>
-                                        <p className="text-blue-800 dark:text-blue-100">{new Date(selectedCustomer.birth_date).toLocaleDateString()}</p>
+                                        <p className="text-blue-800 dark:text-blue-100">{formatDate(selectedCustomer.birth_date)}</p>
                                     </div>
                                 )}
                                 <div>
@@ -1251,7 +1251,7 @@ const AddDeal = () => {
                                 {selectedCustomer.birth_date && (
                                     <div>
                                         <span className="text-blue-600 dark:text-blue-300 font-medium">{t('birth_date')}:</span>
-                                        <p className="text-blue-800 dark:text-blue-100">{new Date(selectedCustomer.birth_date).toLocaleDateString()}</p>
+                                        <p className="text-blue-800 dark:text-blue-100">{formatDate(selectedCustomer.birth_date)}</p>
                                     </div>
                                 )}
                                 <div>
@@ -1887,7 +1887,7 @@ const AddDeal = () => {
                                 {selectedSeller.birth_date && (
                                     <div>
                                         <span className="text-blue-600 dark:text-blue-300 font-medium">{t('birth_date')}:</span>
-                                        <p className="text-blue-800 dark:text-blue-100">{new Date(selectedSeller.birth_date).toLocaleDateString()}</p>
+                                        <p className="text-blue-800 dark:text-blue-100">{formatDate(selectedSeller.birth_date)}</p>
                                     </div>
                                 )}
                                 <div>
@@ -2013,7 +2013,7 @@ const AddDeal = () => {
                                 {selectedBuyer.birth_date && (
                                     <div>
                                         <span className="text-orange-600 dark:text-orange-300 font-medium">{t('birth_date')}:</span>
-                                        <p className="text-orange-800 dark:text-orange-100">{new Date(selectedBuyer.birth_date).toLocaleDateString()}</p>
+                                        <p className="text-orange-800 dark:text-orange-100">{formatDate(selectedBuyer.birth_date)}</p>
                                     </div>
                                 )}
                                 <div>
@@ -2228,7 +2228,7 @@ const AddDeal = () => {
                                 {selectedCustomer.birth_date && (
                                     <div>
                                         <span className="text-blue-600 dark:text-blue-300 font-medium">{t('birth_date')}:</span>
-                                        <p className="text-blue-800 dark:text-blue-100">{new Date(selectedCustomer.birth_date).toLocaleDateString()}</p>
+                                        <p className="text-blue-800 dark:text-blue-100">{formatDate(selectedCustomer.birth_date)}</p>
                                     </div>
                                 )}
                                 <div>

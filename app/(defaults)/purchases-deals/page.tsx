@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
@@ -92,7 +92,7 @@ const CarDealsPage = () => {
 
             const contract: CarContract = {
                 dealType: 'normal',
-                dealDate: new Date(car.created_at).toLocaleDateString('he-IL'),
+                dealDate: new Date(car.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }),
                 companyName: companyInfo.name,
                 companyTaxNumber: companyInfo.tax_number || '',
                 companyAddress: companyInfo.address || '',
@@ -396,7 +396,7 @@ const CarDealsPage = () => {
             accessor: 'created_at',
             title: t('purchase_date'),
             sortable: true,
-            render: ({ created_at }) => new Date(created_at).toLocaleDateString('he-IL'),
+            render: ({ created_at }) => new Date(created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }),
         },
         {
             accessor: 'actions',
@@ -519,7 +519,7 @@ const CarDealsPage = () => {
                                                 </div>
                                                 <div className="mt-2">
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('purchase_date')}</p>
-                                                    <p className="text-sm">{new Date(car.created_at).toLocaleDateString('he-IL')}</p>
+                                                    <p className="text-sm">{new Date(car.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })}</p>
                                                 </div>
                                             </div>
                                             <div className="flex gap-2">

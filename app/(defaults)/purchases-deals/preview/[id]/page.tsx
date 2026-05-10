@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import IconArrowLeft from '@/components/icon/icon-arrow-left';
@@ -351,7 +351,7 @@ const CarDealPreview = () => {
                                     <IconCalendar className="w-5 h-5 text-warning" />
                                     <div>
                                         <p className="text-sm text-gray-500">{t('purchase_date')}</p>
-                                        <p className="font-medium">{new Date(car.created_at).toLocaleDateString('he-IL')}</p>
+                                        <p className="font-medium">{new Date(car.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })}</p>
                                     </div>
                                 </div>
 

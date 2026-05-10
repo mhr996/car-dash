@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { IRootState } from '@/store';
@@ -1216,7 +1216,7 @@ const AnalyticsDashboard = () => {
                                                             {t('new_order_placed')}: <span className="text-success">${order.total_amount.toFixed(0)}</span>
                                                         </h5>
                                                         <p className="text-xs text-white-dark">
-                                                            {new Date(order.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                            {new Date(order.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1243,7 +1243,7 @@ const AnalyticsDashboard = () => {
                                                             {t('new_user_registered')}: <span className="text-primary">{user.email}</span>
                                                         </h5>
                                                         <p className="text-xs text-white-dark">
-                                                            {user.created_at && new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                            {user.created_at && new Date(user.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1270,7 +1270,7 @@ const AnalyticsDashboard = () => {
                                                             {t('new_product_added')}: <span className="text-warning">{product.title}</span>
                                                         </h5>
                                                         <p className="text-xs text-white-dark">
-                                                            {new Date(product.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                            {new Date(product.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                                                         </p>
                                                     </div>
                                                 </div>

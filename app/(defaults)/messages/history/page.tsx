@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import IconArchive from '@/components/icon/icon-archive';
@@ -163,7 +163,7 @@ export default function MessageHistoryPage() {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                                        {msg.created_at ? new Date(msg.created_at).toLocaleDateString() : '-'}
+                                                        {msg.created_at ? new Date(msg.created_at).toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}
                                                     </p>
                                                     <p className="text-xs text-gray-500">
                                                         {msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : ''}
