@@ -78,8 +78,15 @@ export async function POST(request: NextRequest) {
             case 'create_document':
                 return await createDocument(data);
 
-            case 'get_document':
-                return await getDocument(data);
+            // Proxy the PDF using the public retrieval_key URL (no auth needed)
+            // Ref: https://docs.tranzila.com/docs/invoices/hdj5h8w2jhfuj-get-financial-document-for-web-use-only-end-client
+            case 'get_pdf':
+                return await getDocumentPdf(data);
+
+            // Fetch document data as JSON using the billing API
+            // Ref: https://docs.tranzila.com/docs/invoices/h7oy1pnmr45jh-get-financial-documents
+            case 'get_documents':
+                return await getDocuments(data);
 
             default:
                 return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
@@ -250,72 +257,93 @@ export async function GET() {
 }
 
 /**
- * Get document from Tranzila.
- * Per official docs, get_document returns application/pdf on success
- * and application/json on error. We use Content-Type to detect success.
+ * Proxy a document PDF to the client.
+ * Endpoint: GET https://my.tranzila.com/api/get_financial_document/{retrieval_key}
+ * This URL is public — no auth headers required.
+ * Ref: https://docs.tranzila.com/docs/invoices/hdj5h8w2jhfuj-get-financial-document-for-web-use-only-end-client
  */
-async function getDocument(data: any = {}) {
+async function getDocumentPdf(data: any = {}) {
+    try {
+        if (!data.retrieval_key) {
+            return NextResponse.json({ error: 'Missing retrieval_key' }, { status: 400 });
+        }
+
+        const pdfUrl = `https://my.tranzila.com/api/get_financial_document/${data.retrieval_key}`;
+        console.log('📄 Fetching PDF from:', pdfUrl);
+
+        const pdfResponse = await fetch(pdfUrl, {
+            method: 'GET',
+            headers: { Accept: 'application/pdf, text/html' },
+        });
+
+        if (!pdfResponse.ok) {
+            return NextResponse.json({ ok: false, error: `Tranzila returned ${pdfResponse.status}` }, { status: 502 });
+        }
+
+        const contentType = pdfResponse.headers.get('content-type') || 'application/pdf';
+        const pdfBuffer = await pdfResponse.arrayBuffer();
+
+        return new NextResponse(pdfBuffer, {
+            status: 200,
+            headers: {
+                'Content-Type': contentType,
+                'Content-Disposition': 'inline; filename="document.pdf"',
+            },
+        });
+    } catch (e: any) {
+        console.error('Error fetching PDF:', e);
+        return NextResponse.json({ ok: false, error: e?.message || 'Unknown error' }, { status: 500 });
+    }
+}
+
+/**
+ * Fetch document data (JSON) from Tranzila billing API.
+ * Endpoint: POST https://billing5.tranzila.com/api/documents_db/get_documents
+ * Accepts: terminal_names (required) + at least one of: transaction_ids, start_date+end_date, client_email
+ * Returns: JSON with documents array including id, number, type, action, retrieval_key, etc.
+ * Ref: https://docs.tranzila.com/docs/invoices/h7oy1pnmr45jh-get-financial-documents
+ */
+async function getDocuments(data: any = {}) {
     try {
         const headers = generateTranzilaAuthHeaders();
 
-        if (!data.document_id) {
-            return NextResponse.json({ error: 'Missing document_id' }, { status: 400 });
-        }
-
-        console.log('📄 ============ TRANZILA GET DOCUMENT REQUEST ============');
-        console.log('🎯 Document ID:', data.document_id);
-        console.log('==================================================');
-
-        const payload = {
-            terminal_name: TRANZILA_CONFIG.terminal,
-            document_id: parseInt(data.document_id),
-            response_language: 'eng',
+        const payload: any = {
+            terminal_names: [TRANZILA_CONFIG.terminal],
         };
 
-        const docUrl = `${TRANZILA_CONFIG.billingApiUrl}/get_document`;
-        const docResponse = await fetch(docUrl, {
+        // At least one search filter is required
+        if (data.transaction_ids) {
+            payload.transaction_ids = Array.isArray(data.transaction_ids) ? data.transaction_ids : [data.transaction_ids];
+        }
+        if (data.start_date) payload.start_date = data.start_date;
+        if (data.end_date) payload.end_date = data.end_date;
+        if (data.client_email) payload.client_email = data.client_email;
+
+        if (!payload.transaction_ids && !payload.start_date && !payload.client_email) {
+            return NextResponse.json({ error: 'Provide at least one of: transaction_ids, start_date+end_date, client_email' }, { status: 400 });
+        }
+
+        console.log('📋 get_documents payload:', JSON.stringify(payload, null, 2));
+
+        const url = `${TRANZILA_CONFIG.billingApiUrl}/get_documents`;
+        const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                ...headers,
-                'Content-Type': 'application/json',
-                Accept: 'application/pdf, application/json',
-            },
+            headers: { ...headers, 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
         });
 
-        const contentType = docResponse.headers.get('content-type') || '';
-
-        if (contentType.includes('application/pdf')) {
-            // Success — Tranzila returned the PDF
-            console.log('✅ Document found (PDF response received)');
-            return NextResponse.json({
-                ok: true,
-                status: docResponse.status,
-                response: { status_code: 0, status_msg: 'Document found' },
-            });
-        }
-
-        // Error — Tranzila returned JSON with status_code / status_msg
-        let errorResult: any = null;
+        let result: any = null;
         try {
-            errorResult = await docResponse.json();
+            result = await response.json();
         } catch {}
 
-        console.log('❌ Get document error:', JSON.stringify(errorResult, null, 2));
-
         return NextResponse.json({
-            ok: false,
-            status: docResponse.status,
-            response: errorResult,
+            ok: response.ok && result?.status_code === 0,
+            status: response.status,
+            response: result,
         });
     } catch (e: any) {
-        console.error('Error getting document:', e);
-        return NextResponse.json(
-            {
-                ok: false,
-                error: e?.message || 'Unknown error',
-            },
-            { status: 500 },
-        );
+        console.error('Error fetching documents:', e);
+        return NextResponse.json({ ok: false, error: e?.message || 'Unknown error' }, { status: 500 });
     }
 }

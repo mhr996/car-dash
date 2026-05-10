@@ -710,11 +710,12 @@ const AddBill = () => {
                     payments: isCreditNote ? [] : tranzilaPayments,
                     created_by_user: 'car-dash',
                     created_by_system: 'car-dash',
-                    // Credit note cancellation parameters
+                    // Cancel document parameters (related_document_number + relation_type per Tranzila docs)
                     ...(isCreditNote && billData.cancel_tranzila_doc_number
                         ? {
                               canceldoc: 'Y',
-                              cancel_document_number: billData.cancel_tranzila_doc_number,
+                              related_document_number: parseInt(billData.cancel_tranzila_doc_number),
+                              relation_type: 1,
                           }
                         : {}),
                 },
