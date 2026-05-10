@@ -105,6 +105,12 @@ const BillsTable: React.FC<BillsTableProps> = ({
                     }
                 }
             }
+
+            // Refund receipts reverse a prior payment — subtract from balance (increase debt)
+            if (bill.bill_type === 'refund_receipt') {
+                const refundAmount = parseFloat(bill.bill_amount || bill.total_with_tax || '0');
+                totalBalance -= Math.abs(refundAmount);
+            }
         });
 
         return totalBalance;
@@ -130,10 +136,10 @@ const BillsTable: React.FC<BillsTableProps> = ({
             return Math.abs(amount);
         }
 
-        // Refund receipts - use bill_amount, display as positive (they reverse receipts)
+        // Refund receipts - always displayed as negative (they reverse a prior payment)
         if (bill.bill_type === 'refund_receipt') {
             const amount = parseFloat(bill.bill_amount || bill.total_with_tax || '0');
-            return Math.abs(amount);
+            return -Math.abs(amount);
         }
 
         // For receipt types, calculate total from payments array if available

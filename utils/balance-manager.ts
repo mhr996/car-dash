@@ -9,24 +9,19 @@ interface BalanceTransaction {
 }
 
 /**
- * Calculates customer balance from customer_transactions table
- * Balance is always calculated dynamically from transaction history
+ * Calculates customer balance by summing all transaction amounts.
+ * Never reads stored balance_after — always computed live.
  */
 export const getCustomerBalance = async (customerId: string): Promise<number> => {
     try {
-        // Get the most recent transaction to get the latest balance_after value
-        const { data, error } = await supabase.from('customer_transactions').select('balance_after').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(1).single();
+        const { data, error } = await supabase.from('customer_transactions').select('amount').eq('customer_id', customerId);
 
         if (error) {
-            // If no transactions found, balance is 0
-            if (error.code === 'PGRST116') {
-                return 0;
-            }
             console.error('Error fetching customer balance:', error);
             return 0;
         }
 
-        return data?.balance_after || 0;
+        return (data || []).reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
     } catch (error) {
         console.error('Error in getCustomerBalance:', error);
         return 0;
@@ -45,37 +40,31 @@ export const getCustomerBalances = async (customerIds: string[]): Promise<Map<st
     }
 
     try {
-        // Get the most recent transaction for each customer
-        const { data, error } = await supabase.from('customer_transactions').select('customer_id, balance_after, created_at').in('customer_id', customerIds).order('created_at', { ascending: false });
+        // Sum all transaction amounts per customer — no stored balance_after used
+        const { data, error } = await supabase.from('customer_transactions').select('customer_id, amount').in('customer_id', customerIds);
 
         if (error) {
             console.error('Error fetching customer balances:', error);
-            // Initialize all customers with 0 balance
             customerIds.forEach((id) => balanceMap.set(id, 0));
             return balanceMap;
         }
 
-        // Group by customer_id and get the most recent balance_after for each
-        const latestBalances = new Map<string, number>();
-
+        // Accumulate amounts per customer
         if (data && data.length > 0) {
-            data.forEach((transaction: any) => {
-                const customerId = transaction.customer_id.toString();
-                if (!latestBalances.has(customerId)) {
-                    latestBalances.set(customerId, transaction.balance_after || 0);
-                }
+            data.forEach((tx: any) => {
+                const id = tx.customer_id.toString();
+                balanceMap.set(id, (balanceMap.get(id) || 0) + (tx.amount || 0));
             });
         }
 
         // Ensure all requested customers have an entry (even if 0)
         customerIds.forEach((id) => {
-            balanceMap.set(id, latestBalances.get(id) || 0);
+            if (!balanceMap.has(id)) balanceMap.set(id, 0);
         });
 
         return balanceMap;
     } catch (error) {
         console.error('Error in getCustomerBalances:', error);
-        // Initialize all customers with 0 balance on error
         customerIds.forEach((id) => balanceMap.set(id, 0));
         return balanceMap;
     }
@@ -87,17 +76,11 @@ export const getCustomerBalances = async (customerIds: string[]): Promise<Map<st
  */
 export const updateCustomerBalance = async (transaction: BalanceTransaction): Promise<boolean> => {
     try {
-        // Get current balance from transactions
-        const currentBalance = await getCustomerBalance(transaction.customerId);
-        const newBalance = currentBalance + transaction.amount;
-
-        // Log the transaction
+        // Insert the transaction — balance is always computed live from the sum of all amounts
         const { error: insertError } = await supabase.from('customer_transactions').insert({
             customer_id: transaction.customerId,
             type: transaction.type,
             amount: transaction.amount,
-            balance_before: currentBalance,
-            balance_after: newBalance,
             reference_id: transaction.referenceId,
             description: transaction.description,
             created_at: new Date().toISOString(),
@@ -108,7 +91,7 @@ export const updateCustomerBalance = async (transaction: BalanceTransaction): Pr
             return false;
         }
 
-        console.log(`Balance updated for customer ${transaction.customerId}: ${currentBalance} -> ${newBalance}`);
+        console.log(`Transaction recorded for customer ${transaction.customerId}: ${transaction.amount > 0 ? '+' : ''}${transaction.amount}`);
         return true;
     } catch (error) {
         console.error('Error in updateCustomerBalance:', error);
@@ -247,8 +230,12 @@ export const handleReceiptCreated = async (billId: string, customerId: string, b
     let balanceChangeAmount = paymentAmount;
     let description = '';
 
-    // For negative bills (expenses/deductions)
-    if (bill.bill_direction === 'negative') {
+    // Refund receipts always reverse a payment — always negative
+    if (bill.bill_type === 'refund_receipt') {
+        description = `Refund: ${getPaymentDescription(bill, payments)}`;
+        balanceChangeAmount = -Math.abs(paymentAmount);
+    } else if (bill.bill_direction === 'negative') {
+        // For negative bills (expenses/deductions)
         description = `Expense: ${getPaymentDescription(bill, payments)}`;
         balanceChangeAmount = -Math.abs(paymentAmount); // Negative impact on balance
     } else {
@@ -310,8 +297,12 @@ export const handleReceiptDeleted = async (billId: string, customerId: string, b
     let balanceChangeAmount = -paymentAmount; // Reverse the original amount
     let description = '';
 
-    // For negative bills (expenses/deductions) - reverse the deduction
-    if (bill.bill_direction === 'negative') {
+    // Refund receipts: deleting a refund restores the original payment — positive
+    if (bill.bill_type === 'refund_receipt') {
+        description = `Reversed refund: ${getPaymentDescription(bill, payments)}`;
+        balanceChangeAmount = Math.abs(paymentAmount); // Positive (restoring the payment that was refunded)
+    } else if (bill.bill_direction === 'negative') {
+        // For negative bills (expenses/deductions) - reverse the deduction
         description = `Reversed expense: ${getPaymentDescription(bill, payments)}`;
         balanceChangeAmount = Math.abs(paymentAmount); // Positive impact (reversing a deduction)
     } else {

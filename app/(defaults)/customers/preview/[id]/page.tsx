@@ -81,24 +81,30 @@ const CustomerPreview = () => {
 
             try {
                 // Fetch real transaction data from customer_transactions table
-                const { data, error } = await supabase.from('customer_transactions').select('*').eq('customer_id', params.id).order('created_at', { ascending: false });
+                // Order ascending so we can compute running balance_after on the frontend
+                const { data, error } = await supabase.from('customer_transactions').select('*').eq('customer_id', params.id).order('created_at', { ascending: true });
 
                 if (error) {
                     console.error('Error fetching transactions:', error);
                     // If table doesn't exist yet, use empty array
                     setTransactions([]);
                 } else {
-                    // Convert the data to match our Transaction interface
-                    const convertedTransactions: Transaction[] = (data || []).map((tx) => ({
-                        id: tx.id,
-                        created_at: tx.created_at,
-                        type: getTransactionTypeFromDbType(tx.type),
-                        amount: tx.amount,
-                        description: tx.description || '',
-                        reference_id: tx.reference_id,
-                        balance_after: tx.balance_after,
-                    }));
-                    setTransactions(convertedTransactions);
+                    // Compute balance_after as a running total — never read stored value
+                    let running = 0;
+                    const convertedTransactions: Transaction[] = (data || []).map((tx) => {
+                        running += tx.amount || 0;
+                        return {
+                            id: tx.id,
+                            created_at: tx.created_at,
+                            type: getTransactionTypeFromDbType(tx.type),
+                            amount: tx.amount,
+                            description: tx.description || '',
+                            reference_id: tx.reference_id,
+                            balance_after: running,
+                        };
+                    });
+                    // Show most recent first in the table
+                    setTransactions(convertedTransactions.reverse());
                 }
             } catch (error) {
                 console.error('Error:', error);
@@ -120,11 +126,7 @@ const CustomerPreview = () => {
         const fetchCustomerMessages = async () => {
             setMessagesLoading(true);
             try {
-                const { data, error } = await supabase
-                    .from('messages')
-                    .select('*')
-                    .eq('recipient', customer.name)
-                    .order('created_at', { ascending: false });
+                const { data, error } = await supabase.from('messages').select('*').eq('recipient', customer.name).order('created_at', { ascending: false });
 
                 if (error) throw error;
                 setCustomerMessages(data || []);
@@ -479,11 +481,7 @@ const CustomerPreview = () => {
                                         accessor: 'status',
                                         title: t('status'),
                                         sortable: true,
-                                        render: ({ status }) => (
-                                            <span className={`badge ${status === 'sent' ? 'badge-outline-success' : 'badge-outline-warning'}`}>
-                                                {status}
-                                            </span>
-                                        ),
+                                        render: ({ status }) => <span className={`badge ${status === 'sent' ? 'badge-outline-success' : 'badge-outline-warning'}`}>{status}</span>,
                                     },
                                 ]}
                                 minHeight={150}

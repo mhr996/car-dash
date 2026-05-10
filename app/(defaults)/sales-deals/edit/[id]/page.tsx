@@ -804,10 +804,13 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
         // Calculate total payments from bills
         let totalPaid = 0;
         bills.forEach((bill) => {
-            const billAmount = getBillAmount(bill);
-            // Only count positive bills (receipts) as payments
-            if (bill.bill_direction !== 'negative') {
-                totalPaid += billAmount;
+            if (bill.bill_type === 'refund_receipt') {
+                // Refund receipts reverse a prior payment — subtract from totalPaid
+                const refundAmount = getBillAmount(bill);
+                totalPaid -= Math.abs(refundAmount);
+            } else if (bill.bill_direction !== 'negative') {
+                // Only count positive bills (receipts) as payments
+                totalPaid += getBillAmount(bill);
             }
         });
 
@@ -1977,6 +1980,9 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 const totalPaid = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
                 const sellingPrice = deal?.selling_price || 0;
                 finalBillDirection = totalPaid > sellingPrice ? 'positive' : 'negative';
+            } else if (billForm.bill_type === 'refund_receipt') {
+                // Refund receipts always negative — they reverse a prior payment
+                finalBillDirection = 'negative';
             }
 
             // For receipts, we'll use multiple payments structure

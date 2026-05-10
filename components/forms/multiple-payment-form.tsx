@@ -309,15 +309,18 @@ export const MultiplePaymentForm: React.FC<MultiplePaymentFormProps> = ({ paymen
         // Calculate total payments from existing bills
         let totalPaidFromBills = 0;
         bills.forEach((bill) => {
-            // Only count positive bills (receipts) as payments
-            if (bill.bill_direction !== 'negative') {
+            if (bill.bill_type === 'refund_receipt') {
+                // Refund receipts reverse a prior payment — subtract from totalPaid
+                const refundAmount = parseFloat(bill.bill_amount || '0') || 0;
+                totalPaidFromBills -= Math.abs(refundAmount);
+            } else if (bill.bill_direction !== 'negative') {
+                // Only count positive bills (receipts) as payments
                 if (bill.bill_type === 'general') {
                     totalPaidFromBills += parseFloat(bill.bill_amount || '0');
-                } else if (bill.bill_type === 'tax_invoice') {
-                    totalPaidFromBills += parseFloat(bill.total_with_tax || '0');
                 } else if (bill.bill_type === 'receipt_only' || bill.bill_type === 'tax_invoice_receipt') {
-                    if (bill.payments && bill.payments.length > 0) {
-                        totalPaidFromBills += bill.payments.reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
+                    const paymentsArray = bill.payments || bill.bill_payments;
+                    if (paymentsArray && paymentsArray.length > 0) {
+                        totalPaidFromBills += paymentsArray.reduce((sum: number, payment: any) => sum + (payment.amount || 0), 0);
                     }
                 }
             }

@@ -79,7 +79,6 @@ const DealsList = () => {
         }
     }, []);
 
-
     // Save view preference when changed
     const handleViewChange = (view: 'list' | 'grid') => {
         setViewMode(view);
@@ -231,10 +230,7 @@ const DealsList = () => {
                 // Bill status filter
                 const bills = item.bills as any[] | undefined;
                 const hasBills = bills && bills.length > 0;
-                const billStatusMatch =
-                    !activeFilters.billStatus ||
-                    (activeFilters.billStatus === 'has_bill' && hasBills) ||
-                    (activeFilters.billStatus === 'no_bill' && !hasBills);
+                const billStatusMatch = !activeFilters.billStatus || (activeFilters.billStatus === 'has_bill' && hasBills) || (activeFilters.billStatus === 'no_bill' && !hasBills);
 
                 // Date range
                 const dateFrom = activeFilters.dateFrom ? new Date(activeFilters.dateFrom) : null;
@@ -519,6 +515,13 @@ const DealsList = () => {
                     }
                 }
             }
+
+            // Refund receipts reverse a prior payment — subtract from balance (increase debt)
+            if (bill.bill_type === 'refund_receipt') {
+                const refundAmount =
+                    bill.bill_payments && bill.bill_payments.length > 0 ? bill.bill_payments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) : parseFloat(bill.bill_amount || '0') || 0;
+                totalBalance -= Math.abs(refundAmount);
+            }
         });
 
         return totalBalance;
@@ -575,9 +578,7 @@ const DealsList = () => {
                     <div className="flex-grow">
                         <DealFilters
                             initialFilters={
-                                searchParams?.get('billStatus') === 'no_bill' || searchParams?.get('billStatus') === 'has_bill'
-                                    ? { billStatus: searchParams.get('billStatus')! }
-                                    : undefined
+                                searchParams?.get('billStatus') === 'no_bill' || searchParams?.get('billStatus') === 'has_bill' ? { billStatus: searchParams.get('billStatus')! } : undefined
                             }
                             onFilterChange={(newFilters) => {
                                 setActiveFilters(newFilters);
