@@ -654,6 +654,7 @@ import IconPaperclip from '@/components/icon/icon-paperclip';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconTrashLines from '@/components/icon/icon-trash-lines';
 import IconMinusCircle from '@/components/icon/icon-minus-circle';
+import DateInput from '@/components/elements/date-input';
 
 const EditDeal = ({ params }: { params: { id: string } }) => {
     const { t } = getTranslation();
@@ -744,6 +745,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             currency: 'ILS',
         }).format(amount);
     };
+
+
 
     // Helper function to get bill amount based on bill type and payment method
     const getBillAmount = (bill: any) => {
@@ -2499,13 +2502,10 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                     </div>
                                 </div>
                                 <div className="relative">
-                                    <input
-                                        type="date"
-                                        lang="en-GB"
+                                    <DateInput
                                         value={dealDate}
-                                        onChange={(e) => setDealDate(e.target.value)}
-                                        className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                        style={{ colorScheme: 'light' }}
+                                        onChange={setDealDate}
+                                        className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
                                         disabled={deal?.status === 'completed'}
                                     />
                                     <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
@@ -3298,14 +3298,10 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                     </div>
                                                 </div>
                                                 <div className="relative">
-                                                    <input
-                                                        type="date"
-                                                        lang="en-GB"
-                                                        name="date"
+                                                    <DateInput
                                                         value={billForm.date}
-                                                        onChange={handleBillFormChange}
-                                                        className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                                        style={{ colorScheme: 'light' }}
+                                                        onChange={(val) => setBillForm((prev) => ({ ...prev, date: val }))}
+                                                        className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
                                                     />
                                                     <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
                                                         <IconCalendar className="w-5 h-5 text-gray-400" />
@@ -4328,12 +4324,10 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 <label htmlFor="cancelDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                                     {t('cancellation_date')}
                                 </label>
-                                <input
+                                <DateInput
                                     id="cancelDate"
-                                    type="date"
-                                    lang="en-GB"
                                     value={cancelDealDate}
-                                    onChange={(e) => setCancelDealDate(e.target.value)}
+                                    onChange={setCancelDealDate}
                                     className="form-input w-full"
                                     disabled={cancellingDeal}
                                 />

@@ -6,6 +6,7 @@ import IconCaretDown from '@/components/icon/icon-caret-down';
 import BrandSelect from '@/components/brand-select/brand-select';
 import ProviderSelect from '@/components/provider-select/provider-select';
 import { getTranslation } from '@/i18n';
+import DateInput from '@/components/elements/date-input';
 
 interface FilterProps {
     onFilterChange: (filters: CarFilters) => void;
@@ -262,13 +263,13 @@ const CarFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) =
                         {/* Date From Filter */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('date_from')}</label>
-                            <input type="date" lang="en-GB" className="form-input" value={filters.dateFrom} onChange={(e) => handleInputChange('dateFrom', e.target.value)} />
+                            <DateInput className="form-input" value={filters.dateFrom} onChange={(v) => handleInputChange('dateFrom', v)} />
                         </div>
 
                         {/* Date To Filter */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('date_to')}</label>
-                            <input type="date" lang="en-GB" className="form-input" value={filters.dateTo} onChange={(e) => handleInputChange('dateTo', e.target.value)} />
+                            <DateInput className="form-input" value={filters.dateTo} onChange={(v) => handleInputChange('dateTo', v)} />
                         </div>
                     </div>
                 </div>

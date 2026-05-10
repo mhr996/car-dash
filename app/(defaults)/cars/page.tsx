@@ -18,6 +18,7 @@ import { PermissionGuard } from '@/components/auth/permission-guard';
 import ViewToggle from '@/components/view-toggle/view-toggle';
 import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
 import { CarContract } from '@/types/contract';
+import DateInput from '@/components/elements/date-input';
 import { getCompanyInfo } from '@/lib/company-info';
 import IconFile from '@/components/icon/icon-file';
 
@@ -1037,7 +1038,7 @@ const CarsList = () => {
                                 <label htmlFor="returnDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                                     {t('return_date')}
                                 </label>
-                                <input id="returnDate" type="date" lang="en-GB" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="form-input w-full" />
+                                <DateInput id="returnDate" value={returnDate} onChange={setReturnDate} className="form-input w-full" />
                             </div>
                         </div>
 

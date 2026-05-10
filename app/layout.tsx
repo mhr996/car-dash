@@ -20,7 +20,7 @@ const almarai = Almarai({
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
-        <html lang="he" dir="rtl">
+        <html lang="en-GB" dir="rtl">
             <body className={almarai.variable}>
                 <ProviderComponent>{children}</ProviderComponent>
             </body>

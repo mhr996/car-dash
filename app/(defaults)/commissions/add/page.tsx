@@ -11,6 +11,7 @@ import IconTrash from '@/components/icon/icon-trash';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconUser from '@/components/icon/icon-user';
 import IconCalendar from '@/components/icon/icon-calendar';
+import DateInput from '@/components/elements/date-input';
 import IconMinusCircle from '@/components/icon/icon-minus-circle';
 import ProviderSelect from '@/components/provider-select/provider-select';
 import CommissionTypeSelect from '@/components/commission-type-select/commission-type-select';
@@ -706,17 +707,11 @@ const AddCommission = () => {
                                 </div>
                             </div>
                             <div className="relative">
-                                <input
-                                    type="date"
-                                    lang="en-GB"
+                                <DateInput
                                     value={commissionDate}
-                                    onChange={(e) => setCommissionDate(e.target.value)}
-                                    className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                    style={{ colorScheme: 'light' }}
+                                    onChange={setCommissionDate}
+                                    className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
                                 />
-                                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                                    <IconCalendar className="w-5 h-5 text-gray-400" />
-                                </div>
                             </div>
                         </div>
                     )}

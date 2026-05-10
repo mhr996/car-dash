@@ -17,6 +17,7 @@ import TypeSelect from '@/components/type-select/type-select';
 import CreateCustomerModal from '@/components/modals/create-customer-modal';
 import { logActivity } from '@/utils/activity-logger';
 import { usePermissions } from '@/hooks/usePermissions';
+import DateInput from '@/components/elements/date-input';
 
 interface ColorVariant {
     id: string;
@@ -718,7 +719,7 @@ const AddCar = () => {
                                     <label htmlFor="created_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                         {t('created_date')}
                                     </label>
-                                    <input type="date" lang="en-GB" id="created_date" name="created_date" value={form.created_date} onChange={handleInputChange} className="form-input" />
+                                    <DateInput id="created_date" value={form.created_date} onChange={(val) => handleInputChange({ target: { name: 'created_date', value: val } } as any)} className="form-input" />
                                 </div>
                                 {/* Brand */}
                                 <div>

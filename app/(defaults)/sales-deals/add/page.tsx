@@ -17,6 +17,7 @@ import IconMenuWidgets from '@/components/icon/menu/icon-menu-widgets';
 import IconDollarSign from '@/components/icon/icon-dollar-sign';
 import IconNotes from '@/components/icon/icon-notes';
 import IconCalendar from '@/components/icon/icon-calendar';
+import DateInput from '@/components/elements/date-input';
 import { uploadMultipleFiles } from '@/utils/file-upload';
 import { formatCurrency } from '@/utils/number-formatter';
 import { formatDate } from '@/utils/date-formatter';
@@ -1721,12 +1722,10 @@ const AddDeal = () => {
                         <label htmlFor="commission_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                             {t('commission_date')} <span className="text-red-500">*</span>
                         </label>
-                        <input
-                            type="date" lang="en-GB"
+                        <DateInput
                             id="commission_date"
-                            name="commission_date"
                             value={companyCommissionForm.commission_date}
-                            onChange={handleCompanyCommissionFormChange}
+                            onChange={(val) => handleCompanyCommissionFormChange({ target: { name: 'commission_date', value: val } } as any)}
                             className="form-input"
                         />
                     </div>
@@ -2510,16 +2509,11 @@ const AddDeal = () => {
                             </div>
                         </div>
                         <div className="relative">
-                            <input
-                                type="date" lang="en-GB"
+                            <DateInput
                                 value={dealDate}
-                                onChange={(e) => setDealDate(e.target.value)}
-                                className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                style={{ colorScheme: 'light' }}
+                                onChange={setDealDate}
+                                className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
                             />
-                            <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                                <IconCalendar className="w-5 h-5 text-gray-400" />
-                            </div>
                         </div>
                     </div>
                 )}{' '}

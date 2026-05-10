@@ -4,6 +4,7 @@ import IconUser from '@/components/icon/icon-user';
 import { getTranslation } from '@/i18n';
 import CustomerTypeSelect from '@/components/customer-type-select/customer-type-select';
 import supabase from '@/lib/supabase';
+import DateInput from '@/components/elements/date-input';
 
 interface Customer {
     id: string;
@@ -231,12 +232,10 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
                             <label htmlFor="birth_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                 {t('birth_date')}
                             </label>
-                            <input
-                                type="date" lang="en-GB"
+                            <DateInput
                                 id="birth_date"
-                                name="birth_date"
                                 value={form.birth_date}
-                                onChange={handleInputChange}
+                                onChange={(val) => handleInputChange({ target: { name: 'birth_date', value: val } } as any)}
                                 className={`form-input ${errors.birth_date ? 'border-red-500' : ''}`}
                             />
                             {errors.birth_date && <p className="text-red-500 text-xs mt-1">{errors.birth_date}</p>}
