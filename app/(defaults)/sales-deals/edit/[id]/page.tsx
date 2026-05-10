@@ -134,7 +134,7 @@ interface BillPayment {
 /**
  * Create invoice/receipt document in Tranzila
  */
-const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null, selectedCar?: Car | null) => {
+const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null, selectedCar?: Car | null, existingBills: any[] = []) => {
     const { t } = getTranslation();
     try {
         // Map bill type to Tranzila document type
@@ -564,7 +564,7 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
 
             // Use payments already loaded with the bills state — no need to call Tranzila
             // (get_document only returns a PDF, not JSON payment data)
-            const originalBill = bills.find((b: any) => b.id.toString() === billData.cancel_bill_id);
+            const originalBill = existingBills.find((b: any) => b.id.toString() === billData.cancel_bill_id);
             const originalPayments: any[] = originalBill?.payments || [];
 
             if (originalPayments.length === 0) {
@@ -2089,7 +2089,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             // Create document in Tranzila - THIS IS MANDATORY
             // If Tranzila fails, we'll rollback the bill creation
             try {
-                await createTranzilaDocument(billResult.id, billData, payments, deal, selectedCar);
+                await createTranzilaDocument(billResult.id, billData, payments, deal, selectedCar, bills);
             } catch (tranzilaError) {
                 // Rollback: Delete the bill and payments that were just created
                 await supabase.from('bills').delete().eq('id', billResult.id);
