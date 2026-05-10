@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -2491,7 +2491,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 </div>
                                 <div className="relative">
                                     <input
-                                        type="date"
+                                        type="date" lang="en-GB"
                                         value={dealDate}
                                         onChange={(e) => setDealDate(e.target.value)}
                                         className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
@@ -3289,7 +3289,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                 </div>
                                                 <div className="relative">
                                                     <input
-                                                        type="date"
+                                                        type="date" lang="en-GB"
                                                         name="date"
                                                         value={billForm.date}
                                                         onChange={handleBillFormChange}
@@ -4317,7 +4317,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 <label htmlFor="cancelDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                                     {t('cancellation_date')}
                                 </label>
-                                <input id="cancelDate" type="date" value={cancelDealDate} onChange={(e) => setCancelDealDate(e.target.value)} className="form-input w-full" disabled={cancellingDeal} />
+                                <input id="cancelDate" type="date" lang="en-GB" value={cancelDealDate} onChange={(e) => setCancelDealDate(e.target.value)} className="form-input w-full" disabled={cancellingDeal} />
                             </div>
 
                             <div>

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -718,7 +718,7 @@ const AddCar = () => {
                                     <label htmlFor="created_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                         {t('created_date')}
                                     </label>
-                                    <input type="date" id="created_date" name="created_date" value={form.created_date} onChange={handleInputChange} className="form-input" />
+                                    <input type="date" lang="en-GB" id="created_date" name="created_date" value={form.created_date} onChange={handleInputChange} className="form-input" />
                                 </div>
                                 {/* Brand */}
                                 <div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import IconX from '@/components/icon/icon-x';
 import IconUser from '@/components/icon/icon-user';
 import { getTranslation } from '@/i18n';
@@ -232,7 +232,7 @@ const CreateCustomerModal = ({ isOpen, onClose, onCustomerCreated }: CreateCusto
                                 {t('birth_date')}
                             </label>
                             <input
-                                type="date"
+                                type="date" lang="en-GB"
                                 id="birth_date"
                                 name="birth_date"
                                 value={form.birth_date}

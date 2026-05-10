@@ -1037,7 +1037,7 @@ const CarsList = () => {
                                 <label htmlFor="returnDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                                     {t('return_date')}
                                 </label>
-                                <input id="returnDate" type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="form-input w-full" />
+                                <input id="returnDate" type="date" lang="en-GB" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} className="form-input w-full" />
                             </div>
                         </div>
 

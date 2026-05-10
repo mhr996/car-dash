@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import IconSearch from '@/components/icon/icon-search';
 import IconFilter from '@/components/icon/icon-filter';
 import IconX from '@/components/icon/icon-x';
@@ -227,13 +227,13 @@ const BillFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters }) 
                         {/* Date From Filter */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('date_from')}</label>
-                            <input type="date" className="form-input" value={filters.dateFrom} onChange={(e) => handleInputChange('dateFrom', e.target.value)} />
+                            <input type="date" lang="en-GB" className="form-input" value={filters.dateFrom} onChange={(e) => handleInputChange('dateFrom', e.target.value)} />
                         </div>
 
                         {/* Date To Filter */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('date_to')}</label>
-                            <input type="date" className="form-input" value={filters.dateTo} onChange={(e) => handleInputChange('dateTo', e.target.value)} />
+                            <input type="date" lang="en-GB" className="form-input" value={filters.dateTo} onChange={(e) => handleInputChange('dateTo', e.target.value)} />
                         </div>
                     </div>
                 </div>
