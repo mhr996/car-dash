@@ -458,9 +458,12 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                     // payment_method 1 - Credit Card
                     const visaFields: Record<string, any> = {};
                     if (payment.visa_last_four) visaFields.cc_last_4_digits = payment.visa_last_four;
-                    // Tranzila requires cc_installments_number >= 2; omit for single-payment (Regular)
                     if (payment.visa_installments && payment.visa_installments >= 2) {
+                        // cc_credit_term 8 = Payments (installment plan); must accompany cc_installments_number
+                        visaFields.cc_credit_term = 8;
                         visaFields.cc_installments_number = payment.visa_installments;
+                    } else {
+                        visaFields.cc_credit_term = 1; // 1 = Regular (single payment)
                     }
                     return { ...basePayment, ...visaFields };
                 } else if (payment.payment_type === 'check') {

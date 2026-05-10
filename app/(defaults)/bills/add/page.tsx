@@ -617,9 +617,12 @@ const AddBill = () => {
                         // payment_method 1 - Credit Card
                         const visaFields: Record<string, any> = {};
                         if (payment.visa_last_four) visaFields.cc_last_4_digits = payment.visa_last_four;
-                        // Tranzila requires cc_installments_number >= 2; omit for single-payment (Regular)
                         if (payment.visa_installments && payment.visa_installments >= 2) {
+                            // cc_credit_term 8 = Payments (installment plan); must accompany cc_installments_number
+                            visaFields.cc_credit_term = 8;
                             visaFields.cc_installments_number = payment.visa_installments;
+                        } else {
+                            visaFields.cc_credit_term = 1; // 1 = Regular (single payment)
                         }
                         return { ...basePayment, ...visaFields };
                     } else if (payment.payment_type === 'check') {
@@ -1273,7 +1276,8 @@ const AddBill = () => {
                         </div>
                         <div className="relative">
                             <input
-                                type="date" lang="en-GB"
+                                type="date"
+                                lang="en-GB"
                                 value={billDate}
                                 onChange={(e) => setBillDate(e.target.value)}
                                 className="form-input bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:w-5 [&::-webkit-calendar-picker-indicator]:h-5 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
