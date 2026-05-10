@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
  * - Set `canceldoc: 'Y'` to mark as a credit document
  * - Add document relation with type 1 (by number) or 2 (by id) to reference original
  *
- * Document Relation Types:
+ * Document Relation Types (inside document_relations array):
  * - 1 = Cancelling document number - for whole document cancellation
  * - 2 = Cancelling document id - for whole document cancellation
  *
@@ -168,16 +168,20 @@ async function createDocument(data: any = {}) {
         };
 
         // For credit notes / cancellation documents:
-        // Per official Tranzila docs, use top-level fields:
+        // Per official Tranzila docs, use document_relations array:
         //   canceldoc: 'Y'
-        //   related_document_number: <integer>  (the original document's number)
-        //   relation_type: 1  (1 = by document number, 2 = by document id)
+        //   document_relations: [{ type: 1, number: "<doc_number>" }]
+        //   type 1 = by document number, type 2 = by document id
         if (data.canceldoc === 'Y') {
             payload.canceldoc = 'Y';
 
             if (data.related_document_number) {
-                payload.related_document_number = data.related_document_number;
-                payload.relation_type = data.relation_type;
+                payload.document_relations = [
+                    {
+                        type: data.relation_type || 1,
+                        number: String(data.related_document_number),
+                    },
+                ];
             }
         }
 
@@ -191,8 +195,7 @@ async function createDocument(data: any = {}) {
         console.log('💳 Payments count:', payload.payments.length);
         if (payload.canceldoc) {
             console.log('🔄 This is a CREDIT/CANCELLATION document');
-            console.log('🔄 related_document_number:', payload.related_document_number);
-            console.log('🔄 relation_type:', payload.relation_type);
+            console.log('🔄 document_relations:', JSON.stringify(payload.document_relations));
         }
         console.log('==================================================');
 
