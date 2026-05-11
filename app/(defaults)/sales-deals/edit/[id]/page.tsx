@@ -746,8 +746,6 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
         }).format(amount);
     };
 
-
-
     // Helper function to get bill amount based on bill type and payment method
     const getBillAmount = (bill: any) => {
         if (bill.bill_type === 'general') {
@@ -4324,13 +4322,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 <label htmlFor="cancelDate" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
                                     {t('cancellation_date')}
                                 </label>
-                                <DateInput
-                                    id="cancelDate"
-                                    value={cancelDealDate}
-                                    onChange={setCancelDealDate}
-                                    className="form-input w-full"
-                                    disabled={cancellingDeal}
-                                />
+                                <DateInput id="cancelDate" value={cancelDealDate} onChange={setCancelDealDate} className="form-input w-full" disabled={cancellingDeal} />
                             </div>
 
                             <div>

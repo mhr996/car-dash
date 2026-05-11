@@ -221,7 +221,13 @@ const DealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters, in
                         {/* Bill Status Filter */}
                         <div className="space-y-2">
                             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('bill_status')}</label>
-                            <CustomSelect options={billStatusOptions} value={filters.billStatus} onChange={(value) => handleInputChange('billStatus', value)} placeholder={t('all')} className="form-select" />
+                            <CustomSelect
+                                options={billStatusOptions}
+                                value={filters.billStatus}
+                                onChange={(value) => handleInputChange('billStatus', value)}
+                                placeholder={t('all')}
+                                className="form-select"
+                            />
                         </div>
 
                         {/* Date From Filter */}

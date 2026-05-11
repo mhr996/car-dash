@@ -473,10 +473,15 @@ const DealsList = () => {
             totalBalance += carEvaluationAmount; // Add as credit (positive impact)
         }
 
-        // Deduct register orders (أمر سجل)
+        // Handle register orders based on direction (أمر سجل)
         if (deal?.register_orders && Array.isArray(deal.register_orders) && deal.register_orders.length > 0) {
-            const totalDeductions = deal.register_orders.reduce((sum: number, order: any) => sum + (order.amount || 0), 0);
-            totalBalance -= totalDeductions;
+            deal.register_orders.forEach((order: any) => {
+                if (order.direction === 'positive') {
+                    totalBalance += order.amount || 0; // Positive adds to balance (reduces debt)
+                } else {
+                    totalBalance -= order.amount || 0; // Negative (default) deducts from balance (increases debt)
+                }
+            });
         }
 
         if (!bills || bills.length === 0) return totalBalance;

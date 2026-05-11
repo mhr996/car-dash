@@ -719,7 +719,12 @@ const AddCar = () => {
                                     <label htmlFor="created_date" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
                                         {t('created_date')}
                                     </label>
-                                    <DateInput id="created_date" value={form.created_date} onChange={(val) => handleInputChange({ target: { name: 'created_date', value: val } } as any)} className="form-input" />
+                                    <DateInput
+                                        id="created_date"
+                                        value={form.created_date}
+                                        onChange={(val) => handleInputChange({ target: { name: 'created_date', value: val } } as any)}
+                                        className="form-input"
+                                    />
                                 </div>
                                 {/* Brand */}
                                 <div>
