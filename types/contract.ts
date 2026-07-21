@@ -57,7 +57,7 @@ export interface CarContract {
     carEngineNumber: string;
     carKilometers: number;
 
-    // Trade-in Car Info (optional)
+    // Trade-in Car Info (optional) — singular kept for backward compatibility
     tradeInCar?: {
         type: string;
         make: string;
@@ -67,6 +67,16 @@ export interface CarContract {
         kilometers: number;
         estimatedValue: number;
     };
+    /** Multiple customer trade-in cars (exchange deals) */
+    tradeInCars?: Array<{
+        type: string;
+        make: string;
+        model: string;
+        plateNumber: string;
+        year: number;
+        kilometers: number;
+        estimatedValue: number;
+    }>;
 
     // Exchange deal specific fields
     additionalCustomerAmount?: number; // Amount customer pays when company car is more expensive

@@ -266,10 +266,11 @@ interface MultiplePaymentFormProps {
     totalAmount: number;
     deal?: any; // Deal information for balance calculation
     carTakenFromClient?: any; // Car taken from client for exchange deals
+    carsTakenFromClient?: any[];
     bills?: any[]; // Existing bills for balance calculation
 }
 
-export const MultiplePaymentForm: React.FC<MultiplePaymentFormProps> = ({ payments, onPaymentsChange, totalAmount, deal, carTakenFromClient, bills = [] }) => {
+export const MultiplePaymentForm: React.FC<MultiplePaymentFormProps> = ({ payments, onPaymentsChange, totalAmount, deal, carTakenFromClient, carsTakenFromClient, bills = [] }) => {
     const { t } = getTranslation();
 
     const addPayment = () => {
@@ -300,9 +301,12 @@ export const MultiplePaymentForm: React.FC<MultiplePaymentFormProps> = ({ paymen
 
         let dealAmount = deal.selling_price || deal.amount || 0;
 
-        // For exchange deals, subtract the customer car evaluation value
-        if (deal.deal_type === 'exchange' && carTakenFromClient) {
-            const carEvaluation = carTakenFromClient.buy_price || 0;
+        // For exchange deals, subtract the total customer cars evaluation value
+        if (deal.deal_type === 'exchange') {
+            const cars = carsTakenFromClient?.length ? carsTakenFromClient : carTakenFromClient ? [carTakenFromClient] : [];
+            const carEvaluation =
+                deal.customer_car_eval_value ||
+                cars.reduce((sum: number, c: any) => sum + (parseFloat(String(c?.buy_price || 0)) || 0), 0);
             dealAmount -= carEvaluation;
         }
 

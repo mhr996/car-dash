@@ -23,7 +23,8 @@ export interface Deal {
     car_id?: string;
     seller_id?: string;
     buyer_id?: string;
-    car_taken_from_client?: string; // For exchange deals - links to the car received from client
+    car_taken_from_client?: string; // For exchange deals - first car received from client (backward compat)
+    cars_taken_from_client?: string[]; // All cars received from client in an exchange deal
 
     // Exchange deal specific fields
     customer_car_eval_value?: number;

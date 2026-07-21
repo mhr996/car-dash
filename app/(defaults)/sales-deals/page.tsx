@@ -24,6 +24,7 @@ import IconDocument from '@/components/icon/icon-document';
 import IconPdf from '@/components/icon/icon-pdf';
 import IconCaretDown from '@/components/icon/icon-caret-down';
 import { usePermissions } from '@/hooks/usePermissions';
+import { getTradeInCarIds, mapCarToTradeInInfo } from '@/utils/trade-in-cars';
 
 type DealType = 'new_used_sale' | 'new_sale' | 'used_sale' | 'new_used_sale_tax_inclusive' | 'exchange' | 'intermediary' | 'financing_assistance_intermediary' | 'company_commission' | '';
 
@@ -149,7 +150,8 @@ const DealsList = () => {
                             type,
                             kilometers,
                             buy_price
-                        )${
+                        ),
+                        cars_taken_from_client${
                             hasPermission('view_bills')
                                 ? `,
                         bills (
@@ -317,6 +319,24 @@ const DealsList = () => {
                 contractDealType = deal.deal_type;
             }
 
+            // Load all trade-in cars for exchange deals
+            let tradeInCarsMapped: ReturnType<typeof mapCarToTradeInInfo>[] = [];
+            if (deal.deal_type === 'exchange') {
+                const tradeInIds = getTradeInCarIds({
+                    car_taken_from_client: deal.car_taken_from_client?.id || (typeof deal.car_taken_from_client === 'string' ? deal.car_taken_from_client : null),
+                    cars_taken_from_client: deal.cars_taken_from_client,
+                });
+                if (tradeInIds.length > 0) {
+                    const { data: tradeInRows } = await supabase.from('cars').select('id, title, brand, car_number, year, type, kilometers, buy_price').in('id', tradeInIds);
+                    if (tradeInRows) {
+                        const byId = new Map(tradeInRows.map((c: any) => [c.id, c]));
+                        tradeInCarsMapped = tradeInIds.map((id) => byId.get(id)).filter(Boolean).map(mapCarToTradeInInfo);
+                    }
+                } else if (deal.car_taken_from_client && typeof deal.car_taken_from_client === 'object') {
+                    tradeInCarsMapped = [mapCarToTradeInInfo(deal.car_taken_from_client)];
+                }
+            }
+
             // Create contract data following the same logic as preview page
             const contractData: CarContract = {
                 dealType: contractDealType as any,
@@ -381,17 +401,10 @@ const DealsList = () => {
                     paymentNotes: deal.payment_notes,
                 }),
 
-                // Trade-in car info if applicable (for exchange deals)
-                ...(deal.car_taken_from_client && {
-                    tradeInCar: {
-                        type: deal.car_taken_from_client.type || '',
-                        make: deal.car_taken_from_client.brand || '',
-                        model: deal.car_taken_from_client.title || '',
-                        plateNumber: deal.car_taken_from_client.car_number || '',
-                        year: parseInt(deal.car_taken_from_client.year) || 0,
-                        kilometers: parseFloat(deal.car_taken_from_client.kilometers) || 0,
-                        estimatedValue: parseFloat(deal.car_taken_from_client.buy_price) || 0,
-                    },
+                // Trade-in car info if applicable (for exchange deals — supports multiple)
+                ...(tradeInCarsMapped.length > 0 && {
+                    tradeInCar: tradeInCarsMapped[0],
+                    tradeInCars: tradeInCarsMapped,
                     additionalCustomerAmount: deal.additional_customer_amount || 0,
                     additionalCompanyAmount: deal.additional_company_amount || 0,
                 }),

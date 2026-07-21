@@ -26,6 +26,9 @@ import { logActivity } from '@/utils/activity-logger';
 import { handleDealCreated, getCustomerIdFromDeal } from '@/utils/balance-manager';
 import DealPaymentMethods, { PaymentMethod } from '@/components/deal-payment-methods/deal-payment-methods';
 import { usePermissions } from '@/hooks/usePermissions';
+import IconPlus from '@/components/icon/icon-plus';
+import IconTrash from '@/components/icon/icon-trash';
+import { emptyOldCarForm, OldCarFormFields, sumOldCarsPurchasePrice } from '@/utils/trade-in-cars';
 
 const AddDeal = () => {
     const { t } = getTranslation();
@@ -53,26 +56,27 @@ const AddDeal = () => {
         tax_percentage: '18', // Default tax percentage
     });
 
-    // Form state for exchange deal
+    // Form state for exchange deal (supports multiple customer trade-in cars)
     const [exchangeForm, setExchangeForm] = useState({
         title: '',
         notes: '',
-        selling_price: '', // Add selling price field
-        // Customer old car details
-        old_car_manufacturer: '',
-        old_car_name: '',
-        old_car_year: '',
-        old_car_kilometers: '',
-        old_car_condition: '', // يد
-        old_car_number: '', // رقم السيارة
-        old_car_market_price: '',
-        old_car_purchase_price: '',
-        // Exchange calculation fields
-        customer_car_eval_value: '', // تم تبديل على سيارة وتم تقييمها ب
-        additional_customer_amount: '', // المبلغ المضاف من الزبون
-        additional_company_amount: '', // المبلغ المضاف من الشركة
-        loss_amount: '', // Manual loss/deductions
+        selling_price: '',
+        oldCars: [emptyOldCarForm()] as OldCarFormFields[],
+        customer_car_eval_value: '',
+        additional_customer_amount: '',
+        additional_company_amount: '',
+        loss_amount: '',
     });
+
+    const recalculateExchangeAmounts = (oldCars: OldCarFormFields[], salePrice: number) => {
+        const totalPurchase = sumOldCarsPurchasePrice(oldCars);
+        const difference = salePrice - totalPurchase;
+        return {
+            customer_car_eval_value: totalPurchase.toString(),
+            additional_customer_amount: difference > 0 ? difference.toString() : '0',
+            additional_company_amount: difference < 0 ? Math.abs(difference).toString() : '0',
+        };
+    };
     // Form state for company commission deal
     const [companyCommissionForm, setCompanyCommissionForm] = useState({
         title: '',
@@ -238,28 +242,8 @@ const AddDeal = () => {
                         selling_price: newSellingPrice,
                     };
 
-                    // Auto-calculate display fields if old car purchase price exists
-                    if (prev.old_car_purchase_price && selectedCar) {
-                        const purchasePrice = parseFloat(prev.old_car_purchase_price);
-                        const salePrice = selectedCar.sale_price;
-                        const difference = salePrice - purchasePrice;
-
-                        updated.customer_car_eval_value = purchasePrice.toString();
-
-                        // Calculate which side pays the additional amount
-                        if (difference > 0) {
-                            // Company's car is more expensive, customer pays the difference
-                            updated.additional_customer_amount = difference.toString();
-                            updated.additional_company_amount = '0';
-                        } else if (difference < 0) {
-                            // Customer's car is more expensive, company pays the difference
-                            updated.additional_company_amount = Math.abs(difference).toString();
-                            updated.additional_customer_amount = '0';
-                        } else {
-                            // Equal value
-                            updated.additional_customer_amount = '0';
-                            updated.additional_company_amount = '0';
-                        }
+                    if (selectedCar && sumOldCarsPurchasePrice(prev.oldCars) > 0) {
+                        Object.assign(updated, recalculateExchangeAmounts(prev.oldCars, selectedCar.sale_price));
                     }
 
                     return updated;
@@ -288,40 +272,47 @@ const AddDeal = () => {
         setExchangeForm((prev) => {
             const updated = { ...prev, [name]: value };
 
-            // Update the car's sale_price in real-time when selling_price changes
             if (name === 'selling_price' && selectedCar && value && !isNaN(parseFloat(value))) {
                 const newSellingPrice = parseFloat(value);
                 if (Math.abs(newSellingPrice - selectedCar.sale_price) > 0.001) {
                     setSelectedCar((prevCar) => (prevCar ? { ...prevCar, sale_price: newSellingPrice } : null));
                 }
-            }
-
-            // Auto-calculate values for exchange deals when old car purchase price changes
-            if (name === 'old_car_purchase_price' && selectedCar) {
-                const purchasePrice = parseFloat(value || '0');
-                const salePrice = selectedCar.sale_price;
-                const difference = salePrice - purchasePrice;
-
-                // Set customer_car_eval_value to the purchase price from customer
-                updated.customer_car_eval_value = purchasePrice.toString();
-
-                // Calculate which side pays the additional amount
-                if (difference > 0) {
-                    // Company's car is more expensive, customer pays the difference
-                    updated.additional_customer_amount = difference.toString();
-                    updated.additional_company_amount = '0';
-                } else if (difference < 0) {
-                    // Customer's car is more expensive, company pays the difference
-                    updated.additional_company_amount = Math.abs(difference).toString();
-                    updated.additional_customer_amount = '0';
-                } else {
-                    // Equal value
-                    updated.additional_customer_amount = '0';
-                    updated.additional_company_amount = '0';
-                }
+                Object.assign(updated, recalculateExchangeAmounts(prev.oldCars, newSellingPrice));
             }
 
             return updated;
+        });
+    };
+
+    const handleOldCarChange = (index: number, field: keyof OldCarFormFields, value: string) => {
+        setExchangeForm((prev) => {
+            const oldCars = prev.oldCars.map((car, i) => (i === index ? { ...car, [field]: value } : car));
+            const salePrice = selectedCar?.sale_price || parseFloat(prev.selling_price || '0') || 0;
+            return {
+                ...prev,
+                oldCars,
+                ...recalculateExchangeAmounts(oldCars, salePrice),
+            };
+        });
+    };
+
+    const addOldCar = () => {
+        setExchangeForm((prev) => ({
+            ...prev,
+            oldCars: [...prev.oldCars, emptyOldCarForm()],
+        }));
+    };
+
+    const removeOldCar = (index: number) => {
+        setExchangeForm((prev) => {
+            if (prev.oldCars.length <= 1) return prev;
+            const oldCars = prev.oldCars.filter((_, i) => i !== index);
+            const salePrice = selectedCar?.sale_price || parseFloat(prev.selling_price || '0') || 0;
+            return {
+                ...prev,
+                oldCars,
+                ...recalculateExchangeAmounts(oldCars, salePrice),
+            };
         });
     };
     const handleCompanyCommissionFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -381,14 +372,7 @@ const AddDeal = () => {
             title: '',
             notes: '',
             selling_price: '',
-            old_car_manufacturer: '',
-            old_car_name: '',
-            old_car_year: '',
-            old_car_kilometers: '',
-            old_car_condition: '',
-            old_car_number: '',
-            old_car_market_price: '',
-            old_car_purchase_price: '',
+            oldCars: [emptyOldCarForm()],
             customer_car_eval_value: '',
             additional_customer_amount: '',
             additional_company_amount: '',
@@ -468,17 +452,20 @@ const AddDeal = () => {
             setAlert({ message: t('deal_title_required'), type: 'danger' });
             return false;
         }
-        if (!exchangeForm.old_car_manufacturer || !exchangeForm.old_car_name || !exchangeForm.old_car_year) {
-            setAlert({ message: t('old_car_details_required'), type: 'danger' });
-            return false;
-        }
-        if (!exchangeForm.old_car_number.trim()) {
-            setAlert({ message: t('car_number_required'), type: 'danger' });
-            return false;
-        }
-        if (!exchangeForm.old_car_purchase_price || parseFloat(exchangeForm.old_car_purchase_price) <= 0) {
-            setAlert({ message: t('old_car_purchase_price_required'), type: 'danger' });
-            return false;
+        for (let i = 0; i < exchangeForm.oldCars.length; i++) {
+            const oldCar = exchangeForm.oldCars[i];
+            if (!oldCar.manufacturer || !oldCar.name || !oldCar.year) {
+                setAlert({ message: `${t('old_car_details_required')} (${t('customer_old_car')} ${i + 1})`, type: 'danger' });
+                return false;
+            }
+            if (!oldCar.number.trim()) {
+                setAlert({ message: `${t('car_number_required')} (${t('customer_old_car')} ${i + 1})`, type: 'danger' });
+                return false;
+            }
+            if (!oldCar.purchase_price || parseFloat(oldCar.purchase_price) <= 0) {
+                setAlert({ message: `${t('old_car_purchase_price_required')} (${t('customer_old_car')} ${i + 1})`, type: 'danger' });
+                return false;
+            }
         }
         return true;
     };
@@ -645,65 +632,65 @@ const AddDeal = () => {
                 };
             }
             if (dealType === 'exchange') {
-                // First, create a new car record for the old car taken from the client
-                const oldCarData = {
-                    title: `${exchangeForm.old_car_manufacturer} ${exchangeForm.old_car_name} (${exchangeForm.old_car_year})`,
-                    year: parseInt(exchangeForm.old_car_year),
-                    brand: exchangeForm.old_car_manufacturer,
-                    status: 'received_from_client',
-                    type: 'used',
-                    source_type: 'customer', // Set source as customer for exchange deals
-                    source_customer_id: selectedCustomer?.id || null, // Link to the customer
-                    kilometers: exchangeForm.old_car_kilometers ? parseInt(exchangeForm.old_car_kilometers) : 0,
-                    market_price: exchangeForm.old_car_market_price ? parseFloat(exchangeForm.old_car_market_price) : 0,
-                    buy_price: parseFloat(exchangeForm.old_car_purchase_price),
-                    sale_price: exchangeForm.old_car_market_price ? parseFloat(exchangeForm.old_car_market_price) : 0,
-                    car_number: exchangeForm.old_car_number.trim(), // Car number is required
-                    images: JSON.stringify([]),
-                    created_at: new Date(dealDate + 'T' + new Date().toTimeString().split(' ')[0]).toISOString(), // Use deal date
-                };
+                // Create a car record for each customer trade-in car
+                const createdCarIds: string[] = [];
+                for (const oldCar of exchangeForm.oldCars) {
+                    const oldCarData = {
+                        title: `${oldCar.manufacturer} ${oldCar.name} (${oldCar.year})`,
+                        year: parseInt(oldCar.year),
+                        brand: oldCar.manufacturer,
+                        status: 'received_from_client',
+                        type: 'used',
+                        source_type: 'customer',
+                        source_customer_id: selectedCustomer?.id || null,
+                        kilometers: oldCar.kilometers ? parseInt(oldCar.kilometers) : 0,
+                        market_price: oldCar.market_price ? parseFloat(oldCar.market_price) : 0,
+                        buy_price: parseFloat(oldCar.purchase_price),
+                        sale_price: oldCar.market_price ? parseFloat(oldCar.market_price) : 0,
+                        car_number: oldCar.number.trim(),
+                        images: JSON.stringify([]),
+                        created_at: new Date(dealDate + 'T' + new Date().toTimeString().split(' ')[0]).toISOString(),
+                    };
 
-                const { data: newCarData, error: carError } = await supabase.from('cars').insert(oldCarData).select().single();
+                    const { data: newCarData, error: carError } = await supabase.from('cars').insert(oldCarData).select().single();
 
-                if (carError) {
-                    throw new Error(`Failed to create car record: ${carError.message}`);
+                    if (carError) {
+                        throw new Error(`Failed to create car record: ${carError.message}`);
+                    }
+
+                    createdCarIds.push(newCarData.id);
+
+                    await logActivity({
+                        type: 'car_received_from_client',
+                        car: {
+                            ...newCarData,
+                            customer: selectedCustomer,
+                        },
+                        customTimestamp: new Date(dealDate + 'T' + new Date().toTimeString().split(' ')[0]).toISOString(),
+                    });
                 }
 
-                // Log the car received from client as a separate activity with deal's date
-                await logActivity({
-                    type: 'car_received_from_client',
-                    car: {
-                        ...newCarData,
-                        customer: selectedCustomer,
-                    },
-                    customTimestamp: new Date(dealDate + 'T' + new Date().toTimeString().split(' ')[0]).toISOString(),
-                });
-
-                // Calculate profit for exchange deal:
-                // Profit = New car sale price - New car buy price - Old car purchase price - Loss amount
                 const newCarSalePrice = selectedCar?.sale_price || 0;
                 const newCarBuyPrice = selectedCar?.buy_price || 0;
-                const oldCarPurchasePrice = parseFloat(exchangeForm.old_car_purchase_price || '0');
+                const oldCarsTotalPurchase = sumOldCarsPurchasePrice(exchangeForm.oldCars);
                 const lossAmount = parseFloat(exchangeForm.loss_amount || '0');
                 const exchangeProfit = newCarSalePrice - newCarBuyPrice - lossAmount;
 
-                // Calculate the difference to determine which additional amount field to use
-                const difference = newCarSalePrice - oldCarPurchasePrice;
+                const difference = newCarSalePrice - oldCarsTotalPurchase;
                 const additionalCustomerAmount = difference > 0 ? difference : 0;
                 const additionalCompanyAmount = difference < 0 ? Math.abs(difference) : 0;
 
-                // Note: customer_car_eval_value, additional_customer_amount, and additional_company_amount are for display only
-                // and don't affect the actual deal amount or profit calculation
                 dealData = {
                     ...dealData,
                     title: exchangeForm.title.trim(),
                     description: exchangeForm.notes.trim() || `${t('exchange_deal_description')} ${selectedCar?.title}`,
-                    amount: Math.max(0, exchangeProfit), // This is the actual profit from the exchange - ensure it's never negative
+                    amount: Math.max(0, exchangeProfit),
                     car_id: selectedCar?.id,
-                    car_taken_from_client: newCarData.id, // Link the newly created car
+                    car_taken_from_client: createdCarIds[0],
+                    cars_taken_from_client: createdCarIds,
                     loss_amount: lossAmount || null,
                     selling_price: exchangeForm.selling_price ? parseFloat(exchangeForm.selling_price) : null,
-                    customer_car_eval_value: oldCarPurchasePrice || null,
+                    customer_car_eval_value: oldCarsTotalPurchase || null,
                     additional_customer_amount: additionalCustomerAmount || null,
                     additional_company_amount: additionalCompanyAmount || null,
                     notes: exchangeForm.notes.trim(),
@@ -1324,138 +1311,145 @@ const AddDeal = () => {
                     )}
                 </div>
             </div>
-            {/* Customer's Old Car Details */}
+            {/* Customer's Old Car Details (supports multiple cars) */}
             <div className="panel">
-                <div className="mb-5 flex items-center gap-3">
-                    <IconMenuWidgets className="w-5 h-5 text-warning" />
-                    <h5 className="text-lg font-semibold dark:text-white-light">{t('customer_old_car_details')}</h5>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="old_car_manufacturer" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('manufacturer')} <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            id="old_car_manufacturer"
-                            name="old_car_manufacturer"
-                            value={exchangeForm.old_car_manufacturer}
-                            onChange={handleExchangeFormChange}
-                            className="form-input"
-                            placeholder={t('enter_manufacturer')}
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="old_car_name" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('car_name')} <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            id="old_car_name"
-                            name="old_car_name"
-                            value={exchangeForm.old_car_name}
-                            onChange={handleExchangeFormChange}
-                            className="form-input"
-                            placeholder={t('enter_car_name')}
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="old_car_year" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('year')} <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="number"
-                            id="old_car_year"
-                            name="old_car_year"
-                            value={exchangeForm.old_car_year}
-                            onChange={handleExchangeFormChange}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            placeholder={t('enter_year')}
-                            min="1900"
-                            max="2030"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="old_car_kilometers" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('kilometers')}
-                        </label>
-                        <input
-                            type="number"
-                            id="old_car_kilometers"
-                            name="old_car_kilometers"
-                            value={exchangeForm.old_car_kilometers}
-                            onChange={handleExchangeFormChange}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            placeholder={t('enter_kilometers')}
-                        />
-                    </div>{' '}
-                    <div>
-                        <label htmlFor="old_car_condition" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('condition')} ({t('hand')})
-                        </label>
-                        <input
-                            type="text"
-                            id="old_car_condition"
-                            name="old_car_condition"
-                            value={exchangeForm.old_car_condition}
-                            onChange={handleExchangeFormChange}
-                            className="form-input"
-                            placeholder={t('enter_condition')}
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="old_car_number" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('car_number')} <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="text"
-                            id="old_car_number"
-                            name="old_car_number"
-                            value={exchangeForm.old_car_number}
-                            onChange={handleExchangeFormChange}
-                            className="form-input"
-                            placeholder={t('enter_car_number')}
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="old_car_market_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('market_price')}
-                        </label>
-                        <input
-                            type="number"
-                            id="old_car_market_price"
-                            name="old_car_market_price"
-                            value={exchangeForm.old_car_market_price}
-                            onChange={handleExchangeFormChange}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            placeholder="0.00"
-                            step="0.01"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="old_car_purchase_price" className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
-                            {t('purchase_price_from_customer')} <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            type="number"
-                            id="old_car_purchase_price"
-                            name="old_car_purchase_price"
-                            value={exchangeForm.old_car_purchase_price}
-                            onChange={handleExchangeFormChange}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            placeholder="0.00"
-                            step="0.01"
-                        />
+                <div className="mb-5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <IconMenuWidgets className="w-5 h-5 text-warning" />
+                        <h5 className="text-lg font-semibold dark:text-white-light">{t('customer_old_car_details')}</h5>
                     </div>
                 </div>
 
+                <div className="space-y-6">
+                    {exchangeForm.oldCars.map((oldCar, index) => (
+                        <div key={index} className="rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50/40 dark:bg-orange-900/10 p-4">
+                            <div className="mb-4 flex items-center justify-between">
+                                <h6 className="font-semibold text-orange-800 dark:text-orange-200">
+                                    {t('customer_old_car')} {exchangeForm.oldCars.length > 1 ? `#${index + 1}` : ''}
+                                </h6>
+                                {exchangeForm.oldCars.length > 1 && (
+                                    <button type="button" onClick={() => removeOldCar(index)} className="btn btn-outline-danger btn-sm flex items-center gap-1">
+                                        <IconTrash className="w-4 h-4" />
+                                        {t('remove')}
+                                    </button>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('manufacturer')} <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={oldCar.manufacturer}
+                                        onChange={(e) => handleOldCarChange(index, 'manufacturer', e.target.value)}
+                                        className="form-input"
+                                        placeholder={t('enter_manufacturer')}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('car_name')} <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={oldCar.name}
+                                        onChange={(e) => handleOldCarChange(index, 'name', e.target.value)}
+                                        className="form-input"
+                                        placeholder={t('enter_car_name')}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('year')} <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={oldCar.year}
+                                        onChange={(e) => handleOldCarChange(index, 'year', e.target.value)}
+                                        onWheel={(e) => e.currentTarget.blur()}
+                                        className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        placeholder={t('enter_year')}
+                                        min="1900"
+                                        max="2030"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('kilometers')}</label>
+                                    <input
+                                        type="number"
+                                        value={oldCar.kilometers}
+                                        onChange={(e) => handleOldCarChange(index, 'kilometers', e.target.value)}
+                                        onWheel={(e) => e.currentTarget.blur()}
+                                        className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        placeholder={t('enter_kilometers')}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('condition')} ({t('hand')})
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={oldCar.condition}
+                                        onChange={(e) => handleOldCarChange(index, 'condition', e.target.value)}
+                                        className="form-input"
+                                        placeholder={t('enter_condition')}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('car_number')} <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={oldCar.number}
+                                        onChange={(e) => handleOldCarChange(index, 'number', e.target.value)}
+                                        className="form-input"
+                                        placeholder={t('enter_car_number')}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">{t('market_price')}</label>
+                                    <input
+                                        type="number"
+                                        value={oldCar.market_price}
+                                        onChange={(e) => handleOldCarChange(index, 'market_price', e.target.value)}
+                                        onWheel={(e) => e.currentTarget.blur()}
+                                        className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        placeholder="0.00"
+                                        step="0.01"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-2">
+                                        {t('purchase_price_from_customer')} <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={oldCar.purchase_price}
+                                        onChange={(e) => handleOldCarChange(index, 'purchase_price', e.target.value)}
+                                        onWheel={(e) => e.currentTarget.blur()}
+                                        className="form-input [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        placeholder="0.00"
+                                        step="0.01"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="mt-4">
+                    <button type="button" onClick={addOldCar} className="btn btn-outline-primary flex items-center gap-2">
+                        <IconPlus className="w-4 h-4" />
+                        {t('add_customer_old_car')}
+                    </button>
+                </div>
+
                 {/* Exchange Calculation Display */}
-                {selectedCar && exchangeForm.old_car_purchase_price && (
+                {selectedCar && sumOldCarsPurchasePrice(exchangeForm.oldCars) > 0 && (
                     <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                         <h6 className="font-semibold text-yellow-800 dark:text-yellow-200 mb-3">{t('exchange_calculation')}</h6>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -1465,11 +1459,13 @@ const AddDeal = () => {
                             </div>
                             <div>
                                 <span className="text-yellow-600 dark:text-yellow-300 font-medium">{t('old_car_value')}:</span>
-                                <p className="text-yellow-800 dark:text-yellow-100">{formatCurrency(parseFloat(exchangeForm.old_car_purchase_price))}</p>
+                                <p className="text-yellow-800 dark:text-yellow-100">{formatCurrency(sumOldCarsPurchasePrice(exchangeForm.oldCars))}</p>
                             </div>
                             <div>
                                 <span className="text-yellow-600 dark:text-yellow-300 font-medium">{t('difference_to_pay')}:</span>
-                                <p className="text-yellow-800 dark:text-yellow-100 font-bold">{formatCurrency(selectedCar.sale_price - parseFloat(exchangeForm.old_car_purchase_price))}</p>
+                                <p className="text-yellow-800 dark:text-yellow-100 font-bold">
+                                    {formatCurrency(selectedCar.sale_price - sumOldCarsPurchasePrice(exchangeForm.oldCars))}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -1544,30 +1540,55 @@ const AddDeal = () => {
                                         </div>
                                     </div>
                                 </div>{' '}
-                                {/* Row 4: Customer Car Evaluation (Auto-calculated) */}
-                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                        <div className="font-medium">{t('customer_car_evaluation')}</div>
-                                        {exchangeForm.old_car_manufacturer && exchangeForm.old_car_name && (
-                                            <div className="text-s mt-1 text-gray-500">
-                                                {exchangeForm.old_car_manufacturer} {exchangeForm.old_car_name}
-                                                {exchangeForm.old_car_year && ` - ${exchangeForm.old_car_year}`}
-                                                {exchangeForm.old_car_number && ` - ${exchangeForm.old_car_number}`}
-                                                {exchangeForm.old_car_condition && ` - ${exchangeForm.old_car_condition}`}
+                                {/* Per-car amount from customer: المبلغ المضاف من الزبون (سيارة N) */}
+                                {exchangeForm.oldCars.map((oldCar, index) =>
+                                    oldCar.manufacturer || oldCar.name || oldCar.purchase_price ? (
+                                        <div key={`customer-amt-${index}`} className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                            <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                <div className="font-medium">
+                                                    {(t('additional_amount_from_customer_car') || `${t('additional_amount_from_customer')} (${t('car')} {{n}})`).replace(
+                                                        '{{n}}',
+                                                        String(index + 1),
+                                                    )}
+                                                </div>
+                                                {(oldCar.manufacturer || oldCar.name) && (
+                                                    <div className="text-s mt-1 text-gray-500">
+                                                        {oldCar.manufacturer} {oldCar.name}
+                                                        {oldCar.year && ` - ${oldCar.year}`}
+                                                        {oldCar.number && ` - ${oldCar.number}`}
+                                                        {oldCar.condition && ` - ${oldCar.condition}`}
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
+                                            <div className="text-center">
+                                                <span className="text-sm text-blue-600 dark:text-blue-400">
+                                                    {formatCurrency(parseFloat(oldCar.purchase_price || '0'))}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : null,
+                                )}
+                                {exchangeForm.oldCars.length > 1 && sumOldCarsPurchasePrice(exchangeForm.oldCars) > 0 && (
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-3">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right font-medium">{t('total_customer_cars_eval')}</div>
+                                        <div className="text-center">
+                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                                                {formatCurrency(sumOldCarsPurchasePrice(exchangeForm.oldCars))}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="text-center">
-                                        <span className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(parseFloat(exchangeForm.customer_car_eval_value || '0'))}</span>
+                                )}
+                                {/* Net difference: customer pays more for showroom car */}
+                                {parseFloat(exchangeForm.additional_customer_amount || '0') > 0 && (
+                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('difference_to_pay')}</div>
+                                        <div className="text-center">
+                                            <span className="text-sm text-blue-600 dark:text-blue-400">
+                                                {formatCurrency(parseFloat(exchangeForm.additional_customer_amount || '0'))}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                                {/* Row 5: Additional Amount from Customer (Auto-calculated) */}
-                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
-                                    <div className="text-center">
-                                        <span className="text-sm text-blue-600 dark:text-blue-400">{formatCurrency(parseFloat(exchangeForm.additional_customer_amount || '0'))}</span>
-                                    </div>
-                                </div>
+                                )}
                                 {/* Row 6: Additional Amount from Company (Auto-calculated) */}
                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                     <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
@@ -1608,11 +1629,9 @@ const AddDeal = () => {
 
                                                 const buyPrice = selectedCar.buy_price;
                                                 const sellPrice = selectedCar.sale_price;
-                                                const oldCarPurchasePrice = parseFloat(exchangeForm.old_car_purchase_price || '0');
                                                 const loss = parseFloat(exchangeForm.loss_amount || '0');
 
-                                                // For exchange: Profit = Sale Price - Old Car Purchase Price - Buy Price - Loss
-                                                // Note: customer_car_eval_value, additional_customer_amount, and additional_company_amount are display-only and don't affect profit
+                                                // For exchange: Profit = Sale Price - Buy Price - Loss
                                                 const profitCommission = sellPrice - buyPrice - loss;
 
                                                 return (

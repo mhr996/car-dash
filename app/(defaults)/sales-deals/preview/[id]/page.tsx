@@ -28,6 +28,7 @@ import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconBank from '@/components/icon/icon-bank';
 import IconCheck from '@/components/icon/icon-check';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
+import { getTradeInCarIds, mapCarToTradeInInfo, sumTradeInBuyPrice } from '@/utils/trade-in-cars';
 import { usePermissions } from '@/hooks/usePermissions';
 import BillsTable from '@/components/bills/bills-table';
 import SignatureModal from '@/components/modals/signature-modal';
@@ -77,12 +78,13 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [deal, setDeal] = useState<Deal | null>(null);
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [car, setCar] = useState<Car | null>(null);
-    const [carTakenFromClient, setCarTakenFromClient] = useState<Car | null>(null);
+    const [carsTakenFromClient, setCarsTakenFromClient] = useState<Car[]>([]);
+    const carTakenFromClient = carsTakenFromClient[0] || null;
     const [bills, setBills] = useState<Bill[]>([]);
     const [registerOrders, setRegisterOrders] = useState<Array<{ amount: number; description: string; created_at: string; direction?: 'positive' | 'negative' }>>([]);
     const [bankTransferOrders, setBankTransferOrders] = useState<Array<{ amount: number; description: string; created_at: string }>>([]);
     const [carImageUrl, setCarImageUrl] = useState<string | null>(null);
-    const [carTakenImageUrl, setCarTakenImageUrl] = useState<string | null>(null);
+    const [carTakenImageUrls, setCarTakenImageUrls] = useState<Record<string, string | null>>({});
     const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
@@ -202,16 +204,22 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                         }
                     }
 
-                    // Fetch car taken from client details if car_taken_from_client exists (for exchange deals)
-                    if (data.car_taken_from_client) {
-                        const { data: carTakenData } = await supabase.from('cars').select('*').eq('id', data.car_taken_from_client).single();
-                        if (carTakenData) {
-                            setCarTakenFromClient(carTakenData);
-                            // Get car taken image URL
-                            if (carTakenData.images && carTakenData.images.length > 0) {
-                                const imageUrl = await getCarImageUrl(carTakenData.images);
-                                setCarTakenImageUrl(imageUrl);
+                    // Fetch all cars taken from client (exchange deals)
+                    const tradeInIds = getTradeInCarIds(data);
+                    if (tradeInIds.length > 0) {
+                        const { data: carsTakenData } = await supabase.from('cars').select('*').in('id', tradeInIds);
+                        if (carsTakenData) {
+                            const byId = new Map(carsTakenData.map((c: Car) => [c.id, c]));
+                            const ordered = tradeInIds.map((id) => byId.get(id)).filter(Boolean) as Car[];
+                            setCarsTakenFromClient(ordered);
+
+                            const imageMap: Record<string, string | null> = {};
+                            for (const taken of ordered) {
+                                if (taken.images && (taken.images as any).length > 0) {
+                                    imageMap[taken.id] = await getCarImageUrl(taken.images);
+                                }
                             }
+                            setCarTakenImageUrls(imageMap);
                         }
                     }
 
@@ -492,16 +500,9 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             }),
 
             // Trade-in car info if applicable
-            ...(carTakenFromClient && {
-                tradeInCar: {
-                    type: carTakenFromClient.type || '',
-                    make: carTakenFromClient.brand || '',
-                    model: carTakenFromClient.title || '',
-                    plateNumber: carTakenFromClient.car_number || '',
-                    year: carTakenFromClient.year,
-                    kilometers: carTakenFromClient.kilometers,
-                    estimatedValue: carTakenFromClient.buy_price,
-                },
+            ...(carsTakenFromClient.length > 0 && {
+                tradeInCar: mapCarToTradeInInfo(carsTakenFromClient[0]),
+                tradeInCars: carsTakenFromClient.map(mapCarToTradeInInfo),
                 additionalCustomerAmount: deal.additional_customer_amount || 0,
                 additionalCompanyAmount: deal.additional_company_amount || 0,
             }),
@@ -849,28 +850,49 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                     )}
 
                                     {/* Exchange Deal Specific Fields */}
-                                    {deal.deal_type === 'exchange' && carTakenFromClient && (
+                                    {deal.deal_type === 'exchange' && carsTakenFromClient.length > 0 && (
                                         <>
-                                            {/* Customer Car Evaluation */}
-                                            <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-2">
-                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                    <div className="font-medium">{t('customer_car_evaluation')}</div>
-                                                    <div className="text-xs mt-1 text-gray-500">
-                                                        {carTakenFromClient.brand} {carTakenFromClient.title} - {carTakenFromClient.year}
+                                            {carsTakenFromClient.map((takenCar, index) => (
+                                                <div
+                                                    key={takenCar.id || index}
+                                                    className={`grid grid-cols-3 gap-4 mb-3 py-2 ${index === 0 ? 'border-t border-gray-200 dark:border-gray-600 pt-2' : ''}`}
+                                                >
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                        <div className="font-medium">
+                                                            {(t('additional_amount_from_customer_car') || `${t('additional_amount_from_customer')} (${t('car')} {{n}})`).replace(
+                                                                '{{n}}',
+                                                                String(index + 1),
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs mt-1 text-gray-500">
+                                                            {takenCar.brand} {takenCar.title} - {takenCar.year}
+                                                            {takenCar.car_number && ` - ${takenCar.car_number}`}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm text-blue-600 dark:text-blue-400">₪{(takenCar.buy_price || 0).toFixed(0)}</span>
                                                     </div>
                                                 </div>
-                                                <div className="text-center">
-                                                    <span className="text-sm text-gray-700 dark:text-gray-300">₪{(deal.customer_car_eval_value || carTakenFromClient.buy_price || 0).toFixed(0)}</span>
+                                            ))}
+                                            {carsTakenFromClient.length > 1 && (
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right font-medium">{t('total_customer_cars_eval')}</div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                                                            ₪{(deal.customer_car_eval_value || sumTradeInBuyPrice(carsTakenFromClient) || 0).toFixed(0)}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
 
-                                            {/* Additional Amount from Customer */}
-                                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
-                                                <div className="text-center">
-                                                    <span className="text-sm text-blue-600 dark:text-blue-400">₪{(deal.additional_customer_amount || 0).toFixed(0)}</span>
+                                            {(deal.additional_customer_amount || 0) > 0 && (
+                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('difference_to_pay')}</div>
+                                                    <div className="text-center">
+                                                        <span className="text-sm text-blue-600 dark:text-blue-400">₪{(deal.additional_customer_amount || 0).toFixed(0)}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
 
                                             {/* Additional Amount from Company */}
                                             <div className="grid grid-cols-3 gap-4 mb-3 py-2">
@@ -1003,8 +1025,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 </div>
                             </div>
                         )}{' '}
-                        {/* Car Taken From Client (Exchange Deals) */}
-                        {carTakenFromClient && deal.deal_type === 'exchange' && (
+                        {/* Cars Taken From Client (Exchange Deals) */}
+                        {carsTakenFromClient.length > 0 && deal.deal_type === 'exchange' && (
                             <div className="panel">
                                 <div className="mb-5">
                                     <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
@@ -1014,57 +1036,70 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 </div>
 
                                 <div className="space-y-6">
-                                    {/* Car Image and Basic Info */}
-                                    <div className="flex flex-col md:flex-row gap-6 p-6 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                        <div className="flex-shrink-0">
-                                            {carTakenImageUrl ? (
-                                                <img src={carTakenImageUrl} alt={carTakenFromClient.title} className="w-full md:w-[200px] h-[150px] rounded-lg object-cover" />
-                                            ) : (
-                                                <div className="w-full md:w-[200px] h-[150px] bg-orange-200 dark:bg-orange-700 rounded-lg flex items-center justify-center">
-                                                    <IconCar className="w-12 h-12 text-orange-400" />
-                                                </div>
+                                    {carsTakenFromClient.map((takenCar, index) => (
+                                        <div key={takenCar.id || index} className="space-y-4">
+                                            {carsTakenFromClient.length > 1 && (
+                                                <h6 className="font-semibold text-orange-700 dark:text-orange-300">
+                                                    {t('customer_old_car')} #{index + 1}
+                                                </h6>
                                             )}
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-bold text-2xl text-gray-900 dark:text-white mb-2">{carTakenFromClient.title}</h3>
-                                            <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">
-                                                {carTakenFromClient.brand} • {carTakenFromClient.year}
-                                            </p>
-                                            <div className="flex flex-wrap items-center gap-4">
-                                                <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                                    {carTakenFromClient.kilometers?.toLocaleString()} {t('km')}
-                                                </span>
-                                                <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                                    {t('provider')}: {carTakenFromClient.provider}
-                                                </span>
-                                                {carTakenFromClient.car_number && (
-                                                    <span className="text-gray-600 dark:text-gray-400 font-medium">
-                                                        {t('car_number')}: {carTakenFromClient.car_number}
-                                                    </span>
+                                            <div className="flex flex-col md:flex-row gap-6 p-6 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                                                <div className="flex-shrink-0">
+                                                    {carTakenImageUrls[takenCar.id] ? (
+                                                        <img
+                                                            src={carTakenImageUrls[takenCar.id]!}
+                                                            alt={takenCar.title}
+                                                            className="w-full md:w-[200px] h-[150px] rounded-lg object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full md:w-[200px] h-[150px] bg-orange-200 dark:bg-orange-700 rounded-lg flex items-center justify-center">
+                                                            <IconCar className="w-12 h-12 text-orange-400" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h3 className="font-bold text-2xl text-gray-900 dark:text-white mb-2">{takenCar.title}</h3>
+                                                    <p className="text-gray-600 dark:text-gray-400 text-lg mb-4">
+                                                        {takenCar.brand} • {takenCar.year}
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center gap-4">
+                                                        <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                            {takenCar.kilometers?.toLocaleString()} {t('km')}
+                                                        </span>
+                                                        {takenCar.provider && (
+                                                            <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                                {t('provider')}: {takenCar.provider}
+                                                            </span>
+                                                        )}
+                                                        {takenCar.car_number && (
+                                                            <span className="text-gray-600 dark:text-gray-400 font-medium">
+                                                                {t('car_number')}: {takenCar.car_number}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className={`grid grid-cols-1 md:grid-cols-${hasPermission('view_car_purchase_price') ? '3' : '1'} gap-6`}>
+                                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('market_price')}</p>
+                                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(takenCar.market_price)}</p>
+                                                </div>
+                                                {hasPermission('view_car_purchase_price') && (
+                                                    <>
+                                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('buy_price')}</p>
+                                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(takenCar.buy_price)}</p>
+                                                        </div>
+                                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('received_value')}</p>
+                                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(takenCar.buy_price)}</p>
+                                                        </div>
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
-                                    </div>
-
-                                    {/* Car Pricing */}
-                                    <div className={`grid grid-cols-1 md:grid-cols-${hasPermission('view_car_purchase_price') ? '3' : '1'} gap-6`}>
-                                        <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                            <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('market_price')}</p>
-                                            <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.market_price)}</p>
-                                        </div>
-                                        {hasPermission('view_car_purchase_price') && (
-                                            <>
-                                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('buy_price')}</p>
-                                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                                </div>
-                                                <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
-                                                    <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('received_value')}</p>
-                                                    <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
+                                    ))}
                                 </div>
                             </div>
                         )}
@@ -1268,6 +1303,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                             deal={deal}
                             car={car}
                             carTakenFromClient={carTakenFromClient}
+                            carsTakenFromClient={carsTakenFromClient}
                             selectedCustomer={customer}
                             onDownloadPDF={handleDownloadPDF}
                             downloadingPDF={downloadingPDF}

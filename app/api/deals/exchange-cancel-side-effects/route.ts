@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { dealId, customerCarId, showroomCarId, cancellationReason, cancelledAt } = body;
+        const { dealId, customerCarId, customerCarIds, showroomCarId, cancellationReason, cancelledAt } = body;
 
         if (!dealId || typeof cancellationReason !== 'string' || !cancellationReason.trim()) {
             return NextResponse.json({ error: 'dealId and cancellationReason are required' }, { status: 400 });
@@ -50,9 +50,16 @@ export async function POST(request: NextRequest) {
             auth: { autoRefreshToken: false, persistSession: false },
         });
 
+        const normalizedIds = Array.isArray(customerCarIds)
+            ? customerCarIds.filter(Boolean).map(String)
+            : customerCarId != null
+              ? [String(customerCarId)]
+              : [];
+
         await applyExchangeDealCancellationSideEffects(
             {
                 dealId: String(dealId),
+                customerCarIds: normalizedIds,
                 customerCarId: customerCarId != null ? String(customerCarId) : null,
                 showroomCarId: showroomCarId != null ? String(showroomCarId) : null,
                 cancellationReason: cancellationReason.trim(),

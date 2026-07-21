@@ -22,6 +22,7 @@ import { BillWithPayments } from '@/types/payment';
 import { usePermissions } from '@/hooks/usePermissions';
 import { applyExchangeDealCancellationSideEffects } from '@/utils/exchange-deal-cancel';
 import { patchDealCancelledInLogs } from '@/utils/deal-cancel-logs';
+import { getTradeInCarIds, sumTradeInBuyPrice, buildDealCarsDetailsText, buildTradeInInvoiceItems } from '@/utils/trade-in-cars';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logActivity } from '@/utils/activity-logger';
 
@@ -134,7 +135,15 @@ interface BillPayment {
 /**
  * Create invoice/receipt document in Tranzila
  */
-const createTranzilaDocument = async (billId: number, billData: any, payments: BillPayment[], deal?: Deal | null, selectedCar?: Car | null, existingBills: any[] = []) => {
+const createTranzilaDocument = async (
+    billId: number,
+    billData: any,
+    payments: BillPayment[],
+    deal?: Deal | null,
+    selectedCar?: Car | null,
+    existingBills: any[] = [],
+    carsTakenFromClient: Car[] = [],
+) => {
     const { t } = getTranslation();
     try {
         // Map bill type to Tranzila document type
@@ -264,6 +273,10 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 to_doc_currency_exchange_rate: 1,
             });
 
+            if (deal.deal_type === 'exchange' && carsTakenFromClient.length > 0) {
+                items.push(...buildTradeInInvoiceItems(carsTakenFromClient));
+            }
+
             // Only add buy price for non-financing assistance intermediary deals
             if (!isFinancingAssistanceIntermediary) {
                 items.push({
@@ -351,6 +364,10 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
                 to_doc_currency_exchange_rate: 1,
             });
 
+            if (deal.deal_type === 'exchange' && carsTakenFromClient.length > 0) {
+                items.push(...buildTradeInInvoiceItems(carsTakenFromClient));
+            }
+
             // Only add buy price for non-financing assistance intermediary deals
             if (!isFinancingAssistanceIntermediary) {
                 items.push({
@@ -412,7 +429,9 @@ const createTranzilaDocument = async (billId: number, billData: any, payments: B
 
             let itemName = 'קבלה';
             if (deal && selectedCar) {
-                itemName = `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}${selectedCar.car_number ? ` - ${selectedCar.car_number}` : ''}`;
+                itemName = buildDealCarsDetailsText(selectedCar, deal.deal_type === 'exchange' ? carsTakenFromClient : [], {
+                    tradeInPrefix: 'רכב מהלקוח',
+                });
             } else if (billData.car_details) {
                 itemName = billData.car_details;
             } else if (billData.customer_name) {
@@ -670,7 +689,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const [selectedSeller, setSelectedSeller] = useState<Customer | null>(null);
     const [selectedBuyer, setSelectedBuyer] = useState<Customer | null>(null);
     const [selectedCar, setSelectedCar] = useState<Car | null>(null);
-    const [carTakenFromClient, setCarTakenFromClient] = useState<Car | null>(null);
+    const [carsTakenFromClient, setCarsTakenFromClient] = useState<Car[]>([]);
+    const carTakenFromClient = carsTakenFromClient[0] || null;
     const [dealDate, setDealDate] = useState(new Date().toISOString().split('T')[0]);
     const [hasCustomerSignature, setHasCustomerSignature] = useState(false);
     const dealId = params.id;
@@ -787,9 +807,9 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
         let dealAmount = deal.selling_price || deal.amount || 0;
 
-        // For exchange deals, subtract the customer car evaluation value
-        if (deal.deal_type === 'exchange' && carTakenFromClient) {
-            const carEvaluation = carTakenFromClient.buy_price || 0;
+        // For exchange deals, subtract the total customer cars evaluation value
+        if (deal.deal_type === 'exchange') {
+            const carEvaluation = deal.customer_car_eval_value || sumTradeInBuyPrice(carsTakenFromClient) || 0;
             dealAmount -= carEvaluation;
         }
 
@@ -991,11 +1011,14 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                         }
                     }
 
-                    // Fetch car taken from client details if car_taken_from_client exists (for exchange deals)
-                    if (data.car_taken_from_client) {
-                        const { data: carTakenData } = await supabase.from('cars').select('*').eq('id', data.car_taken_from_client).single();
-                        if (carTakenData) {
-                            setCarTakenFromClient(carTakenData);
+                    // Fetch all cars taken from client (exchange deals — supports multiple)
+                    const tradeInIds = getTradeInCarIds(data);
+                    if (tradeInIds.length > 0) {
+                        const { data: carsTakenData } = await supabase.from('cars').select('*').in('id', tradeInIds);
+                        if (carsTakenData) {
+                            // Preserve order from tradeInIds
+                            const byId = new Map(carsTakenData.map((c: Car) => [c.id, c]));
+                            setCarsTakenFromClient(tradeInIds.map((id) => byId.get(id)).filter(Boolean) as Car[]);
                         }
                     }
                 }
@@ -1028,7 +1051,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     ...prev,
                     customer_name: customerInfo?.name || '',
                     phone: customerInfo?.phone || '',
-                    car_details: selectedCar ? `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` : '',
+                    car_details: buildDealCarsDetailsText(selectedCar, carsTakenFromClient, { tradeInPrefix: t('customer_old_car') || 'Trade-in' }),
                     total: total, // Price before tax
                     tax_amount: taxAmount, // 18% tax
                     total_with_tax: dealSellingPrice?.toString() || '0', // Deal selling price already includes tax
@@ -1043,7 +1066,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     ...prev,
                     customer_name: selectedCustomer.name || '',
                     phone: selectedCustomer.phone || '',
-                    car_details: selectedCar ? `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` : '',
+                    car_details: buildDealCarsDetailsText(selectedCar, carsTakenFromClient, { tradeInPrefix: t('customer_old_car') || 'Trade-in' }),
                     total: total, // Price before tax
                     tax_amount: taxAmount, // 18% tax
                     total_with_tax: dealSellingPrice?.toString() || '0', // Deal selling price already includes tax
@@ -1054,8 +1077,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
 
     // Auto-calculate exchange fields when data is loaded
     useEffect(() => {
-        if (dealType === 'exchange' && carTakenFromClient && selectedCar) {
-            const purchasePrice = carTakenFromClient.buy_price || 0;
+        if (dealType === 'exchange' && carsTakenFromClient.length > 0 && selectedCar) {
+            const purchasePrice = sumTradeInBuyPrice(carsTakenFromClient);
             const salePrice = selectedCar.sale_price || 0;
             const difference = salePrice - purchasePrice;
 
@@ -1066,7 +1089,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 additional_company_amount: difference < 0 ? Math.abs(difference).toString() : '0',
             }));
         }
-    }, [dealType, carTakenFromClient, selectedCar]);
+    }, [dealType, carsTakenFromClient, selectedCar]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         // Prevent any input changes if deal is completed or cancelled
@@ -1119,25 +1142,20 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             }
 
             // Auto-calculate exchange fields when relevant values change for exchange deals
-            if (dealType === 'exchange' && carTakenFromClient && selectedCar) {
-                const purchasePrice = carTakenFromClient.buy_price || 0;
+            if (dealType === 'exchange' && carsTakenFromClient.length > 0 && selectedCar) {
+                const purchasePrice = sumTradeInBuyPrice(carsTakenFromClient);
                 const salePrice = parseFloat(updated.selling_price || '0') || 0;
                 const difference = salePrice - purchasePrice;
 
-                // Set customer_car_eval_value to the purchase price from customer (buy_price of taken car)
                 updated.customer_car_eval_value = purchasePrice.toString();
 
-                // Calculate which side pays the additional amount
                 if (difference > 0) {
-                    // Company's car is more expensive, customer pays the difference
                     updated.additional_customer_amount = difference.toString();
                     updated.additional_company_amount = '0';
                 } else if (difference < 0) {
-                    // Customer's car is more expensive, company pays the difference
                     updated.additional_company_amount = Math.abs(difference).toString();
                     updated.additional_customer_amount = '0';
                 } else {
-                    // Equal value
                     updated.additional_customer_amount = '0';
                     updated.additional_company_amount = '0';
                 }
@@ -1391,24 +1409,20 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             const updated = { ...prev, car_id: car?.id || '' };
 
             // Auto-calculate exchange fields when car changes for exchange deals
-            if (dealType === 'exchange' && carTakenFromClient && car) {
-                const purchasePrice = carTakenFromClient.buy_price || 0;
+            if (dealType === 'exchange' && carsTakenFromClient.length > 0 && car) {
+                const purchasePrice = sumTradeInBuyPrice(carsTakenFromClient);
                 const salePrice = car.sale_price || 0;
                 const difference = salePrice - purchasePrice;
 
                 updated.customer_car_eval_value = purchasePrice.toString();
 
-                // Calculate which side pays the additional amount
                 if (difference > 0) {
-                    // Company's car is more expensive, customer pays the difference
                     updated.additional_customer_amount = difference.toString();
                     updated.additional_company_amount = '0';
                 } else if (difference < 0) {
-                    // Customer's car is more expensive, company pays the difference
                     updated.additional_company_amount = Math.abs(difference).toString();
                     updated.additional_customer_amount = '0';
                 } else {
-                    // Equal value
                     updated.additional_customer_amount = '0';
                     updated.additional_company_amount = '0';
                 }
@@ -1464,7 +1478,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             const cancelledAtIso = `${cancelDealDate}T00:00:00.000Z`;
 
             const isExchange = deal?.deal_type === 'exchange';
-            const exchangeCustomerCarId = deal?.car_taken_from_client;
+            const exchangeCustomerCarIds = getTradeInCarIds(deal || {});
             const exchangeShowroomCarId = deal?.car_id;
             const dealUpdate: Record<string, unknown> = {
                 status: 'cancelled',
@@ -1515,7 +1529,8 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                         },
                         body: JSON.stringify({
                             dealId: String(dealId),
-                            customerCarId: exchangeCustomerCarId ?? null,
+                            customerCarIds: exchangeCustomerCarIds,
+                            customerCarId: exchangeCustomerCarIds[0] ?? null,
                             showroomCarId: exchangeShowroomCarId ?? null,
                             cancellationReason: cancelReason.trim(),
                             cancelledAt: cancelledAtIso,
@@ -1527,7 +1542,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                         if (res.status === 503) {
                             await applyExchangeDealCancellationSideEffects({
                                 dealId: String(dealId),
-                                customerCarId: exchangeCustomerCarId,
+                                customerCarIds: exchangeCustomerCarIds,
                                 showroomCarId: exchangeShowroomCarId,
                                 cancellationReason: cancelReason.trim(),
                                 cancelledAt: cancelledAtIso,
@@ -1541,7 +1556,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     try {
                         await applyExchangeDealCancellationSideEffects({
                             dealId: String(dealId),
-                            customerCarId: exchangeCustomerCarId,
+                            customerCarIds: exchangeCustomerCarIds,
                             showroomCarId: exchangeShowroomCarId,
                             cancellationReason: cancelReason.trim(),
                             cancelledAt: cancelledAtIso,
@@ -2099,7 +2114,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
             // Create document in Tranzila - THIS IS MANDATORY
             // If Tranzila fails, we'll rollback the bill creation
             try {
-                await createTranzilaDocument(billResult.id, { ...billData, cancel_bill_id: billForm.cancel_bill_id }, payments, deal, selectedCar, bills);
+                await createTranzilaDocument(billResult.id, { ...billData, cancel_bill_id: billForm.cancel_bill_id }, payments, deal, selectedCar, bills, carsTakenFromClient);
             } catch (tranzilaError) {
                 // Rollback: Delete the bill and payments that were just created
                 await supabase.from('bills').delete().eq('id', billResult.id);
@@ -2229,7 +2244,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     ...prev,
                     customer_name: customerInfo?.name || '',
                     phone: customerInfo?.phone || '',
-                    car_details: selectedCar ? `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` : '',
+                    car_details: buildDealCarsDetailsText(selectedCar, carsTakenFromClient, { tradeInPrefix: t('customer_old_car') || 'Trade-in' }),
                     sale_price: deal.amount?.toString() || '',
                 }));
             }
@@ -2239,7 +2254,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     ...prev,
                     customer_name: selectedCustomer?.name || '',
                     phone: selectedCustomer?.phone || '',
-                    car_details: selectedCar ? `${selectedCar.brand} ${selectedCar.title} ${selectedCar.year}` : '',
+                    car_details: buildDealCarsDetailsText(selectedCar, carsTakenFromClient, { tradeInPrefix: t('customer_old_car') || 'Trade-in' }),
                     sale_price: deal.amount?.toString() || '',
                 }));
             }
@@ -2671,28 +2686,44 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                         </div>
                                                     </div>
                                                 </div>{' '}
-                                                {/* Row 4: Customer Car Evaluation (Auto-calculated) */}
-                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                        <div className="font-medium">{t('customer_car_evaluation')}</div>
-                                                        {carTakenFromClient && (
-                                                            <div className="text-xs mt-1 text-gray-500">
-                                                                {carTakenFromClient.brand} {carTakenFromClient.title} - {carTakenFromClient.year}
-                                                                {carTakenFromClient.car_number && ` - ${carTakenFromClient.car_number}`}
+                                                {/* Per-car: المبلغ المضاف من الزبون (سيارة N) */}
+                                                {carsTakenFromClient.map((takenCar, index) => (
+                                                    <div key={takenCar.id || index} className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
+                                                            <div className="font-medium">
+                                                                {(t('additional_amount_from_customer_car') || `${t('additional_amount_from_customer')} (${t('car')} {{n}})`).replace(
+                                                                    '{{n}}',
+                                                                    String(index + 1),
+                                                                )}
                                                             </div>
-                                                        )}
+                                                            <div className="text-xs mt-1 text-gray-500">
+                                                                {takenCar.brand} {takenCar.title} - {takenCar.year}
+                                                                {takenCar.car_number && ` - ${takenCar.car_number}`}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <span className="text-sm text-blue-600 dark:text-blue-400">₪{(takenCar.buy_price || 0).toFixed(0)}</span>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-center">
-                                                        <span className="text-sm text-gray-700 dark:text-gray-300">₪{parseFloat(form.customer_car_eval_value || '0').toFixed(0)}</span>
+                                                ))}
+                                                {carsTakenFromClient.length > 1 && (
+                                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-3">
+                                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right font-medium">{t('total_customer_cars_eval')}</div>
+                                                        <div className="text-center">
+                                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                                                                ₪{parseFloat(form.customer_car_eval_value || '0').toFixed(0)}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                {/* Row 5: Additional Amount from Customer (Auto-calculated) */}
-                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_customer')}</div>
-                                                    <div className="text-center">
-                                                        <span className="text-sm text-blue-600 dark:text-blue-400">₪{parseFloat(form.additional_customer_amount || '0').toFixed(0)}</span>
+                                                )}
+                                                {parseFloat(form.additional_customer_amount || '0') > 0 && (
+                                                    <div className="grid grid-cols-3 gap-4 mb-3 py-2">
+                                                        <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('difference_to_pay')}</div>
+                                                        <div className="text-center">
+                                                            <span className="text-sm text-blue-600 dark:text-blue-400">₪{parseFloat(form.additional_customer_amount || '0').toFixed(0)}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                )}
                                                 {/* Row 6: Additional Amount from Company (Auto-calculated) */}
                                                 <div className="grid grid-cols-3 gap-4 mb-3 py-2">
                                                     <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
@@ -2729,15 +2760,12 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                     <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('profit_commission')}</div>
                                                     <div className="text-center">
                                                         {(() => {
-                                                            if (!selectedCar || !carTakenFromClient) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
+                                                            if (!selectedCar || carsTakenFromClient.length === 0) return <span className="text-sm text-gray-700 dark:text-gray-300">₪0.00</span>;
 
                                                             const buyPrice = selectedCar.buy_price || 0;
                                                             const sellPrice = parseFloat(form.selling_price || '0') || 0;
-                                                            const oldCarPurchasePrice = carTakenFromClient.buy_price || 0;
                                                             const loss = parseFloat(form.loss_amount || '0');
 
-                                                            // For exchange: Profit = Sale Price - Old Car Purchase Price - Buy Price - Loss
-                                                            // Note: customer_car_eval_value and additional_customer_amount are display-only and don't affect profit
                                                             const profitCommission = sellPrice - buyPrice - loss;
 
                                                             return (
@@ -3033,44 +3061,56 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                     </div>
                                 )}
                             </div>
-                            {/* Car Taken From Client (Exchange Deals) */}
-                            {carTakenFromClient && deal && deal.deal_type === 'exchange' && (
+                            {/* Cars Taken From Client (Exchange Deals) */}
+                            {carsTakenFromClient.length > 0 && deal && deal.deal_type === 'exchange' && (
                                 <div className="panel">
                                     <div className="mb-5 flex items-center gap-3">
                                         <IconCar className="w-5 h-5 text-orange-500" />
                                         <h5 className="text-lg font-semibold dark:text-white-light">{t('car_taken_from_client')}</h5>
                                     </div>
-                                    <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                            <div>
-                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_name')}</label>
-                                                <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.title}</p>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('brand')}</label>
-                                                <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.brand}</p>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('year')}</label>
-                                                <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.year}</p>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('kilometers')}</label>
-                                                <p className="font-bold text-gray-900 dark:text-white">
-                                                    {carTakenFromClient.kilometers.toLocaleString()} {t('km')}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('received_value')}</label>
-                                                <p className="font-bold text-orange-700 dark:text-orange-300">{formatCurrency(carTakenFromClient.buy_price)}</p>
-                                            </div>
-                                            {carTakenFromClient.car_number && (
-                                                <div>
-                                                    <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_number')}</label>
-                                                    <p className="font-bold text-gray-900 dark:text-white">{carTakenFromClient.car_number}</p>
+                                    <div className="space-y-4">
+                                        {carsTakenFromClient.map((takenCar, index) => (
+                                            <div
+                                                key={takenCar.id || index}
+                                                className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800"
+                                            >
+                                                {carsTakenFromClient.length > 1 && (
+                                                    <p className="text-sm font-semibold text-orange-700 dark:text-orange-300 mb-3">
+                                                        {t('customer_old_car')} #{index + 1}
+                                                    </p>
+                                                )}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                    <div>
+                                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_name')}</label>
+                                                        <p className="font-bold text-gray-900 dark:text-white">{takenCar.title}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('brand')}</label>
+                                                        <p className="font-bold text-gray-900 dark:text-white">{takenCar.brand}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('year')}</label>
+                                                        <p className="font-bold text-gray-900 dark:text-white">{takenCar.year}</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('kilometers')}</label>
+                                                        <p className="font-bold text-gray-900 dark:text-white">
+                                                            {(takenCar.kilometers || 0).toLocaleString()} {t('km')}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('received_value')}</label>
+                                                        <p className="font-bold text-orange-700 dark:text-orange-300">{formatCurrency(takenCar.buy_price)}</p>
+                                                    </div>
+                                                    {takenCar.car_number && (
+                                                        <div>
+                                                            <label className="block text-sm text-orange-600 dark:text-orange-400 font-medium">{t('car_number')}</label>
+                                                            <p className="font-bold text-gray-900 dark:text-white">{takenCar.car_number}</p>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
@@ -3948,6 +3988,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                     totalAmount={parseFloat(billForm.total_with_tax) || 0}
                                                     deal={deal}
                                                     carTakenFromClient={carTakenFromClient}
+                                                    carsTakenFromClient={carsTakenFromClient}
                                                     bills={bills}
                                                 />
                                             </div>
@@ -4267,6 +4308,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                 deal={deal}
                                 car={selectedCar}
                                 carTakenFromClient={carTakenFromClient}
+                                carsTakenFromClient={carsTakenFromClient}
                                 selectedCustomer={selectedCustomer}
                                 registerOrders={registerOrders}
                                 bankTransferOrders={bankTransferOrders}

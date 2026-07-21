@@ -1,6 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFService } from '@/utils/pdf-service';
 import { CarContract } from '@/types/contract';
+import { formatTradeInCarsLabel, resolveTradeInCars, TradeInCarInfo } from '@/utils/trade-in-cars';
+
+function renderTradeInCarsBlock(
+    cars: TradeInCarInfo[],
+    labels: { title: string; make: string; model: string; type: string; year: string; plate: string; km: string; carN: string },
+    options: { locale?: string; rtl?: boolean } = {},
+): string {
+    if (cars.length === 0) return '';
+    const locale = options.locale || 'en-US';
+    const rtl = options.rtl || false;
+    const titleAlign = rtl ? 'justify-end section-title' : '';
+    const textAlign = rtl ? 'text-right' : '';
+    const titleInner = (title: string) =>
+        rtl
+            ? `<span>${title}</span>
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 100-4 2 2 0 000 4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                                    </svg>`
+            : `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 100-4 2 2 0 000 4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                                    </svg>
+                                    ${title}`;
+
+    return cars
+        .map(
+            (car, index) => `
+                            <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-4 border border-orange-200 compact-section ${index > 0 ? 'mt-2' : ''}">
+                                <h2 class="font-bold mb-2 text-lg text-orange-700 flex items-center gap-2 ${titleAlign}">
+                                    ${titleInner(`${labels.title}${cars.length > 1 ? ` #${index + 1}` : ''}`)}
+                                </h2>
+                                <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs ${textAlign}">
+                                    <p><span class="font-semibold text-orange-700">${labels.make}:</span> ${car.make}</p>
+                                    <p><span class="font-semibold text-orange-700">${labels.model}:</span> ${car.model}</p>
+                                    <p><span class="font-semibold text-orange-700">${labels.type}:</span> ${car.type}</p>
+                                    <p><span class="font-semibold text-orange-700">${labels.year}:</span> ${car.year}</p>
+                                    <p><span class="font-semibold text-orange-700">${labels.plate}:</span> ${car.plateNumber}</p>
+                                    <p><span class="font-semibold text-orange-700">${labels.km}:</span> ${car.kilometers.toLocaleString(locale)}</p>
+                                </div>
+                            </div>`,
+        )
+        .join('');
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -368,29 +410,17 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                             </div>
                         </div>
 
-                        <!-- Trade-in Vehicle (Car Received from Client) -->
-                        ${
-                            contract.tradeInCar
-                                ? `
-                            <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-4 border border-orange-200 compact-section">
-                                <h2 class="font-bold mb-2 text-lg text-orange-700 flex items-center gap-2">
-                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 100-4 2 2 0 000 4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-                                    </svg>
-                                    Trade-in Vehicle
-                                </h2>
-                                <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                                    <p><span class="font-semibold text-orange-700">Make:</span> ${contract.tradeInCar.make}</p>
-                                    <p><span class="font-semibold text-orange-700">Model:</span> ${contract.tradeInCar.model}</p>
-                                    <p><span class="font-semibold text-orange-700">Type:</span> ${contract.tradeInCar.type}</p>
-                                    <p><span class="font-semibold text-orange-700">Year:</span> ${contract.tradeInCar.year}</p>
-                                    <p><span class="font-semibold text-orange-700">Plate:</span> ${contract.tradeInCar.plateNumber}</p>
-                                    <p><span class="font-semibold text-orange-700">KM:</span> ${contract.tradeInCar.kilometers.toLocaleString()}</p>
-                                </div>
-                            </div>
-                        `
-                                : ''
-                        }
+                        <!-- Trade-in Vehicle(s) (Cars Received from Client) -->
+                        ${renderTradeInCarsBlock(resolveTradeInCars(contract), {
+                            title: 'Trade-in Vehicle',
+                            make: 'Make',
+                            model: 'Model',
+                            type: 'Type',
+                            year: 'Year',
+                            plate: 'Plate',
+                            km: 'KM',
+                            carN: 'Car',
+                        })}
                     </div>
                 `
                         : `
@@ -430,11 +460,11 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
                     </div>
                     
                     ${
-                        contract.dealType === 'trade-in' && contract.tradeInCar
+                        contract.dealType === 'trade-in' && resolveTradeInCars(contract).length > 0
                             ? `
                     <!-- Exchange Deal Breakdown - Compact -->
                     <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
-                        <p class="text-xs"><span class="font-semibold text-gray-600">Exchanged for ${contract.tradeInCar.model} ${contract.tradeInCar.make} ${contract.tradeInCar.year} ${contract.tradeInCar.plateNumber}</span>${
+                        <p class="text-xs"><span class="font-semibold text-gray-600">Exchanged for ${formatTradeInCarsLabel(resolveTradeInCars(contract))}</span>${
                             contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
                                 ? `<p><span class="font-semibold text-gray-600">Additional from Customer:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
                                 : ''
@@ -853,29 +883,21 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                             </div>
                         </div>
 
-                        <!-- Trade-in Vehicle (Car Received from Client) -->
-                        ${
-                            contract.tradeInCar
-                                ? `
-                            <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-4 border border-orange-200">
-                                <h2 class="font-bold mb-2 text-lg text-orange-700 flex items-center gap-2 justify-end section-title">
-                                    <span>المركبة المستلمة من العميل</span>
-                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 100-4 2 2 0 000 4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-                                    </svg>
-                                </h2>
-                                <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-right">
-                                    <p><span class="font-semibold text-orange-700">الماركة:</span> ${contract.tradeInCar.make}</p>
-                                    <p><span class="font-semibold text-orange-700">الموديل:</span> ${contract.tradeInCar.model}</p>
-                                    <p><span class="font-semibold text-orange-700">النوع:</span> ${contract.tradeInCar.type}</p>
-                                    <p><span class="font-semibold text-orange-700">السنة:</span> ${contract.tradeInCar.year}</p>
-                                    <p><span class="font-semibold text-orange-700">رقم اللوحة:</span> ${contract.tradeInCar.plateNumber}</p>
-                                    <p><span class="font-semibold text-orange-700">الكيلومترات:</span> ${contract.tradeInCar.kilometers.toLocaleString('en-US')}</p>
-                                </div>
-                            </div>
-                        `
-                                : ''
-                        }
+                        <!-- Trade-in Vehicle(s) (Cars Received from Client) -->
+                        ${renderTradeInCarsBlock(
+                            resolveTradeInCars(contract),
+                            {
+                                title: 'المركبة المستلمة من العميل',
+                                make: 'الماركة',
+                                model: 'الموديل',
+                                type: 'النوع',
+                                year: 'السنة',
+                                plate: 'رقم اللوحة',
+                                km: 'الكيلومترات',
+                                carN: 'سيارة',
+                            },
+                            { locale: 'en-US', rtl: true },
+                        )}
                     </div>
                 `
                         : `
@@ -914,11 +936,11 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
                     </div>
                     
                     ${
-                        contract.dealType === 'trade-in' && contract.tradeInCar
+                        contract.dealType === 'trade-in' && resolveTradeInCars(contract).length > 0
                             ? `
                     <!-- Exchange Deal Breakdown - Compact -->
                     <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
-                        <p class="text-xs text-right"><span class="font-semibold text-gray-600">تم التبديل على سيارة ${contract.tradeInCar.model} ${contract.tradeInCar.make} ${contract.tradeInCar.year} ${contract.tradeInCar.plateNumber}</span>${
+                        <p class="text-xs text-right"><span class="font-semibold text-gray-600">تم التبديل على سيارة ${formatTradeInCarsLabel(resolveTradeInCars(contract))}</span>${
                             contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
                                 ? `<p><span class="font-semibold text-gray-600">المبلغ الإضافي من الزبون:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
                                 : ''
@@ -1338,29 +1360,21 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                             </div>
                         </div>
 
-                        <!-- Trade-in Vehicle (Car Received from Client) -->
-                        ${
-                            contract.tradeInCar
-                                ? `
-                            <div class="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-2 border border-orange-200">
-                                <h2 class="font-bold mb-1 text-xs text-orange-700 flex items-center gap-1 justify-end section-title">
-                                    <span>הרכב המתקבל מהלקוח</span>
-                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm2 6a2 2 0 100-4 2 2 0 000 4zm6 4a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-                                    </svg>
-                                </h2>
-                                <div class="grid grid-cols-2 gap-x-2 gap-y-0 text-xs text-right">
-                                    <p><span class="font-semibold text-orange-700">יצרן:</span> ${contract.tradeInCar.make}</p>
-                                    <p><span class="font-semibold text-orange-700">דגם:</span> ${contract.tradeInCar.model}</p>
-                                    <p><span class="font-semibold text-orange-700">סוג:</span> ${contract.tradeInCar.type}</p>
-                                    <p><span class="font-semibold text-orange-700">שנה:</span> ${contract.tradeInCar.year}</p>
-                                    <p><span class="font-semibold text-orange-700">מס׳ רישוי:</span> ${contract.tradeInCar.plateNumber}</p>
-                                    <p><span class="font-semibold text-orange-700">קילומטרז׳:</span> ${contract.tradeInCar.kilometers.toLocaleString('en-US')}</p>
-                                </div>
-                            </div>
-                        `
-                                : ''
-                        }
+                        <!-- Trade-in Vehicle(s) (Cars Received from Client) -->
+                        ${renderTradeInCarsBlock(
+                            resolveTradeInCars(contract),
+                            {
+                                title: 'הרכב המתקבל מהלקוח',
+                                make: 'יצרן',
+                                model: 'דגם',
+                                type: 'סוג',
+                                year: 'שנה',
+                                plate: 'מס׳ רישוי',
+                                km: 'קילומטרז׳',
+                                carN: 'רכב',
+                            },
+                            { locale: 'en-US', rtl: true },
+                        )}
                     </div>
                 `
                         : `
@@ -1401,11 +1415,11 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                         </div>
                         
                         ${
-                            contract.dealType === 'trade-in' && contract.tradeInCar
+                            contract.dealType === 'trade-in' && resolveTradeInCars(contract).length > 0
                                 ? `
                         <!-- Exchange Deal Breakdown - Compact -->
                         <div class="mt-2 bg-white rounded-lg p-1.5 border border-emerald-200">
-                            <p class="text-xs text-right"><span class="font-semibold text-gray-600">הוחלף עבור ${contract.tradeInCar.model} ${contract.tradeInCar.make} ${contract.tradeInCar.year} ${contract.tradeInCar.plateNumber}</span>${
+                            <p class="text-xs text-right"><span class="font-semibold text-gray-600">הוחלף עבור ${formatTradeInCarsLabel(resolveTradeInCars(contract))}</span>${
                                 contract.additionalCustomerAmount && contract.additionalCustomerAmount > 0
                                     ? `<p><span class="font-semibold text-gray-600">סכום נוסף מהלקוח:</span> <span class="text-blue-600">${formatCurrency(contract.additionalCustomerAmount)}</span></p>`
                                     : ''

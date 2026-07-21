@@ -16,7 +16,8 @@ interface BillsTableProps {
     className?: string;
     deal?: any; // Deal information for exchange deals
     car?: any; // Car data for the deal
-    carTakenFromClient?: any; // Car taken from client for exchange deals
+    carTakenFromClient?: any; // First car taken from client (backward compat)
+    carsTakenFromClient?: any[]; // All cars taken from client for exchange deals
     selectedCustomer?: any; // Selected customer for display
     registerOrders?: Array<{ amount: number; description: string; created_at: string; direction?: 'positive' | 'negative' }>;
     bankTransferOrders?: Array<{ amount: number; description: string; created_at: string }>;
@@ -32,11 +33,18 @@ const BillsTable: React.FC<BillsTableProps> = ({
     deal,
     car,
     carTakenFromClient,
+    carsTakenFromClient,
     selectedCustomer,
     registerOrders = [],
     bankTransferOrders = [],
 }) => {
     const { t } = getTranslation();
+    const tradeInCars =
+        carsTakenFromClient && carsTakenFromClient.length > 0
+            ? carsTakenFromClient
+            : carTakenFromClient
+              ? [carTakenFromClient]
+              : [];
 
     // Calculate deal balance using the same logic from sales-deals page
     const calculateDealBalance = (deal: any, bills: any[]): number => {
@@ -231,32 +239,39 @@ const BillsTable: React.FC<BillsTableProps> = ({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {/* Add special row for exchange deals showing customer car evaluation */}
-                        {deal?.deal_type === 'exchange' && carTakenFromClient && (
-                            <tr className="bg-blue-50 dark:bg-blue-900/20 border-b-2 border-blue-200 dark:border-blue-700">
-                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                                        {t('car_taken_from_client_label')}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
-                                    {deal?.customers?.name || deal?.customer?.name || selectedCustomer?.name || t('unknown_customer')}
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                    <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(carTakenFromClient.buy_price || 0)}</span>
-                                </td>
-                                <td className="px-4 py-3 text-sm">
-                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(deal.created_at)}</td>
-                                <td className="px-4 py-3 text-center">
-                                    <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
-                                </td>
-                            </tr>
-                        )}
+                        {/* Special rows for exchange deals — one per customer trade-in car */}
+                        {deal?.deal_type === 'exchange' &&
+                            tradeInCars.map((takenCar: any, index: number) => (
+                                <tr key={takenCar?.id || `trade-in-${index}`} className="bg-blue-50 dark:bg-blue-900/20 border-b-2 border-blue-200 dark:border-blue-700">
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                                            {t('car_taken_from_client_label')}
+                                            {tradeInCars.length > 1 ? ` #${index + 1}` : ''}
+                                        </span>
+                                        {(takenCar?.brand || takenCar?.title || takenCar?.car_number) && (
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                {[takenCar.brand, takenCar.title, takenCar.year, takenCar.car_number].filter(Boolean).join(' - ')}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                                        {deal?.customers?.name || deal?.customer?.name || selectedCustomer?.name || t('unknown_customer')}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(takenCar?.buy_price || 0)}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm">
+                                        <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(deal.created_at)}</td>
+                                    <td className="px-4 py-3 text-center">
+                                        <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
+                                    </td>
+                                </tr>
+                            ))}
 
                         {/* Add special row for financing assistance intermediary deals showing manual bank transfer orders */}
                         {deal?.deal_type === 'financing_assistance_intermediary' &&

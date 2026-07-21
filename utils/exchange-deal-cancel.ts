@@ -8,7 +8,12 @@ type JsonLogRow = {
     car?: { id?: string | number } | null;
 };
 
-async function fetchRelevantLogs(db: SupabaseClient, dealId: string, customerCarId: string | null | undefined, showroomCarId: string | null | undefined): Promise<JsonLogRow[]> {
+async function fetchRelevantLogs(
+    db: SupabaseClient,
+    dealId: string,
+    customerCarIds: string[],
+    showroomCarId: string | null | undefined,
+): Promise<JsonLogRow[]> {
     const byId = new Map<string, JsonLogRow>();
     const merge = (rows: JsonLogRow[] | null) => {
         for (const r of rows || []) byId.set(r.id, r);
@@ -23,7 +28,7 @@ async function fetchRelevantLogs(db: SupabaseClient, dealId: string, customerCar
         merge(byDeal as JsonLogRow[]);
     }
 
-    if (customerCarId) {
+    for (const customerCarId of customerCarIds) {
         const cid = String(customerCarId);
         const { data: byCar, error: errCar } = await db.from('logs').select('*').eq('car->>id', cid);
         if (errCar) {
@@ -54,27 +59,41 @@ async function fetchRelevantLogs(db: SupabaseClient, dealId: string, customerCar
         return [];
     }
 
+    const customerSet = new Set(customerCarIds.map(String));
     const out: JsonLogRow[] = [];
     for (const log of (scan || []) as JsonLogRow[]) {
         let hit = false;
         if (log.deal && String(log.deal.id) === did) hit = true;
-        if (customerCarId && log.car && String(log.car.id) === String(customerCarId)) hit = true;
+        if (log.car && customerSet.has(String(log.car.id))) hit = true;
         if (showroomCarId && log.car && String(log.car.id) === String(showroomCarId)) hit = true;
         if (hit) out.push(log);
     }
     return out;
 }
 
+function normalizeCustomerCarIds(params: {
+    customerCarId?: string | null;
+    customerCarIds?: string[] | null;
+}): string[] {
+    if (Array.isArray(params.customerCarIds) && params.customerCarIds.length > 0) {
+        return params.customerCarIds.filter(Boolean).map(String);
+    }
+    if (params.customerCarId) return [String(params.customerCarId)];
+    return [];
+}
+
 /**
  * After an exchange deal is marked cancelled and FK fields cleared on `deals`,
- * mark the customer trade-in car as returned (archived), annotate logs, and re-log the showroom car as inventory.
+ * mark the customer trade-in car(s) as returned (archived), annotate logs, and re-log the showroom car as inventory.
  *
  * @param db — Pass a service-role client from the API route if browser RLS blocks updates.
  */
 export async function applyExchangeDealCancellationSideEffects(
     params: {
         dealId: string;
-        customerCarId: string | null | undefined;
+        /** @deprecated Prefer customerCarIds */
+        customerCarId?: string | null;
+        customerCarIds?: string[] | null;
         showroomCarId: string | null | undefined;
         cancellationReason: string;
         /** Stored in `logs.deal.cancelled_at` (from cancel form date) */
@@ -82,9 +101,10 @@ export async function applyExchangeDealCancellationSideEffects(
     },
     db: SupabaseClient = supabase as unknown as SupabaseClient,
 ): Promise<void> {
-    const { dealId, customerCarId, showroomCarId, cancellationReason, cancelledAt } = params;
+    const { dealId, showroomCarId, cancellationReason, cancelledAt } = params;
+    const customerCarIds = normalizeCustomerCarIds(params);
 
-    if (customerCarId) {
+    for (const customerCarId of customerCarIds) {
         const { data: updatedCar, error: carErr } = await db
             .from('cars')
             .update({
@@ -112,15 +132,16 @@ export async function applyExchangeDealCancellationSideEffects(
         cancelledAt: cancelledAt.trim(),
     });
 
-    const logs = await fetchRelevantLogs(db, dealId, customerCarId, showroomCarId);
+    const logs = await fetchRelevantLogs(db, dealId, customerCarIds, showroomCarId);
     const logErrors: string[] = [];
+    const customerSet = new Set(customerCarIds.map(String));
 
     for (const log of logs) {
         const row = log as JsonLogRow & { deal?: Record<string, unknown>; car?: Record<string, unknown> };
         const updates: Record<string, unknown> = {};
         let touched = false;
 
-        if (customerCarId && row.car && String((row.car as { id?: string }).id) === String(customerCarId)) {
+        if (row.car && customerSet.has(String((row.car as { id?: string }).id))) {
             updates.car = {
                 ...row.car,
                 status: 'returned_to_customer',
