@@ -305,11 +305,16 @@ export const logActivity = async ({ type, deal, car, bill, customTimestamp }: Lo
                 }
             }
 
-            // Get customer details if source_customer_id exists (for cars received from customers)
+            // Get customer details if source_customer_id exists (customer purchase or brokerage)
             if (car.source_customer_id) {
                 const customer = await getCustomerDetails(car.source_customer_id);
                 if (customer) {
-                    enrichedCar.customer_details = customer;
+                    if (car.source_type === 'brokerage' || car.source_type === 'broker') {
+                        enrichedCar.customer_details = customer;
+                        enrichedCar.broker_details = customer; // legacy log readers
+                    } else {
+                        enrichedCar.customer_details = customer;
+                    }
                 }
             }
 

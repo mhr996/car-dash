@@ -32,7 +32,7 @@ interface Car {
     sale_price: number;
     kilometers: number;
     provider: string;
-    source_type?: 'provider' | 'customer';
+    source_type?: 'provider' | 'customer' | 'brokerage' | 'broker';
     source_customer_id?: string;
     brand: string;
     desc?: string; // New description field
@@ -207,6 +207,12 @@ const CarPreview = () => {
             sellerAddress = '[Customer Address - To Be Filled]';
             sellerPhone = car.customers.phone || '';
             sellerTaxNumber = car.customers.id_number || '';
+        } else if ((car.source_type === 'brokerage' || car.source_type === 'broker') && car.customers) {
+            const party = car.customers;
+            sellerName = party.name;
+            sellerAddress = (party as { address?: string }).address || '';
+            sellerPhone = party.phone || '';
+            sellerTaxNumber = party.id_number || '';
         } else if (car.source_type === 'provider' && car.providers) {
             // Seller is a provider
             sellerName = car.providers.name;
@@ -553,6 +559,16 @@ const CarPreview = () => {
                                                 <div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="badge badge-outline-info text-xs">{t('from_customer')}</span>
+                                                    </div>
+                                                    <div className="mt-1">
+                                                        <div>{car.customers.name}</div>
+                                                        <div className="text-xs text-gray-500">{car.customers.phone}</div>
+                                                    </div>
+                                                </div>
+                                            ) : (car.source_type === 'brokerage' || car.source_type === 'broker') && car.customers ? (
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="badge badge-outline-warning text-xs">{t('from_brokerage')}</span>
                                                     </div>
                                                     <div className="mt-1">
                                                         <div>{car.customers.name}</div>

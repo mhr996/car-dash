@@ -99,7 +99,8 @@ const CarDealsPage = () => {
                 companyPhone: companyInfo.phone || '',
                 sellerName: car.source_type === 'provider' ? car.provider?.name || '' : car.source_customer?.name || '',
                 sellerTaxNumber: car.source_type === 'provider' ? car.provider?.id_number || '' : '',
-                sellerPhone: car.source_type === 'provider' ? car.provider?.phone || '' : car.source_customer?.phone || '',
+                sellerPhone:
+                    car.source_type === 'provider' ? car.provider?.phone || '' : car.source_customer?.phone || '',
                 sellerAddress: car.source_type === 'provider' ? car.provider?.address || '' : '',
                 buyerName: companyInfo.name,
                 buyerId: companyInfo.tax_number || '',
@@ -260,7 +261,12 @@ const CarDealsPage = () => {
 
             // Source type filter
             if (filters.sourceType) {
-                filtered = filtered.filter((car) => car.source_type === filters.sourceType);
+                filtered = filtered.filter((car) => {
+                    if (filters.sourceType === 'brokerage') {
+                        return car.source_type === 'brokerage' || car.source_type === 'broker';
+                    }
+                    return car.source_type === filters.sourceType;
+                });
             }
 
             // Status filter
@@ -351,13 +357,29 @@ const CarDealsPage = () => {
             accessor: 'source_type',
             title: t('source_type'),
             sortable: true,
-            render: (car) => <span className={`badge ${car.source_type === 'provider' ? 'badge-outline-primary' : 'badge-outline-success'}`}>{t(`source_type_${car.source_type}`)}</span>,
+            render: (car) => (
+                <span
+                    className={`badge ${
+                        car.source_type === 'provider'
+                            ? 'badge-outline-primary'
+                            : car.source_type === 'brokerage' || car.source_type === 'broker'
+                              ? 'badge-outline-warning'
+                              : 'badge-outline-success'
+                    }`}
+                >
+                    {t(`source_type_${car.source_type === 'broker' ? 'brokerage' : car.source_type}`)}
+                </span>
+            ),
         },
         {
             accessor: 'source_name',
             title: t('source_name'),
             sortable: true,
-            render: (car) => <span className="text-sm">{car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}</span>,
+            render: (car) => (
+                <span className="text-sm">
+                    {car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}
+                </span>
+            ),
         },
         ...(hasPermission('view_car_purchase_price')
             ? [
@@ -495,15 +517,25 @@ const CarDealsPage = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('source_type')}</p>
-                                                    <span className={`badge ${car.source_type === 'provider' ? 'badge-outline-primary' : 'badge-outline-success'} text-xs`}>
-                                                        {t(`source_type_${car.source_type}`)}
+                                                    <span
+                                                        className={`badge ${
+                                                            car.source_type === 'provider'
+                                                                ? 'badge-outline-primary'
+                                                                : car.source_type === 'brokerage' || car.source_type === 'broker'
+                                                                  ? 'badge-outline-warning'
+                                                                  : 'badge-outline-success'
+                                                        } text-xs`}
+                                                    >
+                                                        {t(`source_type_${car.source_type === 'broker' ? 'brokerage' : car.source_type}`)}
                                                     </span>
                                                 </div>
                                             </div>
                                             <div className="border-t border-gray-200 dark:border-gray-700 pt-3 mb-4">
                                                 <div className="mb-2">
                                                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('source_name')}</p>
-                                                    <p className="font-semibold text-sm truncate">{car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}</p>
+                                                    <p className="font-semibold text-sm truncate">
+                                                        {car.source_type === 'provider' ? car.provider?.name : car.source_customer?.name}
+                                                    </p>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     {hasPermission('view_car_purchase_price') && (

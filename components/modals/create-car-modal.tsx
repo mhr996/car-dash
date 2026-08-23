@@ -7,12 +7,12 @@ import IconGallery from '@/components/icon/icon-gallery';
 import { getTranslation } from '@/i18n';
 import BrandSelect from '@/components/brand-select/brand-select';
 import StatusSelect from '@/components/status-select/status-select';
-import ProviderSelect from '@/components/provider-select/provider-select';
-import CustomerSelect from '@/components/customer-select/customer-select';
 import TypeSelect from '@/components/type-select/type-select';
 import CreateCustomerModal from '@/components/modals/create-customer-modal';
+import CarSourceFields from '@/components/car-source-fields/car-source-fields';
 import supabase from '@/lib/supabase';
 import { logActivity } from '@/utils/activity-logger';
+import { CarSource } from '@/types';
 
 interface Car {
     id: string;
@@ -60,8 +60,8 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
     const { t } = getTranslation();
     const [saving, setSaving] = useState(false);
 
-    // Car source state (provider or customer)
-    const [carSource, setCarSource] = useState<'provider' | 'customer'>('provider');
+    // Car source state (provider, customer, or broker)
+    const [carSource, setCarSource] = useState<CarSource>('provider');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [isCreateCustomerModalOpen, setIsCreateCustomerModalOpen] = useState(false);
 
@@ -183,13 +183,13 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
     };
 
     // Car source handlers
-    const handleCarSourceChange = (source: 'provider' | 'customer') => {
+    const handleCarSourceChange = (source: CarSource) => {
         setCarSource(source);
-        // Reset the other selection when switching
+        if (source !== 'provider') {
+            setForm((prev) => ({ ...prev, provider: '' }));
+        }
         if (source === 'provider') {
             setSelectedCustomer(null);
-        } else {
-            setForm((prev) => ({ ...prev, provider: '' }));
         }
     };
 
@@ -206,7 +206,7 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
         setIsCreateCustomerModalOpen(false);
     };
 
-    // Color management functions
+                       // Color management functions
     const addColor = () => {
         const newColor: ColorVariant = {
             id: Date.now().toString(),
@@ -356,6 +356,10 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
             newErrors.customer = t('customer_required');
         }
 
+        if ((carSource === 'brokerage' || carSource === 'broker') && !selectedCustomer) {
+            newErrors.customer = t('customer_required');
+        }
+
         if (form.kilometers && (parseInt(form.kilometers) < 0 || parseInt(form.kilometers) > 1000000)) {
             newErrors.kilometers = t('valid_kilometers_required');
         }
@@ -416,8 +420,8 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
                 type: form.type || null,
                 // Handle provider/customer based on source selection
                 provider: carSource === 'provider' ? form.provider : null,
-                source_customer_id: carSource === 'customer' ? selectedCustomer?.id : null,
-                source_type: carSource,
+                source_customer_id: carSource === 'customer' || carSource === 'brokerage' || carSource === 'broker' ? selectedCustomer?.id : null,
+                source_type: carSource === 'broker' ? 'brokerage' : carSource,
                 kilometers: form.kilometers ? parseInt(form.kilometers) : 0,
                 market_price: form.market_price ? parseFloat(form.market_price) : 0,
                 buy_price: form.buy_price ? parseFloat(form.buy_price) : 0,
@@ -693,67 +697,17 @@ const CreateCarModal = ({ isOpen, onClose, onCarCreated }: CreateCarModalProps) 
                                     </div>
                                     {errors.sale_price && <p className="text-red-500 text-xs mt-1">{errors.sale_price}</p>}
                                 </div>
-                                {/* Car Source Selection */}
-                                <div className="">
-                                    <label className="block text-sm font-bold text-gray-700 dark:text-white mb-3">
-                                        {t('car_source')} <span className="text-red-500">*</span>
-                                    </label>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t('car_source_description')}</p>
-
-                                    {/* Toggle Buttons */}
-                                    <div className="flex gap-3 mb-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleCarSourceChange('provider')}
-                                            className={`flex-1 px-4 py-3 rounded-lg border-2 transition-colors ${
-                                                carSource === 'provider'
-                                                    ? 'border-primary bg-primary text-white'
-                                                    : 'border-gray-300 bg-white text-gray-700 hover:border-primary hover:bg-primary hover:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'
-                                            }`}
-                                        >
-                                            <div className="text-center">
-                                                <div className="font-medium">{t('from_provider')}</div>
-                                            </div>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleCarSourceChange('customer')}
-                                            className={`flex-1 px-4 py-3 rounded-lg border-2 transition-colors ${
-                                                carSource === 'customer'
-                                                    ? 'border-primary bg-primary text-white'
-                                                    : 'border-gray-300 bg-white text-gray-700 hover:border-primary hover:bg-primary hover:text-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300'
-                                            }`}
-                                        >
-                                            <div className="text-center">
-                                                <div className="font-medium">{t('from_customer')}</div>
-                                            </div>
-                                        </button>
-                                    </div>
-
-                                    {/* Conditional Selectors */}
-                                    {carSource === 'provider' ? (
-                                        <div>
-                                            <label htmlFor="provider" className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
-                                                {t('select_provider')} <span className="text-red-500">*</span>
-                                            </label>
-                                            <ProviderSelect
-                                                defaultValue={form.provider}
-                                                className={`form-input ${errors.provider ? 'border-red-500' : ''}`}
-                                                name="provider"
-                                                onChange={handleProviderChange}
-                                            />
-                                            {errors.provider && <p className="text-red-500 text-xs mt-1">{errors.provider}</p>}
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-white mb-2">
-                                                {t('select_customer')} <span className="text-red-500">*</span>
-                                            </label>
-                                            <CustomerSelect selectedCustomer={selectedCustomer} onCustomerSelect={handleCustomerSelect} onCreateNew={handleCreateNewCustomer} className="form-input" />
-                                            {errors.customer && <p className="text-red-500 text-xs mt-1">{errors.customer}</p>}
-                                        </div>
-                                    )}
-                                </div>
+                                <CarSourceFields
+                                    carSource={carSource}
+                                    onSourceChange={handleCarSourceChange}
+                                    providerValue={form.provider}
+                                    onProviderChange={handleProviderChange}
+                                    selectedCustomer={selectedCustomer}
+                                    onCustomerSelect={handleCustomerSelect}
+                                    onCreateCustomer={handleCreateNewCustomer}
+                                    providerError={errors.provider}
+                                    customerError={errors.customer}
+                                />
                             </div>
 
                             {/* Car Description */}

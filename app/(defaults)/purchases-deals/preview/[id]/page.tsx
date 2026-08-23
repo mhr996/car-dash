@@ -30,7 +30,7 @@ interface Car {
     sale_price: number;
     kilometers: number;
     provider: string;
-    source_type?: 'provider' | 'customer';
+    source_type?: 'provider' | 'customer' | 'brokerage' | 'broker';
     source_customer_id?: string;
     brand: string;
     desc?: string;
@@ -196,7 +196,12 @@ const CarDealPreview = () => {
 
                                     setGeneratingContract(true);
                                     try {
-                                        const sourceEntity = car.source_type === 'provider' ? car.providers : car.customers;
+                                        const sourceEntity =
+                                            car.source_type === 'provider'
+                                                ? car.providers
+                                                : car.source_type === 'brokerage' || car.source_type === 'broker'
+                                                  ? car.customers
+                                                  : car.customers;
 
                                         const contractData: CarContract = {
                                             dealType: 'normal',
@@ -206,8 +211,14 @@ const CarDealPreview = () => {
                                             companyAddress: companyInfo.address || '',
                                             companyPhone: companyInfo.phone || '',
                                             sellerName: sourceEntity?.name || 'N/A',
-                                            sellerTaxNumber: car.customers?.id_number?.toString() || '',
-                                            sellerAddress: car.providers?.address || '',
+                                            sellerTaxNumber:
+                                                car.source_type === 'brokerage' || car.source_type === 'broker'
+                                                    ? (car.customers)?.id_number?.toString() || ''
+                                                    : car.customers?.id_number?.toString() || car.providers?.id_number?.toString() || '',
+                                            sellerAddress:
+                                                car.source_type === 'brokerage' || car.source_type === 'broker'
+                                                    ? (car.customers as any)?.address || ''
+                                                    : car.providers?.address || '',
                                             sellerPhone: sourceEntity?.phone || '',
                                             buyerName: companyInfo.name,
                                             buyerId: companyInfo.tax_number || '',
@@ -342,8 +353,16 @@ const CarDealPreview = () => {
                                     <IconUser className="w-5 h-5 text-success" />
                                     <div>
                                         <p className="text-sm text-gray-500">{t('purchased_from')}</p>
-                                        <p className="font-medium">{car.source_type === 'provider' ? car.providers?.name : car.customers?.name}</p>
-                                        <p className="text-xs text-gray-400">{t(`source_type_${car.source_type}`)}</p>
+                                        <p className="font-medium">
+                                            {car.source_type === 'provider'
+                                                ? car.providers?.name
+                                                : car.source_type === 'brokerage' || car.source_type === 'broker'
+                                                  ? car.customers?.name
+                                                  : car.customers?.name}
+                                        </p>
+                                        <p className="text-xs text-gray-400">
+                                            {t(`source_type_${car.source_type === 'broker' ? 'brokerage' : car.source_type}`)}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -400,7 +419,7 @@ const CarDealPreview = () => {
                             <h3 className="text-lg font-semibold">
                                 {t('source')} {t('contact_information')}
                             </h3>
-                            <p className="text-xs text-gray-500 mt-1">{t(`source_type_${car.source_type}`)}</p>
+                            <p className="text-xs text-gray-500 mt-1">{t(`source_type_${car.source_type === 'broker' ? 'brokerage' : car.source_type}`)}</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {car.source_type === 'provider' && car.providers ? (
@@ -486,6 +505,58 @@ const CarDealPreview = () => {
                                                 <p className="text-xs text-gray-500">{t('age')}</p>
                                                 <p className="font-medium">
                                                     {car.customers.age} {t('years_old')}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (car.source_type === 'brokerage' || car.source_type === 'broker') && car.customers ? (
+                                <>
+                                    <div className="flex items-start gap-3">
+                                        <IconUser className="w-5 h-5 text-primary mt-0.5" />
+                                        <div className="flex-1">
+                                            <p className="text-xs text-gray-500">{t('customer_name')}</p>
+                                            <p className="font-semibold">{(car.customers)?.name}</p>
+                                        </div>
+                                    </div>
+
+                                    {(car.customers)?.phone && (
+                                        <div className="flex items-start gap-3">
+                                            <IconPhone className="w-5 h-5 text-success mt-0.5" />
+                                            <div className="flex-1">
+                                                <p className="text-xs text-gray-500">{t('phone')}</p>
+                                                <p className="font-medium">{(car.customers)?.phone}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {((car.customers as any)?.address) && (
+                                        <div className="flex items-start gap-3">
+                                            <IconMapPin className="w-5 h-5 text-warning mt-0.5" />
+                                            <div className="flex-1">
+                                                <p className="text-xs text-gray-500">{t('address')}</p>
+                                                <p className="font-medium">{(car.customers as any)?.address}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(car.customers)?.id_number && (
+                                        <div className="flex items-start gap-3">
+                                            <IconCreditCard className="w-5 h-5 text-info mt-0.5" />
+                                            <div className="flex-1">
+                                                <p className="text-xs text-gray-500">{t('id_number')}</p>
+                                                <p className="font-medium">{(car.customers)?.id_number}</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(car.customers as any)?.age && (
+                                        <div className="flex items-start gap-3">
+                                            <IconCalendar className="w-5 h-5 text-warning mt-0.5" />
+                                            <div className="flex-1">
+                                                <p className="text-xs text-gray-500">{t('age')}</p>
+                                                <p className="font-medium">
+                                                    {(car.customers as any).age} {t('years_old')}
                                                 </p>
                                             </div>
                                         </div>

@@ -116,6 +116,7 @@ const CarDealFilters: React.FC<FilterProps> = ({ onFilterChange, onClearFilters 
         { value: '', label: t('all') },
         { value: 'provider', label: t('source_type_provider') },
         { value: 'customer', label: t('source_type_customer') },
+        { value: 'brokerage', label: t('source_type_brokerage') },
     ];
 
     const statusOptions = [

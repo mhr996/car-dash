@@ -80,6 +80,8 @@ export interface Customer {
     birth_date?: string;
 }
 
+export type CarSource = 'provider' | 'customer' | 'brokerage' | 'broker'; // 'broker' kept for legacy rows
+
 export interface Car {
     id: string;
     title: string;
@@ -88,6 +90,8 @@ export interface Car {
     status: string;
     type?: string;
     provider?: string | null;
+    source_type?: CarSource;
+    source_customer_id?: string | number | null;
     kilometers: number;
     market_price: number;
     buy_price: number;

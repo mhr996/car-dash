@@ -318,11 +318,18 @@ export class LogsPDFGenerator {
 
         const car = log.car;
         const provider = car.providers || car.provider_details;
-        const providerName = provider?.name || car.provider || t('not_available');
+        const customer = car.customers || car.customer_details || car.source_customer;
+        const broker = car.brokers || car.broker_details || car.source_broker;
+        const sourceName =
+            car.source_type === 'customer'
+                ? customer?.name || t('not_available')
+                : car.source_type === 'brokerage' || car.source_type === 'broker'
+                  ? customer?.name || broker?.name || t('not_available')
+                  : provider?.name || car.provider || customer?.name || broker?.name || t('not_available');
         const purchaseDate = car.created_at ? formatDate(car.created_at) : t('not_available');
         const purchasePrice = car.buy_price ? `₪${car.buy_price.toLocaleString()}` : t('not_available');
 
-        return `${purchaseDate}<br><span style="color: #6b7280; font-size: 8px;">${providerName}<br>${purchasePrice}</span>`;
+        return `${purchaseDate}<br><span style="color: #6b7280; font-size: 8px;">${sourceName}<br>${purchasePrice}</span>`;
     }
 
     private static getSaleInfo(log: Log, t: any): string {
@@ -330,8 +337,9 @@ export class LogsPDFGenerator {
 
         const deal = log.deal;
         const customer = deal.customer || deal.customers;
+        const broker = deal.broker || deal.brokers;
         const saleDate = deal.created_at ? formatDate(deal.created_at) : t('not_available');
-        const buyerName = customer?.name || deal.customer_name || t('not_available');
+        const buyerName = broker?.name || customer?.name || deal.customer_name || t('not_available');
         const salePrice = deal.selling_price ? `₪${deal.selling_price.toLocaleString()}` : deal.amount ? `₪${deal.amount.toLocaleString()}` : t('not_available');
 
         return `${saleDate}<br><span style="color: #6b7280; font-size: 8px;">${buyerName}<br>${salePrice}</span>`;

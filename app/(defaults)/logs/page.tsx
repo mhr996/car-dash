@@ -236,6 +236,7 @@ const LogsPage = () => {
         const car = log.car;
         const provider = car.providers || car.provider_details;
         const customer = car.customers || car.customer_details || car.source_customer;
+        const broker = car.brokers || car.broker_details || car.source_broker;
 
         // Determine source name based on source_type
         let sourceName = t('not_available');
@@ -243,9 +244,11 @@ const LogsPage = () => {
             sourceName = provider?.name || car.provider || t('not_available');
         } else if (car.source_type === 'customer') {
             sourceName = customer?.name || t('not_available');
+        } else if (car.source_type === 'brokerage' || car.source_type === 'broker') {
+            sourceName = customer?.name || broker?.name || t('not_available');
         } else {
             // Fallback: older logs might not have source_type but still include enriched details
-            sourceName = provider?.name || customer?.name || car.provider || t('not_available');
+            sourceName = provider?.name || customer?.name || broker?.name || car.provider || t('not_available');
         }
 
         const purchaseReturned =
@@ -257,7 +260,9 @@ const LogsPage = () => {
         const returnedToLabel = purchaseReturned
             ? car.source_type === 'provider'
                 ? t('returned_to_provider')
-                : t('returned_to_customer')
+                : car.source_type === 'brokerage' || car.source_type === 'broker'
+                  ? t('returned_to_brokerage')
+                  : t('returned_to_customer')
             : null;
 
         const purchasePriceLine = purchaseReturned ? (
@@ -288,6 +293,7 @@ const LogsPage = () => {
 
         const deal = log.deal;
         const customer = deal.customer || deal.customers;
+        const broker = deal.broker || deal.brokers;
         const seller = deal.seller || deal.sellers;
         const buyer = deal.buyer || deal.buyers;
 
@@ -329,7 +335,7 @@ const LogsPage = () => {
             <div className="text-sm">
                 <div className="font-medium">{formatDate(deal.created_at) || t('not_available')}</div>
                 <div className="text-gray-500 dark:text-gray-400">
-                    {customer?.name || deal.customer_name || t('not_available')}
+                    {broker?.name || customer?.name || deal.customer_name || t('not_available')}
                     {showExchangeCancelledLabels ? exchangeCancelledBadge : null}
                 </div>
                 {showExchangeCancelledLabels ? (
@@ -655,9 +661,19 @@ const LogsPage = () => {
                                         return <span className="text-gray-400">{t('not_available')}</span>;
                                     }
 
-                                    // Display badge based on source type
-                                    const isProvider = sourceType === 'provider';
-                                    return <span className={`badge ${isProvider ? 'badge-outline-primary' : 'badge-outline-success'}`}>{isProvider ? t('provider') : t('customer')}</span>;
+                                    const badgeClass =
+                                        sourceType === 'provider'
+                                            ? 'badge-outline-primary'
+                                            : sourceType === 'brokerage' || sourceType === 'broker'
+                                              ? 'badge-outline-warning'
+                                              : 'badge-outline-success';
+                                    const label =
+                                        sourceType === 'provider'
+                                            ? t('provider')
+                                            : sourceType === 'brokerage' || sourceType === 'broker'
+                                              ? t('source_type_brokerage')
+                                              : t('customer');
+                                    return <span className={`badge ${badgeClass}`}>{label}</span>;
                                 },
                             },
                             {

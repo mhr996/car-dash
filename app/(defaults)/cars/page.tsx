@@ -230,6 +230,8 @@ const CarsList = () => {
                     item.brand?.toLowerCase().includes(searchTerm) ||
                     item.status?.toLowerCase().includes(searchTerm) ||
                     item.providers?.name?.toLowerCase().includes(searchTerm) ||
+                    item.source_customer?.name?.toLowerCase().includes(searchTerm) ||
+                    
                     item.year?.toString().includes(searchTerm) ||
                     item.car_number?.toLowerCase().includes(searchTerm);
 
@@ -455,9 +457,9 @@ const CarsList = () => {
                 companyTaxNumber: companyInfo.tax_number || '',
                 companyAddress: companyInfo.address || '',
                 companyPhone: companyInfo.phone || '',
-                sellerName: car.providers?.name || '',
+                sellerName: car.providers?.name || car.source_customer?.name || '',
                 sellerTaxNumber: car.providers?.id_number || '',
-                sellerPhone: car.providers?.phone || '',
+                sellerPhone: car.providers?.phone || car.source_customer?.phone || '',
                 sellerAddress: car.providers?.address || '',
                 buyerName: companyInfo.name,
                 buyerId: companyInfo.tax_number || '',
@@ -727,7 +729,9 @@ const CarsList = () => {
                                     accessor: 'provider',
                                     title: t('provider'),
                                     sortable: true,
-                                    render: ({ providers, source_customer, provider }) => <span>{providers?.name || source_customer?.name || provider || '-'}</span>,
+                                    render: ({ providers, source_customer, provider }) => (
+                                        <span>{providers?.name || source_customer?.name || provider || '-'}</span>
+                                    ),
                                 },
                                 {
                                     accessor: 'market_price',

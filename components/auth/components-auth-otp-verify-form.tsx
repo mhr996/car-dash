@@ -174,7 +174,7 @@ const ComponentsAuthOTPVerifyForm = ({ email, onBack }: OTPVerifyFormProps) => {
 
             {error && <div className="text-red-500 bg-red-100 dark:bg-red-900/20 p-3 rounded-md mb-4 text-center">{error}</div>}
 
-            <div className="flex justify-center gap-2 mb-6">
+            <div className="flex flex-row justify-center gap-2 mb-6" dir="ltr">
                 {otp.map((digit, index) => (
                     <input
                         key={index}
@@ -183,12 +183,14 @@ const ComponentsAuthOTPVerifyForm = ({ email, onBack }: OTPVerifyFormProps) => {
                         }}
                         type="text"
                         inputMode="numeric"
+                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
                         maxLength={1}
                         value={digit}
+                        dir="ltr"
                         onChange={(e) => handleChange(index, e.target.value)}
                         onKeyDown={(e) => handleKeyDown(index, e)}
                         onPaste={handlePaste}
-                        className="w-12 h-14 text-center text-2xl font-bold border-2 rounded-lg focus:border-primary focus:outline-none transition-colors dark:bg-gray-800 dark:border-gray-600"
+                        className="w-12 h-14 text-center text-2xl font-bold border-2 rounded-lg focus:border-primary focus:outline-none transition-colors dark:bg-gray-800 dark:border-gray-600 [direction:ltr]"
                         disabled={isVerifying}
                     />
                 ))}
