@@ -175,7 +175,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 // Add seller data to the deal object
                                 data.seller = {
                                     name: sellerData.name,
-                                    id_number: sellerData.id,
+                                    id_number: sellerData.id_number || '',
+                                    address: sellerData.address || '',
                                 };
                             }
                         }
@@ -187,7 +188,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 // Add buyer data to the deal object
                                 data.buyer = {
                                     name: buyerData.name,
-                                    id_number: buyerData.id,
+                                    id_number: buyerData.id_number || '',
+                                    address: buyerData.address || '',
                                 };
                             }
                         }
@@ -455,8 +457,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             sellerPhone: isIntermediaryDeal ? '' : companyInfo?.phone || '',
 
             buyerName: isIntermediaryDeal ? deal.buyer?.name || t('unknown_buyer') : customer?.name || t('unknown_customer'),
-            buyerId: isIntermediaryDeal ? deal.buyer?.id_number || '' : customer?.id || '',
-            buyerAddress: '',
+            buyerId: isIntermediaryDeal ? deal.buyer?.id_number || '' : customer?.id_number || '',
+            buyerAddress: isIntermediaryDeal ? deal.buyer?.address || '' : customer?.address || '',
             buyerPhone: isIntermediaryDeal ? '' : customer?.phone || '',
 
             // Mark as intermediary deal and include additional info
@@ -465,13 +467,13 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                 actualSeller: {
                     name: deal.seller?.name || t('unknown_seller'),
                     id: deal.seller?.id_number || '',
-                    address: '',
+                    address: deal.seller?.address || '',
                     phone: '',
                 },
                 actualBuyer: {
                     name: deal.buyer?.name || t('unknown_buyer'),
                     id: deal.buyer?.id_number || '',
-                    address: '',
+                    address: deal.buyer?.address || '',
                     phone: '',
                 },
             }),

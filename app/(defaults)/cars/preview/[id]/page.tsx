@@ -204,7 +204,7 @@ const CarPreview = () => {
         if (car.source_type === 'customer' && car.customers) {
             // Seller is a customer
             sellerName = car.customers.name;
-            sellerAddress = '[Customer Address - To Be Filled]';
+            sellerAddress = (car.customers as any)?.address || '';
             sellerPhone = car.customers.phone || '';
             sellerTaxNumber = car.customers.id_number || '';
         } else if ((car.source_type === 'brokerage' || car.source_type === 'broker') && car.customers) {

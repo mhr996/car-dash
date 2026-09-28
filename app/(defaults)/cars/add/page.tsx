@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -37,6 +37,8 @@ const AddCar = () => {
     const [carSource, setCarSource] = useState<CarSource>('provider');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [isCreateCustomerModalOpen, setIsCreateCustomerModalOpen] = useState(false);
+    const [archivedCarInfo, setArchivedCarInfo] = useState<any>(null);
+    const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
 
     const [form, setForm] = useState({
         title: '',
@@ -106,34 +108,79 @@ const AddCar = () => {
                 )
                 .ilike('car_number', carNumberTrimmed);
 
-            if (error) return;
+            if (error) {
+                setAlert({ visible: true, message: error.message || 'Error fetching car', type: 'danger' });
+                return;
+            }
 
-            // السيارات المؤرشفة = لها صف في deals
-            const { data: carsWithDeals } = await supabase.from('cars').select('id, deals:deals!deals_car_id_fkey(id)').ilike('car_number', carNumberTrimmed);
+            const existingCar = cars && cars.length > 0 ? cars[0] : null;
+            if (!existingCar) {
+                setArchivedCarInfo(null);
+                return;
+            }
 
-            const archivedIds = new Set((carsWithDeals || []).filter((c: any) => c.deals && Array.isArray(c.deals) && c.deals.length > 0).map((c: any) => c.id));
+            // السيارات المؤرشفة = لها صف في deals (غير ملغى) أو حالتها returned_to_customer
+            const { data: carsWithDeals, error: dealsError } = await supabase.from('cars').select('id, deals:deals!deals_car_id_fkey(id, status)').eq('id', existingCar.id);
+            
+            if (dealsError) {
+                setAlert({ visible: true, message: dealsError.message || 'Error fetching deals for car', type: 'danger' });
+                return;
+            }
 
-            const archivedCar = (cars || []).find((c: any) => archivedIds.has(c.id));
-            if (!archivedCar) return;
+            const isReturned = String(existingCar.status || '').trim().toLowerCase() === 'returned_to_customer';
+            const hasActiveDeal = carsWithDeals && carsWithDeals.length > 0 && carsWithDeals[0].deals && Array.isArray(carsWithDeals[0].deals) && carsWithDeals[0].deals.some((d: any) => d.status !== 'cancelled');
+            const isArchived = isReturned || hasActiveDeal;
+
+            if (isArchived) {
+                const { data: deals, error: lastDealError } = await supabase
+                    .from('deals')
+                    .select('*, customer:customers!deals_customer_id_fkey(id, name), buyer:customers!deals_buyer_id_fkey(id, name), seller:customers!deals_seller_id_fkey(id, name)')
+                    .eq('car_id', existingCar.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (lastDealError) {
+                    setAlert({ visible: true, message: lastDealError.message || 'Error fetching last deal', type: 'danger' });
+                    return;
+                }
+
+                const lastDeal = deals && deals.length > 0 ? deals[0] : null;
+
+                let returnDate = null;
+                if (isReturned && !lastDeal) {
+                    const { data: logsData } = await supabase.from('logs').select('created_at').eq('car->>id', String(existingCar.id)).order('created_at', { ascending: false }).limit(1);
+                    if (logsData && logsData.length > 0) {
+                        returnDate = logsData[0].created_at;
+                    }
+                }
+
+                setArchivedCarInfo({
+                    ...existingCar,
+                    lastDeal,
+                    returnDate
+                });
+            } else {
+                setArchivedCarInfo(null);
+            }
 
             setForm((prev) => ({
                 ...prev,
-                title: archivedCar.title || prev.title,
-                year: archivedCar.year ? String(archivedCar.year) : prev.year,
-                brand: archivedCar.brand || prev.brand,
-                status: archivedCar.status || prev.status,
-                type: archivedCar.type || prev.type,
-                kilometers: archivedCar.kilometers != null ? String(archivedCar.kilometers) : prev.kilometers,
-                market_price: archivedCar.market_price != null ? String(archivedCar.market_price) : prev.market_price,
-                buy_price: archivedCar.buy_price != null ? String(archivedCar.buy_price) : prev.buy_price,
-                sale_price: archivedCar.sale_price != null ? String(archivedCar.sale_price) : prev.sale_price,
-                desc: archivedCar.desc || prev.desc,
-                public: archivedCar.public ?? prev.public,
+                title: existingCar.title || prev.title,
+                year: existingCar.year ? String(existingCar.year) : prev.year,
+                brand: existingCar.brand || prev.brand,
+                status: existingCar.status || prev.status,
+                type: existingCar.type || prev.type,
+                kilometers: existingCar.kilometers != null ? String(existingCar.kilometers) : prev.kilometers,
+                market_price: existingCar.market_price != null ? String(existingCar.market_price) : prev.market_price,
+                buy_price: existingCar.buy_price != null ? String(existingCar.buy_price) : prev.buy_price,
+                sale_price: existingCar.sale_price != null ? String(existingCar.sale_price) : prev.sale_price,
+                desc: existingCar.desc || prev.desc,
+                public: existingCar.public ?? prev.public,
             }));
 
-            if (archivedCar.source_type === 'brokerage' || archivedCar.source_type === 'broker') {
+            if (existingCar.source_type === 'brokerage' || existingCar.source_type === 'broker') {
                 setCarSource('brokerage');
-                const sc = archivedCar.source_customer as { id: number | string; name: string; phone?: string } | undefined;
+                const sc = existingCar.source_customer as { id: number | string; name: string; phone?: string } | undefined;
                 if (sc) {
                     setSelectedCustomer({
                         id: String(sc.id),
@@ -143,9 +190,9 @@ const AddCar = () => {
                     });
                 }
                 setForm((prev) => ({ ...prev, provider: '' }));
-            } else if (archivedCar.source_customer_id && archivedCar.source_customer) {
+            } else if (existingCar.source_customer_id && existingCar.source_customer) {
                 setCarSource('customer');
-                const sc = archivedCar.source_customer as { id: number | string; name: string; phone?: string };
+                const sc = existingCar.source_customer as { id: number | string; name: string; phone?: string };
                 setSelectedCustomer({
                     id: String(sc.id),
                     name: sc.name,
@@ -153,15 +200,15 @@ const AddCar = () => {
                     age: 0,
                 });
                 setForm((prev) => ({ ...prev, provider: '' }));
-            } else if (archivedCar.provider != null) {
+            } else if (existingCar.provider != null) {
                 setCarSource('provider');
                 setSelectedCustomer(null);
-                setForm((prev) => ({ ...prev, provider: String(archivedCar.provider) }));
+                setForm((prev) => ({ ...prev, provider: String(existingCar.provider) }));
             }
 
-            setAlert({ visible: true, message: t('archived_car_data_loaded') || 'تم تحميل بيانات السيارة المؤرشفة', type: 'success' });
-        } catch {
-            // تجاهل الأخطاء - المستخدم ربما أدخل رقم سيارة جديدة
+            setAlert({ visible: true, message: isArchived ? (t('archived_car_data_loaded') || 'تم تحميل بيانات السيارة المؤرشفة') : 'تم تحميل بيانات السيارة', type: 'success' });
+        } catch (err: any) {
+            setAlert({ visible: true, message: err.message || 'Unknown error occurred', type: 'danger' });
         }
     };
 
@@ -488,15 +535,43 @@ const AddCar = () => {
         e.preventDefault();
 
         if (!validateForm()) return;
+        
+        if (archivedCarInfo && form.car_number.trim() === archivedCarInfo.car_number) {
+            setIsArchiveModalOpen(true);
+            return;
+        }
+
+        await submitActualForm();
+    };
+
+    const submitActualForm = async () => {
         setSaving(true);
         try {
             // Check if car_number exists in available cars (not archived) - prevent 409 duplicate
-            const { data: existingCars } = await supabase.from('cars').select('id, car_number, deals:deals!deals_car_id_fkey(id)').ilike('car_number', form.car_number.trim());
-            const hasAvailableWithSameNumber = existingCars?.some((car: any) => !car.deals || (Array.isArray(car.deals) && car.deals.length === 0));
+            const { data: existingCars } = await supabase.from('cars').select('id, car_number, status, deals:deals!deals_car_id_fkey(id, status)').ilike('car_number', form.car_number.trim());
+            const hasAvailableWithSameNumber = existingCars?.some((car: any) => {
+                const isReturned = String(car.status || '').trim().toLowerCase() === 'returned_to_customer';
+                const hasActiveDeal = car.deals && Array.isArray(car.deals) && car.deals.some((d: any) => d.status !== 'cancelled');
+                const isArchived = isReturned || hasActiveDeal;
+                return !isArchived;
+            });
             if (hasAvailableWithSameNumber) {
                 setAlert({ visible: true, message: t('car_number_duplicate_available'), type: 'danger' });
                 setSaving(false);
                 return;
+            }
+
+            // Delete archived cars to bypass 409 unique constraint violation and ensure no old copy remains in archive
+            const archivedCarsWithSameNumber = existingCars?.filter((car: any) => {
+                const isReturned = String(car.status || '').trim().toLowerCase() === 'returned_to_customer';
+                const hasActiveDeal = car.deals && Array.isArray(car.deals) && car.deals.some((d: any) => d.status !== 'cancelled');
+                return isReturned || hasActiveDeal;
+            });
+            if (archivedCarsWithSameNumber && archivedCarsWithSameNumber.length > 0) {
+                for (const ac of archivedCarsWithSameNumber) {
+                    // Delete old car record entirely
+                    await supabase.from('cars').delete().eq('id', ac.id);
+                }
             }
 
             // First, create the car record without images to get the car ID
@@ -1181,6 +1256,64 @@ const AddCar = () => {
 
             {/* Create Customer Modal */}
             <CreateCustomerModal isOpen={isCreateCustomerModalOpen} onClose={() => setIsCreateCustomerModalOpen(false)} onCustomerCreated={handleCustomerCreated} />
+
+            {/* Archive Confirmation Modal */}
+            {isArchiveModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className="bg-white dark:bg-black rounded-lg shadow-xl w-full max-w-lg p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">تأكيد إضافة سيارة مؤرشفة</h3>
+                            <button onClick={() => setIsArchiveModalOpen(false)} className="text-gray-500 hover:text-gray-700">
+                                <IconX className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="mb-6 space-y-3">
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                هذه السيارة موجودة في الأرشيف بالفعل. هل أنت متأكد أنك تريد إضافتها كسيارة جديدة؟
+                            </p>
+                            {archivedCarInfo?.lastDeal ? (
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+                                    <h4 className="font-semibold mb-2">معلومات آخر عملية:</h4>
+                                    <ul className="text-sm space-y-1">
+                                        <li><strong>نوع العملية:</strong> {archivedCarInfo.lastDeal.deal_type === 'sale' ? 'بيع' : archivedCarInfo.lastDeal.deal_type === 'return' ? 'إرجاع' : archivedCarInfo.lastDeal.deal_type}</li>
+                                        <li><strong>التاريخ:</strong> {new Date(archivedCarInfo.lastDeal.created_at).toLocaleDateString('en-GB')}</li>
+                                        {(archivedCarInfo.lastDeal.customer || archivedCarInfo.lastDeal.buyer || archivedCarInfo.lastDeal.customer_name) && (
+                                            <li><strong>العميل:</strong> {archivedCarInfo.lastDeal.customer?.name || archivedCarInfo.lastDeal.buyer?.name || archivedCarInfo.lastDeal.customer_name}</li>
+                                        )}
+                                    </ul>
+                                </div>
+                            ) : archivedCarInfo?.status === 'returned_to_customer' ? (
+                                <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md">
+                                    <h4 className="font-semibold mb-2">حالة السيارة:</h4>
+                                    <ul className="text-sm space-y-1">
+                                        <li><strong>نوع العملية:</strong> تم إرجاعها إلى المورد/العميل</li>
+                                        {archivedCarInfo.returnDate && (
+                                            <li><strong>تاريخ الإرجاع:</strong> {new Date(archivedCarInfo.returnDate).toLocaleDateString('en-GB')}</li>
+                                        )}
+                                        {(archivedCarInfo.source_customer?.name || archivedCarInfo.provider) && (
+                                            <li><strong>المورد/العميل:</strong> {archivedCarInfo.source_customer?.name || archivedCarInfo.provider}</li>
+                                        )}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setIsArchiveModalOpen(false)} className="btn btn-outline-secondary">
+                                إلغاء
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    setIsArchiveModalOpen(false);
+                                    submitActualForm();
+                                }} 
+                                className="btn btn-primary"
+                            >
+                                تأكيد الإضافة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

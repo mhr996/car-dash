@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import IconArrowLeft from '@/components/icon/icon-arrow-left';
@@ -212,11 +212,11 @@ const CarDealPreview = () => {
                                             companyPhone: companyInfo.phone || '',
                                             sellerName: sourceEntity?.name || 'N/A',
                                             sellerTaxNumber:
-                                                car.source_type === 'brokerage' || car.source_type === 'broker'
+                                                car.source_type === 'brokerage' || car.source_type === 'broker' || car.source_type === 'customer'
                                                     ? (car.customers)?.id_number?.toString() || ''
-                                                    : car.customers?.id_number?.toString() || car.providers?.id_number?.toString() || '',
+                                                    : car.providers?.id_number?.toString() || '',
                                             sellerAddress:
-                                                car.source_type === 'brokerage' || car.source_type === 'broker'
+                                                car.source_type === 'brokerage' || car.source_type === 'broker' || car.source_type === 'customer'
                                                     ? (car.customers as any)?.address || ''
                                                     : car.providers?.address || '',
                                             sellerPhone: sourceEntity?.phone || '',
