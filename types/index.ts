@@ -41,6 +41,7 @@ export interface Deal {
         phone: string;
         id_number?: string;
         email?: string;
+        address?: string;
     };
 
     // Joined seller data from the customers table (for intermediary deals)
@@ -49,6 +50,7 @@ export interface Deal {
         phone: string;
         id_number?: string;
         email?: string;
+        address?: string;
     };
 
     // Joined buyer data from the customers table (for intermediary deals)
@@ -57,6 +59,7 @@ export interface Deal {
         phone: string;
         id_number?: string;
         email?: string;
+        address?: string;
     };
 
     // Joined bills data from the bills table

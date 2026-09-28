@@ -40,6 +40,8 @@ interface Customer {
     name: string;
     phone: string;
     age: number;
+    id_number?: string;
+    address?: string;
 }
 
 interface Car {
