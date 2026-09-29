@@ -132,9 +132,13 @@ interface BillPayment {
     check_holder_name?: string;
 }
 
-/**
- * Create invoice/receipt document in Tranzila
- */
+class TranzilaReconciliationRequiredError extends Error {
+    constructor(billId: number, details: string) {
+        super(`Bill ${billId} requires reconciliation. A Tranzila document may already exist. The local bill was retained. Do not retry; check Tranzila and reconcile this bill first. ${details}`);
+        this.name = 'TranzilaReconciliationRequiredError';
+    }
+}
+
 const createTranzilaDocument = async (
     billId: number,
     billData: any,
@@ -145,6 +149,8 @@ const createTranzilaDocument = async (
     carsTakenFromClient: Car[] = [],
 ) => {
     const { t } = getTranslation();
+    let creationMayHaveSucceeded = false;
+    let documentNumber: string | number | undefined;
     try {
         // Map bill type to Tranzila document type
         // Document types from Tranzila API:
@@ -610,6 +616,7 @@ const createTranzilaDocument = async (
             tranzilaRequestData.relation_type = 1;
         }
 
+        creationMayHaveSucceeded = true;
         const response = await fetch('/api/tranzila', {
             method: 'POST',
             headers: {
@@ -624,20 +631,29 @@ const createTranzilaDocument = async (
         const result = await response.json();
 
         // Check if Tranzila returned an error
-        if (!result.ok || !result.response || result.response.status_code !== 0) {
-            const errorMsg = result.response?.status_msg || 'Unknown Tranzila error';
-            const statusCode = result.response?.status_code || 'N/A';
+        if (!result?.ok || !result.response || result.response.status_code !== 0) {
+            if (result?.ok && typeof result.response?.status_code === 'number' && result.response.status_code !== 0) {
+                creationMayHaveSucceeded = false;
+            }
+            const errorMsg = result?.response?.status_msg || result?.error || result?.message || 'Unknown Tranzila error';
+            const statusCode = result?.response?.status_code ?? 'N/A';
             throw new Error(`Tranzila error (${statusCode}): ${errorMsg}`);
+        }
+
+        const document = result.response.document;
+        documentNumber = document?.number;
+        if (!document?.id || !document?.number || !document?.retrieval_key) {
+            throw new Error('Tranzila reported success (status_code 0) but omitted required document details (id, number, or retrieval_key).');
         }
 
         // Document created successfully, update bill record with Tranzila info
         const { error: updateError } = await supabase
             .from('bills')
             .update({
-                tranzila_document_id: result.response.document.id,
-                tranzila_document_number: result.response.document.number,
-                tranzila_retrieval_key: result.response.document.retrieval_key,
-                tranzila_created_at: billData.date ? new Date(billData.date + 'T00:00:00').toISOString() : result.response.document.created_at,
+                tranzila_document_id: document.id,
+                tranzila_document_number: document.number,
+                tranzila_retrieval_key: document.retrieval_key,
+                tranzila_created_at: billData.date ? new Date(billData.date + 'T00:00:00').toISOString() : document.created_at,
             })
             .eq('id', billId);
 
@@ -645,9 +661,13 @@ const createTranzilaDocument = async (
             throw new Error('Failed to update bill with Tranzila data: ' + updateError.message);
         }
 
-        console.log('Tranzila document created successfully:', result.response.document.number);
+        console.log('Tranzila document created successfully:', document.number);
     } catch (error) {
         console.error('Error calling Tranzila API:', error);
+        if (creationMayHaveSucceeded) {
+            const details = error instanceof Error ? error.message : 'Unknown error';
+            throw new TranzilaReconciliationRequiredError(billId, `${documentNumber ? `Tranzila document: ${documentNumber}. ` : ''}${details}`);
+        }
         throw error;
     }
 };
@@ -698,6 +718,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     // Bill creation state
     const [isBillSectionExpanded, setIsBillSectionExpanded] = useState(false);
     const [creatingBill, setCreatingBill] = useState(false);
+    const [billCreationReviewMessage, setBillCreationReviewMessage] = useState<string | null>(null);
 
     // New multiple payments state for receipts
     const [payments, setPayments] = useState<BillPayment[]>([
@@ -1968,6 +1989,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
     const handleCreateBill = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (billCreationReviewMessage) {
+            setAlert({ message: billCreationReviewMessage, type: 'danger' });
+            return;
+        }
+
         if (!validateBillForm()) return;
 
         setCreatingBill(true);
@@ -2111,11 +2137,14 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                 }
             }
 
-            // Create document in Tranzila - THIS IS MANDATORY
-            // If Tranzila fails, we'll rollback the bill creation
             try {
                 await createTranzilaDocument(billResult.id, { ...billData, cancel_bill_id: billForm.cancel_bill_id }, payments, deal, selectedCar, bills, carsTakenFromClient);
             } catch (tranzilaError) {
+                if (tranzilaError instanceof TranzilaReconciliationRequiredError) {
+                    setBillCreationReviewMessage(tranzilaError.message);
+                    throw tranzilaError;
+                }
+
                 // Rollback: Delete the bill and payments that were just created
                 await supabase.from('bills').delete().eq('id', billResult.id);
 
@@ -2710,9 +2739,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                                     <div className="grid grid-cols-3 gap-4 mb-3 py-2 border-t border-gray-200 dark:border-gray-600 pt-3">
                                                         <div className="text-sm text-gray-700 dark:text-gray-300 text-right font-medium">{t('total_customer_cars_eval')}</div>
                                                         <div className="text-center">
-                                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                                                                ₪{parseFloat(form.customer_car_eval_value || '0').toFixed(0)}
-                                                            </span>
+                                                            <span className="text-sm font-bold text-gray-700 dark:text-gray-300">₪{parseFloat(form.customer_car_eval_value || '0').toFixed(0)}</span>
                                                         </div>
                                                     </div>
                                                 )}
@@ -3070,10 +3097,7 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                                     </div>
                                     <div className="space-y-4">
                                         {carsTakenFromClient.map((takenCar, index) => (
-                                            <div
-                                                key={takenCar.id || index}
-                                                className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800"
-                                            >
+                                            <div key={takenCar.id || index} className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                                                 {carsTakenFromClient.length > 1 && (
                                                     <p className="text-sm font-semibold text-orange-700 dark:text-orange-300 mb-3">
                                                         {t('customer_old_car')} #{index + 1}
