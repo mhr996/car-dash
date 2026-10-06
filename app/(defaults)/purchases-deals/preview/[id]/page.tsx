@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import IconArrowLeft from '@/components/icon/icon-arrow-left';
 import IconCalendar from '@/components/icon/icon-calendar';
 import IconUser from '@/components/icon/icon-user';
@@ -9,6 +9,8 @@ import IconDocument from '@/components/icon/icon-document';
 import IconPhone from '@/components/icon/icon-phone';
 import IconMapPin from '@/components/icon/icon-map-pin';
 import IconCreditCard from '@/components/icon/icon-credit-card';
+import IconPlus from '@/components/icon/icon-plus';
+import IconPdf from '@/components/icon/icon-pdf';
 import supabase from '@/lib/supabase';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
@@ -17,6 +19,17 @@ import { CarContract } from '@/types/contract';
 import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
 import { usePermissions } from '@/hooks/usePermissions';
+
+interface PurchaseBill {
+    id: number;
+    created_at: string;
+    date: string;
+    bill_type: string;
+    status: string;
+    total_with_tax: number;
+    tranzila_document_number?: string;
+    tranzila_retrieval_key?: string;
+}
 
 interface Car {
     id: string;
@@ -63,6 +76,7 @@ const CarDealPreview = () => {
     const { hasPermission } = usePermissions();
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [car, setCar] = useState<Car | null>(null);
     const [loading, setLoading] = useState(true);
     const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -75,6 +89,12 @@ const CarDealPreview = () => {
         message: '',
         type: 'success',
     });
+    const [activeTab, setActiveTab] = useState<'details' | 'bills'>(searchParams?.get('tab') === 'bills' ? 'bills' : 'details');
+    const [bills, setBills] = useState<PurchaseBill[]>([]);
+    const [loadingBills, setLoadingBills] = useState(false);
+    const [downloadingPdf, setDownloadingPdf] = useState<number | null>(null);
+    const canViewBills = hasPermission('view_bills');
+    const canManageBills = hasPermission('manage_bills');
 
     useEffect(() => {
         const fetchCar = async () => {
@@ -87,7 +107,7 @@ const CarDealPreview = () => {
                         `
                         *,
                         providers!cars_provider_fkey(id, name, address, phone, id_number),
-                        customers!cars_source_customer_id_fkey(id, name, phone, age, id_number)
+                        customers!cars_source_customer_id_fkey(id, name, phone, age, id_number, address)
                     `,
                     )
                     .eq('id', params.id)
@@ -127,6 +147,37 @@ const CarDealPreview = () => {
     }, [params?.id]);
 
     useEffect(() => {
+        const fetchBills = async () => {
+            if (!car?.id || !canViewBills) {
+                setBills([]);
+                return;
+            }
+
+            setLoadingBills(true);
+            try {
+                const { data, error } = await supabase
+                    .from('bills')
+                    .select('id, created_at, date, bill_type, status, total_with_tax, tranzila_document_number, tranzila_retrieval_key')
+                    .ilike('free_text', `%purchase_car_id:${car.id}%`)
+                    .order('created_at', { ascending: false })
+                    .limit(100);
+
+                if (error) throw error;
+                setBills((data || []) as PurchaseBill[]);
+            } catch (error) {
+                console.error('Error fetching purchase bills:', error);
+            } finally {
+                setLoadingBills(false);
+            }
+        };
+
+        if (activeTab === 'bills') {
+            fetchBills();
+        }
+        // Intentionally depend on stable primitives only
+    }, [activeTab, car?.id]);
+
+    useEffect(() => {
         const loadCompanyInfo = async () => {
             const info = await getCompanyInfo();
             setCompanyInfo(info);
@@ -140,6 +191,26 @@ const CarDealPreview = () => {
         if (parts.length === 2) return parts.pop()?.split(';').shift();
         return null;
     };
+
+    const getBillTypeLabel = (type: string) => {
+        const key = `bill_type_${type}`;
+        const translated = t(key);
+        return translated !== key ? translated : type;
+    };
+
+    const handleViewBillPdf = (bill: PurchaseBill) => {
+        if (!bill.tranzila_retrieval_key) return;
+        setDownloadingPdf(bill.id);
+        try {
+            window.open(`/api/tranzila/download-pdf?key=${encodeURIComponent(bill.tranzila_retrieval_key)}`, '_blank');
+        } finally {
+            setDownloadingPdf(null);
+        }
+    };
+
+    const createBillHref = params?.id
+        ? `/purchases-deals/invoice/add?car_id=${params.id}&returnTo=${encodeURIComponent(`/purchases-deals/preview/${params.id}?tab=bills`)}`
+        : null;
 
     if (loading) {
         return (
@@ -412,8 +483,40 @@ const CarDealPreview = () => {
                     </div>
                 </div>
 
-                {/* Source Entity Details - Full Width */}
+                {/* Bottom Tabs */}
                 <div className="mt-6">
+                    <div className="mb-5 flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700">
+                        <button
+                            type="button"
+                            className={`px-4 py-2 font-medium transition-colors ${
+                                activeTab === 'details'
+                                    ? 'border-b-2 border-primary text-primary'
+                                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                            }`}
+                            onClick={() => setActiveTab('details')}
+                        >
+                            {t('details')}
+                        </button>
+                        {canViewBills && (
+                            <button
+                                type="button"
+                                className={`px-4 py-2 font-medium transition-colors ${
+                                    activeTab === 'bills'
+                                        ? 'border-b-2 border-primary text-primary'
+                                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                                }`}
+                                onClick={() => setActiveTab('bills')}
+                            >
+                                {t('bills')}
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {activeTab === 'details' && (
+                <>
+                {/* Source Entity Details - Full Width */}
+                <div className="mt-2">
                     <div className="panel">
                         <div className="mb-5">
                             <h3 className="text-lg font-semibold">
@@ -619,6 +722,95 @@ const CarDealPreview = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
+                )}
+                </>
+                )}
+
+                {canViewBills && activeTab === 'bills' && (
+                    <div className="panel mt-2">
+                        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold">{t('bills')}</h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {car.providers?.name || car.customers?.name || `${car.brand} ${car.title}`}
+                                </p>
+                            </div>
+                            {canManageBills && createBillHref && (
+                                <Link href={createBillHref} className="btn btn-primary gap-2">
+                                    <IconPlus className="w-4 h-4" />
+                                    {t('create_bill')}
+                                </Link>
+                            )}
+                        </div>
+
+                        {loadingBills ? (
+                            <div className="flex justify-center py-10">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                            </div>
+                        ) : bills.length === 0 ? (
+                            <div className="text-center py-10 text-gray-500">
+                                <IconDocument className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                                <p>{t('no_bills_found')}</p>
+                            </div>
+                        ) : (
+                            <div className="table-responsive">
+                                <table className="table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>{t('invoice_number')}</th>
+                                            <th>{t('bill_type')}</th>
+                                            <th>{t('total_amount')}</th>
+                                            <th>{t('date')}</th>
+                                            <th>{t('status')}</th>
+                                            <th>{t('actions')}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {bills.map((bill) => (
+                                            <tr key={bill.id}>
+                                                <td className="font-mono font-semibold">
+                                                    {bill.tranzila_document_number || `#${bill.id}`}
+                                                </td>
+                                                <td>
+                                                    <span className="badge badge-outline-info">{getBillTypeLabel(bill.bill_type)}</span>
+                                                </td>
+                                                <td className="font-medium">₪{Number(bill.total_with_tax || 0).toLocaleString()}</td>
+                                                <td>
+                                                    {new Date(bill.date || bill.created_at).toLocaleDateString('en-GB', {
+                                                        year: 'numeric',
+                                                        month: '2-digit',
+                                                        day: '2-digit',
+                                                    })}
+                                                </td>
+                                                <td>
+                                                    <span className="badge badge-outline-primary">{t(bill.status) || bill.status}</span>
+                                                </td>
+                                                <td>
+                                                    {bill.tranzila_retrieval_key ? (
+                                                        <button
+                                                            type="button"
+                                                            className="flex hover:text-success"
+                                                            onClick={() => handleViewBillPdf(bill)}
+                                                            title={t('download_pdf')}
+                                                            disabled={downloadingPdf === bill.id}
+                                                        >
+                                                            {downloadingPdf === bill.id ? (
+                                                                <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div>
+                                                            ) : (
+                                                                <IconPdf className="h-4.5 w-4.5" />
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-gray-400">—</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

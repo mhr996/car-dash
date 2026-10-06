@@ -1,6 +1,6 @@
 ﻿'use client';
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
@@ -36,10 +36,15 @@ interface ProviderInfo {
 const AddCommission = () => {
     const { t } = getTranslation();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [saving, setSaving] = useState(false);
     const [alert, setAlert] = useState<{ message: string; type: 'success' | 'danger' } | null>(null);
 
-    const [providerId, setProviderId] = useState('');
+    const preselectedProviderId = searchParams?.get('provider_id') || '';
+    const returnTo = searchParams?.get('returnTo') || '';
+    const providerLocked = Boolean(preselectedProviderId);
+
+    const [providerId, setProviderId] = useState(preselectedProviderId);
     const [selectedProvider, setSelectedProvider] = useState<ProviderInfo | null>(null);
     const [commissionType, setCommissionType] = useState('');
     const [commissionDate, setCommissionDate] = useState(new Date().toISOString().split('T')[0]);
@@ -59,6 +64,12 @@ const AddCommission = () => {
     const [cancelAmount, setCancelAmount] = useState('');
     const [cancelDescription, setCancelDescription] = useState('');
     const [providerCommissions, setProviderCommissions] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (preselectedProviderId && providerId !== preselectedProviderId) {
+            setProviderId(preselectedProviderId);
+        }
+    }, [preselectedProviderId, providerId]);
 
     useEffect(() => {
         if (!providerId) {
@@ -592,7 +603,7 @@ const AddCommission = () => {
             }
 
             setAlert({ message: t('commission_created_successfully'), type: 'success' });
-            setTimeout(() => router.push('/commissions'), 1500);
+            setTimeout(() => router.push(returnTo || '/commissions'), 1500);
         } catch (err) {
             console.error(err);
             setAlert({ message: err instanceof Error ? err.message : t('error_creating_commission'), type: 'danger' });
@@ -639,14 +650,18 @@ const AddCommission = () => {
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Provider Selection */}
+                    {/* Provider Selection / Locked provider from purchase deal */}
                     <div className="panel bg-gradient-to-r from-primary/10 to-secondary/10 border-2 border-primary/20">
                         <div className="mb-5 flex items-center gap-3">
                             <IconUser className="w-5 h-5 text-primary" />
-                            <h5 className="text-xl font-bold text-primary dark:text-white-light">{t('select_provider')}</h5>
+                            <h5 className="text-xl font-bold text-primary dark:text-white-light">
+                                {providerLocked ? t('provider_information') : t('select_provider')}
+                            </h5>
                         </div>
                         <div className="space-y-4">
-                            <ProviderSelect defaultValue={providerId} onChange={(e) => setProviderId(e.target.value)} className="form-select text-white-dark w-full" />
+                            {!providerLocked && (
+                                <ProviderSelect defaultValue={providerId} onChange={(e) => setProviderId(e.target.value)} className="form-select text-white-dark w-full" />
+                            )}
                             {selectedProvider && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg border">
                                     <div>

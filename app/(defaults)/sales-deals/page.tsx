@@ -116,19 +116,22 @@ const DealsList = () => {
                             id,
                             name,
                             id_number,
-                            phone
+                            phone,
+                            address
                         ),
                         seller:customers!deals_seller_id_fkey (
                             id,
                             name,
                             id_number,
-                            phone
+                            phone,
+                            address
                         ),
                         buyer:customers!deals_buyer_id_fkey (
                             id,
                             name,
                             id_number,
-                            phone
+                            phone,
+                            address
                         ),
                         cars!deals_car_id_fkey (
                             id,
@@ -357,7 +360,7 @@ const DealsList = () => {
 
                 buyerName: isIntermediaryDeal ? deal.buyer?.name || 'Unknown Buyer' : deal.customers?.name || 'Unknown Customer',
                 buyerId: isIntermediaryDeal ? deal.buyer?.id_number?.toString() || '' : deal.customers?.id_number?.toString() || '',
-                buyerAddress: '',
+                buyerAddress: isIntermediaryDeal ? deal.buyer?.address || '' : deal.customers?.address || '',
                 buyerPhone: isIntermediaryDeal ? deal.buyer?.phone || '' : deal.customers?.phone || '',
 
                 // Mark as intermediary deal and include additional info
@@ -366,13 +369,13 @@ const DealsList = () => {
                     actualSeller: {
                         name: deal.seller?.name || 'Unknown Seller',
                         id: deal.seller?.id_number?.toString() || '',
-                        address: '',
+                        address: deal.seller?.address || '',
                         phone: deal.seller?.phone || '',
                     },
                     actualBuyer: {
                         name: deal.buyer?.name || 'Unknown Buyer',
                         id: deal.buyer?.id_number?.toString() || '',
-                        address: '',
+                        address: deal.buyer?.address || '',
                         phone: deal.buyer?.phone || '',
                     },
                 }),
@@ -416,9 +419,12 @@ const DealsList = () => {
                 totalAmount: deal.selling_price || deal.amount || 0,
                 paymentMethod: 'other',
 
-                // Signatures
+                // Signatures (company stamp from company settings only)
                 companySignatureUrl: companyInfo?.signature_url,
-                customerSignatureUrl: undefined,
+                customerSignatureUrl:
+                    (
+                        await supabase.from('deal_signatures').select('customer_signature_url').eq('deal_id', deal.id).maybeSingle()
+                    ).data?.customer_signature_url || undefined,
             };
 
             const filename = `contract-${deal.id}-${new Date().toISOString().split('T')[0]}.pdf`;

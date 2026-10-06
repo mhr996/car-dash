@@ -81,6 +81,7 @@ export interface Customer {
     customer_type?: string;
     id_number?: string;
     birth_date?: string;
+    address?: string;
 }
 
 export type CarSource = 'provider' | 'customer' | 'brokerage' | 'broker'; // 'broker' kept for legacy rows

@@ -28,6 +28,8 @@ interface Customer {
     id: number;
     name: string;
     phone?: string;
+    address?: string;
+    id_number?: string;
 }
 
 interface CarDeal {
@@ -98,10 +100,12 @@ const CarDealsPage = () => {
                 companyAddress: companyInfo.address || '',
                 companyPhone: companyInfo.phone || '',
                 sellerName: car.source_type === 'provider' ? car.provider?.name || '' : car.source_customer?.name || '',
-                sellerTaxNumber: car.source_type === 'provider' ? car.provider?.id_number || '' : '',
+                sellerTaxNumber:
+                    car.source_type === 'provider' ? car.provider?.id_number || '' : car.source_customer?.id_number || '',
                 sellerPhone:
                     car.source_type === 'provider' ? car.provider?.phone || '' : car.source_customer?.phone || '',
-                sellerAddress: car.source_type === 'provider' ? car.provider?.address || '' : '',
+                sellerAddress:
+                    car.source_type === 'provider' ? car.provider?.address || '' : car.source_customer?.address || '',
                 buyerName: companyInfo.name,
                 buyerId: companyInfo.tax_number || '',
                 buyerAddress: companyInfo.address || '',
@@ -163,7 +167,7 @@ const CarDealsPage = () => {
                     created_at,
                     contract_image,
                     provider:providers!cars_provider_fkey(id, name, phone, address, id_number),
-                    source_customer:customers!cars_source_customer_id_fkey(id, name, phone)
+                    source_customer:customers!cars_source_customer_id_fkey(id, name, phone, address, id_number)
                 `,
                 )
                 .order('created_at', { ascending: false });

@@ -58,6 +58,8 @@ interface Car {
         id: number;
         name: string;
         phone?: string;
+        address?: string;
+        id_number?: string;
     };
     deals?: Array<{
         id: number;
@@ -185,8 +187,8 @@ const CarsList = () => {
                     .select(
                         `
                         *, 
-                        providers!cars_provider_fkey(id, name, address, phone),
-                        source_customer:customers!cars_source_customer_id_fkey(id, name, phone),
+                        providers!cars_provider_fkey(id, name, address, phone, id_number),
+                        source_customer:customers!cars_source_customer_id_fkey(id, name, phone, address, id_number),
                         deals!deals_car_id_fkey(id, title, deal_type, status, customer_name, created_at)
                     `,
                     )
@@ -458,9 +460,9 @@ const CarsList = () => {
                 companyAddress: companyInfo.address || '',
                 companyPhone: companyInfo.phone || '',
                 sellerName: car.providers?.name || car.source_customer?.name || '',
-                sellerTaxNumber: car.providers?.id_number || '',
+                sellerTaxNumber: car.providers?.id_number || car.source_customer?.id_number || '',
                 sellerPhone: car.providers?.phone || car.source_customer?.phone || '',
-                sellerAddress: car.providers?.address || '',
+                sellerAddress: car.providers?.address || car.source_customer?.address || '',
                 buyerName: companyInfo.name,
                 buyerId: companyInfo.tax_number || '',
                 buyerAddress: companyInfo.address || '',
