@@ -507,11 +507,11 @@ const AddPurchaseInvoice = () => {
 
             try {
                 if (!isCancelDoc && (billType === 'receipt_only' || billType === 'tax_invoice_receipt')) {
+                    // PostgREST derives bulk-insert columns from keys, even when their values are undefined.
                     const paymentInserts = payments
                         .filter((p) => (p.amount || 0) > 0)
-                        .map((p) => ({
-                            ...p,
-                            id: undefined,
+                        .map(({ id: _id, ...payment }) => ({
+                            ...payment,
                             bill_id: billResult.id,
                             created_at: billData.created_at,
                         }));

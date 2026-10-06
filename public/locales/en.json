@@ -1,4 +1,11 @@
 {
+    "exchange_vehicle_overview": "Exchange Vehicles and Values",
+    "exchange_outgoing_car": "Vehicle Delivered to Customer",
+    "exchange_incoming_cars": "Vehicles Received from Customer",
+    "exchange_agreed_sale_price": "Agreed Sale Price",
+    "exchange_trade_in_value": "Agreed Trade-in Value",
+    "exchange_price_difference": "Price Difference (Before Payments)",
+    "exchange_incoming_data_unavailable": "Incoming vehicle details are unavailable. Check the vehicles linked to this exchange.",
     "sign_purchase": "Sign Purchase",
     "purchase_seller_signature": "Purchase Seller Signature",
     "cancellation_full_amount_required": "The cancellation amount must match the original document total.",

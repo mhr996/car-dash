@@ -28,12 +28,13 @@ import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconBank from '@/components/icon/icon-bank';
 import IconCheck from '@/components/icon/icon-check';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
-import { getTradeInCarIds, mapCarToTradeInInfo, sumTradeInBuyPrice } from '@/utils/trade-in-cars';
+import { getTradeInCarIds, mapCarToTradeInInfo, orderTradeInCars } from '@/utils/trade-in-cars';
 import { usePermissions } from '@/hooks/usePermissions';
 import BillsTable from '@/components/bills/bills-table';
 import SignatureModal from '@/components/modals/signature-modal';
 import IconPencil from '@/components/icon/icon-pencil';
 import { uploadFile, getPublicUrlFromPath } from '@/utils/file-upload';
+import { ExchangeDealSummary } from '@/components/deals/exchange-deal-summary';
 
 interface Customer {
     id: string;
@@ -216,20 +217,21 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     // Fetch all cars taken from client (exchange deals)
                     const tradeInIds = getTradeInCarIds(data);
                     if (tradeInIds.length > 0) {
-                        const { data: carsTakenData } = await supabase.from('cars').select('*').in('id', tradeInIds);
-                        if (carsTakenData) {
-                            const byId = new Map(carsTakenData.map((c: Car) => [c.id, c]));
-                            const ordered = tradeInIds.map((id) => byId.get(id)).filter(Boolean) as Car[];
-                            setCarsTakenFromClient(ordered);
+                        const { data: carsTakenData, error: carsTakenError } = await supabase.from('cars').select('*').in('id', tradeInIds).returns<Car[]>();
+                        if (carsTakenError) throw carsTakenError;
+                        const ordered = orderTradeInCars(carsTakenData || [], tradeInIds);
+                        setCarsTakenFromClient(ordered);
 
-                            const imageMap: Record<string, string | null> = {};
-                            for (const taken of ordered) {
-                                if (taken.images && (taken.images as any).length > 0) {
-                                    imageMap[taken.id] = await getCarImageUrl(taken.images);
-                                }
+                        const imageMap: Record<string, string | null> = {};
+                        for (const taken of ordered) {
+                            if (taken.images && taken.images.length > 0) {
+                                imageMap[taken.id] = await getCarImageUrl(taken.images);
                             }
-                            setCarTakenImageUrls(imageMap);
                         }
+                        setCarTakenImageUrls(imageMap);
+                    } else {
+                        setCarsTakenFromClient([]);
+                        setCarTakenImageUrls({});
                     }
 
                     // Fetch bills linked to this deal (only if user has permission)
@@ -811,7 +813,16 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                             </div>
                         </div>
                         {/* Deal Summary Table */}
-                        {car && (
+                        {deal.deal_type === 'exchange' && (
+                            <ExchangeDealSummary
+                                deal={deal}
+                                outgoingCar={car}
+                                incomingCars={carsTakenFromClient}
+                                canViewPurchasePrice={hasPermission('view_car_purchase_price')}
+                                canViewCars={hasPermission('view_cars')}
+                            />
+                        )}
+                        {car && deal.deal_type !== 'exchange' && (
                             <div className="panel">
                                 <div className="mb-5">
                                     <h5 className="text-xl font-bold text-gray-900 dark:text-white-light">{t('deal_summary')}</h5>
@@ -863,61 +874,6 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                                 <span className="text-sm text-gray-700 dark:text-gray-300">₪{deal.amount?.toFixed(0) || '0.00'}</span>
                                             </div>
                                         </div>
-                                    )}
-
-                                    {/* Exchange Deal Specific Fields */}
-                                    {deal.deal_type === 'exchange' && carsTakenFromClient.length > 0 && (
-                                        <>
-                                            {carsTakenFromClient.map((takenCar, index) => (
-                                                <div
-                                                    key={takenCar.id || index}
-                                                    className={`grid grid-cols-3 gap-4 mb-3 py-2 ${index === 0 ? 'border-t border-gray-200 dark:border-gray-600 pt-2' : ''}`}
-                                                >
-                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">
-                                                        <div className="font-medium">
-                                                            {(t('additional_amount_from_customer_car') || `${t('additional_amount_from_customer')} (${t('car')} {{n}})`).replace(
-                                                                '{{n}}',
-                                                                String(index + 1),
-                                                            )}
-                                                        </div>
-                                                        <div className="text-xs mt-1 text-gray-500">
-                                                            {takenCar.brand} {takenCar.title} - {takenCar.year}
-                                                            {takenCar.car_number && ` - ${takenCar.car_number}`}
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <span className="text-sm text-blue-600 dark:text-blue-400">₪{(takenCar.buy_price || 0).toFixed(0)}</span>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {carsTakenFromClient.length > 1 && (
-                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right font-medium">{t('total_customer_cars_eval')}</div>
-                                                    <div className="text-center">
-                                                        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                                                            ₪{(deal.customer_car_eval_value || sumTradeInBuyPrice(carsTakenFromClient) || 0).toFixed(0)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {(deal.additional_customer_amount || 0) > 0 && (
-                                                <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                                    <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('difference_to_pay')}</div>
-                                                    <div className="text-center">
-                                                        <span className="text-sm text-blue-600 dark:text-blue-400">₪{(deal.additional_customer_amount || 0).toFixed(0)}</span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Additional Amount from Company */}
-                                            <div className="grid grid-cols-3 gap-4 mb-3 py-2">
-                                                <div className="text-sm text-gray-700 dark:text-gray-300 text-right">{t('additional_amount_from_company')}</div>
-                                                <div className="text-center">
-                                                    <span className="text-sm text-orange-600 dark:text-orange-400">₪{(deal.additional_company_amount || 0).toFixed(0)}</span>
-                                                </div>
-                                            </div>
-                                        </>
                                     )}
 
                                     {/* Row 5: Profit/Loss */}
@@ -976,6 +932,18 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                             <p className="text-sm text-gray-600 dark:text-gray-400">{t('age')}</p>
                                         </div>
                                     </div>
+                                    {customer.id_number && (
+                                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                                            <p className="font-bold">{customer.id_number}</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('id_number')}</p>
+                                        </div>
+                                    )}
+                                    {customer.address && (
+                                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                                            <p className="font-bold">{customer.address}</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{t('address')}</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -985,7 +953,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 <div className="mb-5">
                                     <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
                                         <IconCar className="w-6 h-6 text-primary" />
-                                        {t('car_information')}
+                                        {deal.deal_type === 'exchange' ? t('exchange_outgoing_car') : t('car_information')}
                                     </h5>
                                 </div>
 
@@ -1007,6 +975,9 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                                 {car.brand} • {car.year}
                                             </p>
                                             <div className="flex flex-wrap items-center gap-4">
+                                                {car.car_number && (
+                                                    <span className="text-gray-600 dark:text-gray-400 font-medium">{t('car_number')}: {car.car_number}</span>
+                                                )}
                                                 <span className="text-gray-600 dark:text-gray-400 font-medium">
                                                     {car.kilometers?.toLocaleString()} {t('km')}
                                                 </span>
@@ -1022,7 +993,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                         </div>
                                     </div>
                                     {/* Car Pricing */}
-                                    <div className={`grid grid-cols-1 md:grid-cols-${hasPermission('view_car_purchase_price') ? '3' : '2'} gap-6`}>
+                                    <div className={`grid grid-cols-1 ${hasPermission('view_car_purchase_price') ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
                                         <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                             <p className="text-blue-600 dark:text-blue-400 font-medium mb-2">{t('market_price')}</p>
                                             <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{formatCurrency(car.market_price)}</p>
@@ -1034,8 +1005,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                             </div>
                                         )}
                                         <div className="p-6 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                                            <p className="text-amber-600 dark:text-amber-400 font-medium mb-2">{t('sale_price')}</p>
-                                            <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{formatCurrency(car.sale_price)}</p>
+                                            <p className="text-amber-600 dark:text-amber-400 font-medium mb-2">{deal.deal_type === 'exchange' ? t('exchange_agreed_sale_price') : t('sale_price')}</p>
+                                            <p className="text-3xl font-bold text-amber-700 dark:text-amber-300">{formatCurrency(deal.deal_type === 'exchange' ? deal.selling_price ?? car.sale_price : car.sale_price)}</p>
                                         </div>
                                     </div>{' '}
                                 </div>
@@ -1047,7 +1018,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 <div className="mb-5">
                                     <h5 className="text-xl font-bold text-gray-900 dark:text-white-light flex items-center gap-3">
                                         <IconCar className="w-6 h-6 text-orange-500" />
-                                        {t('car_taken_from_client')}
+                                        {t('exchange_incoming_cars')}
                                     </h5>
                                 </div>
 
@@ -1096,7 +1067,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                                 </div>
                                             </div>
 
-                                            <div className={`grid grid-cols-1 md:grid-cols-${hasPermission('view_car_purchase_price') ? '3' : '1'} gap-6`}>
+                                            <div className={`grid grid-cols-1 ${hasPermission('view_car_purchase_price') ? 'md:grid-cols-3' : 'md:grid-cols-1'} gap-6`}>
                                                 <div className="p-6 bg-orange-100 dark:bg-orange-900/30 rounded-lg border border-orange-200 dark:border-orange-800">
                                                     <p className="text-orange-600 dark:text-orange-400 font-medium mb-2">{t('market_price')}</p>
                                                     <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(takenCar.market_price)}</p>

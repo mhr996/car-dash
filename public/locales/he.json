@@ -1,4 +1,11 @@
 {
+    "exchange_vehicle_overview": "רכבי ההחלפה וערכיהם",
+    "exchange_outgoing_car": "הרכב שנמסר ללקוח",
+    "exchange_incoming_cars": "הרכבים שהתקבלו מהלקוח",
+    "exchange_agreed_sale_price": "מחיר המכירה שסוכם",
+    "exchange_trade_in_value": "שווי הטרייד אין שסוכם",
+    "exchange_price_difference": "הפרש המחירים לפני תשלומים",
+    "exchange_incoming_data_unavailable": "פרטי הרכבים שהתקבלו אינם זמינים. יש לבדוק את הרכבים המקושרים לעסקת ההחלפה.",
     "sign_purchase": "חתימה על עסקת רכישה",
     "purchase_seller_signature": "חתימת מוכר הרכב",
     "cancellation_full_amount_required": "סכום הביטול חייב להיות זהה לסכום הכולל של המסמך המקורי.",

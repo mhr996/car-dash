@@ -24,7 +24,7 @@ import IconDocument from '@/components/icon/icon-document';
 import IconPdf from '@/components/icon/icon-pdf';
 import IconCaretDown from '@/components/icon/icon-caret-down';
 import { usePermissions } from '@/hooks/usePermissions';
-import { getTradeInCarIds, mapCarToTradeInInfo } from '@/utils/trade-in-cars';
+import { getTradeInCarIds, mapCarToTradeInInfo, orderTradeInCars } from '@/utils/trade-in-cars';
 
 type DealType = 'new_used_sale' | 'new_sale' | 'used_sale' | 'new_used_sale_tax_inclusive' | 'exchange' | 'intermediary' | 'financing_assistance_intermediary' | 'company_commission' | '';
 
@@ -325,15 +325,12 @@ const DealsList = () => {
             // Load all trade-in cars for exchange deals
             let tradeInCarsMapped: ReturnType<typeof mapCarToTradeInInfo>[] = [];
             if (deal.deal_type === 'exchange') {
-                const tradeInIds = getTradeInCarIds({
-                    car_taken_from_client: deal.car_taken_from_client?.id || (typeof deal.car_taken_from_client === 'string' ? deal.car_taken_from_client : null),
-                    cars_taken_from_client: deal.cars_taken_from_client,
-                });
+                const tradeInIds = getTradeInCarIds(deal);
                 if (tradeInIds.length > 0) {
-                    const { data: tradeInRows } = await supabase.from('cars').select('id, title, brand, car_number, year, type, kilometers, buy_price').in('id', tradeInIds);
+                    const { data: tradeInRows, error: tradeInError } = await supabase.from('cars').select('id, title, brand, car_number, year, type, kilometers, buy_price').in('id', tradeInIds);
+                    if (tradeInError) throw tradeInError;
                     if (tradeInRows) {
-                        const byId = new Map(tradeInRows.map((c: any) => [c.id, c]));
-                        tradeInCarsMapped = tradeInIds.map((id) => byId.get(id)).filter(Boolean).map(mapCarToTradeInInfo);
+                        tradeInCarsMapped = orderTradeInCars(tradeInRows, tradeInIds).map(mapCarToTradeInInfo);
                     }
                 } else if (deal.car_taken_from_client && typeof deal.car_taken_from_client === 'object') {
                     tradeInCarsMapped = [mapCarToTradeInInfo(deal.car_taken_from_client)];

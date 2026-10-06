@@ -1,4 +1,11 @@
 {
+    "exchange_vehicle_overview": "سيارات صفقة التبادل وقيمها",
+    "exchange_outgoing_car": "السيارة المسلّمة للزبون",
+    "exchange_incoming_cars": "السيارات المستلمة من الزبون",
+    "exchange_agreed_sale_price": "سعر البيع المتفق عليه",
+    "exchange_trade_in_value": "قيمة سيارة التبادل المتفق عليها",
+    "exchange_price_difference": "فرق الأسعار قبل الدفعات",
+    "exchange_incoming_data_unavailable": "تفاصيل السيارات المستلمة غير متوفرة. يرجى التحقق من السيارات المرتبطة بصفقة التبادل.",
     "sign_purchase": "توقيع صفقة الشراء",
     "purchase_seller_signature": "توقيع بائع السيارة",
     "cancellation_full_amount_required": "يجب أن يطابق مبلغ الإلغاء المبلغ الإجمالي للمستند الأصلي.",

@@ -1,5 +1,5 @@
 ﻿'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
@@ -17,7 +17,7 @@ import { logActivity } from '@/utils/activity-logger';
 import { handleReceiptCreated, getCustomerIdFromDeal, getCustomerIdByName } from '@/utils/balance-manager';
 import { BillPayment } from '@/types/payment';
 import { MultiplePaymentForm } from '@/components/forms/multiple-payment-form';
-import { getTradeInCarIds, buildDealCarsDetailsText, buildTradeInInvoiceItems, sumTradeInBuyPrice } from '@/utils/trade-in-cars';
+import { getTradeInCarIds, orderTradeInCars, getExchangeInvoiceCars, buildDealCarsDetailsText, buildTradeInInvoiceItems, sumTradeInBuyPrice } from '@/utils/trade-in-cars';
 
 interface TradeInCar {
     id: string | number;
@@ -95,6 +95,7 @@ const AddBill = () => {
     const [saving, setSaving] = useState(false);
     const [deals, setDeals] = useState<Deal[]>([]);
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+    const dealSelectionRequest = useRef(0);
     const [carsTakenFromClient, setCarsTakenFromClient] = useState<TradeInCar[]>([]);
     const [existingBills, setExistingBills] = useState<any[]>([]); // Bills already created for selected deal
     const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0]); // Default to today
@@ -224,38 +225,50 @@ const AddBill = () => {
         }
     };
     const handleDealSelect = async (dealId: string) => {
+        const requestId = ++dealSelectionRequest.current;
         const deal = deals.find((d) => d.id.toString() === dealId);
         if (deal) {
-            setSelectedDeal(deal);
+            setSelectedDeal(null);
+            setCarsTakenFromClient([]);
+            setExistingBills([]);
 
             // Load all customer trade-in cars for exchange deals
             let tradeInCars: TradeInCar[] = [];
-            if (deal.deal_type === 'exchange') {
-                const tradeInIds = getTradeInCarIds({
-                    car_taken_from_client: deal.car_taken_from_client != null ? String(deal.car_taken_from_client) : null,
-                    cars_taken_from_client: (deal.cars_taken_from_client || []).map(String),
-                });
-                if (tradeInIds.length > 0) {
-                    const { data: carsTakenData } = await supabase
-                        .from('cars')
-                        .select('id, title, brand, year, car_number, buy_price, market_price, sale_price')
-                        .in('id', tradeInIds);
-                    if (carsTakenData) {
-                        const byId = new Map(carsTakenData.map((c: TradeInCar) => [String(c.id), c]));
-                        tradeInCars = tradeInIds.map((id) => byId.get(String(id))).filter(Boolean) as TradeInCar[];
+            try {
+                if (deal.deal_type === 'exchange') {
+                    const tradeInIds = getTradeInCarIds(deal);
+                    if (tradeInIds.length > 0) {
+                        const { data: carsTakenData, error: carsTakenError } = await supabase
+                            .from('cars')
+                            .select('id, title, brand, year, car_number, buy_price, market_price, sale_price')
+                            .in('id', tradeInIds)
+                            .returns<TradeInCar[]>();
+                        if (carsTakenError) throw carsTakenError;
+                        tradeInCars = orderTradeInCars(carsTakenData || [], tradeInIds);
                     }
                 }
+            } catch (error) {
+                if (requestId !== dealSelectionRequest.current) return;
+                console.error('Error fetching trade-in cars:', error);
+                setAlert({ message: t('error_loading_data'), type: 'danger' });
+                return;
             }
-            setCarsTakenFromClient(tradeInCars);
+            if (requestId !== dealSelectionRequest.current) return;
 
             // Fetch existing bills for this deal to check for duplicates
             try {
-                const { data: bills } = await supabase.from('bills').select('id, bill_type, tranzila_document_number').eq('deal_id', deal.id);
+                const { data: bills, error } = await supabase.from('bills').select('id, bill_type, tranzila_document_number').eq('deal_id', deal.id);
+                if (requestId !== dealSelectionRequest.current) return;
+                if (error) throw error;
                 setExistingBills(bills || []);
             } catch (error) {
+                if (requestId !== dealSelectionRequest.current) return;
                 console.error('Error fetching existing bills:', error);
-                setExistingBills([]);
+                setAlert({ message: t('error_loading_data'), type: 'danger' });
+                return;
             }
+            setCarsTakenFromClient(tradeInCars);
+            setSelectedDeal(deal);
 
             // Determine customer info based on deal type
             let customerInfo = null;
@@ -371,6 +384,9 @@ const AddBill = () => {
             };
 
             const documentType = documentTypeMap[billData.bill_type] || 'IR';
+            const tradeInCars = deal?.deal_type === 'exchange' && billData.bill_type !== 'credit_note' && (documentType === 'IN' || documentType === 'IR')
+                ? getExchangeInvoiceCars(deal, carsTakenFromClient)
+                : carsTakenFromClient;
 
             // Calculate total payment amount
             const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
@@ -403,8 +419,8 @@ const AddBill = () => {
                 });
 
                 // Exchange deals: include every customer trade-in car
-                if (deal.deal_type === 'exchange' && carsTakenFromClient.length > 0) {
-                    items.push(...buildTradeInInvoiceItems(carsTakenFromClient));
+                if (deal.deal_type === 'exchange' && tradeInCars.length > 0) {
+                    items.push(...buildTradeInInvoiceItems(tradeInCars));
                 }
 
                 if (isIntermediary || isFinancingAssistanceIntermediary) {
@@ -538,8 +554,8 @@ const AddBill = () => {
                 });
 
                 // Exchange deals: include every customer trade-in car
-                if (deal.deal_type === 'exchange' && carsTakenFromClient.length > 0) {
-                    items.push(...buildTradeInInvoiceItems(carsTakenFromClient));
+                if (deal.deal_type === 'exchange' && tradeInCars.length > 0) {
+                    items.push(...buildTradeInInvoiceItems(tradeInCars));
                 }
 
                 if (isIntermediary || isFinancingAssistanceIntermediary) {
@@ -1192,13 +1208,11 @@ const AddBill = () => {
                             onChange={(deal) => {
                                 if (deal) {
                                     handleDealSelect(deal.id.toString());
-                                    if (billForm.bill_type) {
-                                        // financials refresh after async select completes via selectedDeal update
-                                        setTimeout(() => updateFormFinancials(deal, billForm.bill_type), 0);
-                                    }
                                 } else {
+                                    dealSelectionRequest.current += 1;
                                     setSelectedDeal(null);
                                     setCarsTakenFromClient([]);
+                                    setExistingBills([]);
                                 }
                             }}
                             className="w-full"

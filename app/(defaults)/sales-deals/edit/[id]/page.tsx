@@ -22,7 +22,7 @@ import { BillWithPayments } from '@/types/payment';
 import { usePermissions } from '@/hooks/usePermissions';
 import { applyExchangeDealCancellationSideEffects } from '@/utils/exchange-deal-cancel';
 import { patchDealCancelledInLogs } from '@/utils/deal-cancel-logs';
-import { getTradeInCarIds, sumTradeInBuyPrice, buildDealCarsDetailsText, buildTradeInInvoiceItems } from '@/utils/trade-in-cars';
+import { getTradeInCarIds, orderTradeInCars, getExchangeInvoiceCars, sumTradeInBuyPrice, buildDealCarsDetailsText, buildTradeInInvoiceItems } from '@/utils/trade-in-cars';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logActivity } from '@/utils/activity-logger';
 
@@ -173,6 +173,9 @@ const createTranzilaDocument = async (
         };
 
         const documentType = documentTypeMap[billData.bill_type] || 'IR';
+        if (deal?.deal_type === 'exchange' && !['credit_note', 'refund_receipt'].includes(billData.bill_type) && (documentType === 'IN' || documentType === 'IR')) {
+            carsTakenFromClient = getExchangeInvoiceCars(deal, carsTakenFromClient);
+        }
 
         // Calculate total payment amount
         const totalPaymentAmount = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
@@ -979,12 +982,11 @@ const EditDeal = ({ params }: { params: { id: string } }) => {
                     // Fetch all cars taken from client (exchange deals — supports multiple)
                     const tradeInIds = getTradeInCarIds(data);
                     if (tradeInIds.length > 0) {
-                        const { data: carsTakenData } = await supabase.from('cars').select('*').in('id', tradeInIds);
-                        if (carsTakenData) {
-                            // Preserve order from tradeInIds
-                            const byId = new Map(carsTakenData.map((c: Car) => [c.id, c]));
-                            setCarsTakenFromClient(tradeInIds.map((id) => byId.get(id)).filter(Boolean) as Car[]);
-                        }
+                        const { data: carsTakenData, error: carsTakenError } = await supabase.from('cars').select('*').in('id', tradeInIds).returns<Car[]>();
+                        if (carsTakenError) throw carsTakenError;
+                        setCarsTakenFromClient(orderTradeInCars(carsTakenData || [], tradeInIds));
+                    } else {
+                        setCarsTakenFromClient([]);
                     }
                 }
             } catch (error) {

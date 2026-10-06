@@ -33,17 +33,34 @@ export const emptyOldCarForm = (): OldCarFormFields => ({
 });
 
 export function getTradeInCarIds(deal: {
-    car_taken_from_client?: string | { id?: string } | null;
-    cars_taken_from_client?: string[] | null;
+    car_taken_from_client?: string | number | { id?: string | number } | null;
+    cars_taken_from_client?: Array<string | number> | null;
 }): string[] {
-    if (Array.isArray(deal.cars_taken_from_client) && deal.cars_taken_from_client.length > 0) {
-        return deal.cars_taken_from_client.filter(Boolean).map(String);
+    if (Array.isArray(deal.cars_taken_from_client)) {
+        const ids = Array.from(new Set(deal.cars_taken_from_client.filter(Boolean).map(String)));
+        if (ids.length > 0) return ids;
     }
     const single = deal.car_taken_from_client;
     if (!single) return [];
-    if (typeof single === 'string') return [single];
+    if (typeof single === 'string' || typeof single === 'number') return [String(single)];
     if (typeof single === 'object' && single.id) return [String(single.id)];
     return [];
+}
+
+export function orderTradeInCars<T extends { id: string | number }>(cars: T[], ids: string[]): T[] {
+    const byId = new Map(cars.map((car) => [String(car.id), car]));
+    return ids.map((id) => {
+        const car = byId.get(String(id));
+        if (!car) throw new Error(`Trade-in car ${id} could not be loaded`);
+        return car;
+    });
+}
+
+export function getExchangeInvoiceCars<T extends { id: string | number }>(deal: Parameters<typeof getTradeInCarIds>[0], cars: T[]): T[] {
+    const ids = getTradeInCarIds(deal);
+    const ordered = ids.length > 0 ? orderTradeInCars(cars, ids) : cars;
+    if (ordered.length === 0) throw new Error('Exchange invoice requires incoming vehicle details');
+    return ordered;
 }
 
 export function mapCarToTradeInInfo(car: {
@@ -68,6 +85,30 @@ export function mapCarToTradeInInfo(car: {
 
 export function sumTradeInBuyPrice(cars: { buy_price?: number | string | null }[]): number {
     return cars.reduce((sum, c) => sum + (parseFloat(String(c.buy_price ?? 0)) || 0), 0);
+}
+
+export function getExchangeDealValues(
+    deal: {
+        selling_price?: number | null;
+        customer_car_eval_value?: number | null;
+        additional_customer_amount?: number | null;
+        additional_company_amount?: number | null;
+        loss_amount?: number | null;
+    },
+    outgoingCar: { sale_price?: number | null; buy_price?: number | null } | null,
+    incomingCars: Array<{ buy_price?: number | string | null }>,
+) {
+    const salePrice = deal.selling_price ?? outgoingCar?.sale_price ?? 0;
+    const incomingValue = deal.customer_car_eval_value ?? sumTradeInBuyPrice(incomingCars);
+    const difference = salePrice - incomingValue;
+    return {
+        salePrice,
+        incomingValue,
+        difference,
+        customerTopUp: deal.additional_customer_amount ?? Math.max(difference, 0),
+        companyTopUp: deal.additional_company_amount ?? Math.max(-difference, 0),
+        profit: outgoingCar?.buy_price == null ? null : salePrice - outgoingCar.buy_price - (deal.loss_amount ?? 0),
+    };
 }
 
 export function sumOldCarsPurchasePrice(cars: OldCarFormFields[]): number {

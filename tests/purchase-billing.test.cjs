@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { createClient } = require('@supabase/supabase-js');
 const { loadModule, declarations, evaluate } = require('./helpers/typescript.cjs');
 
 const billing = loadModule('utils/purchase-billing.ts');
@@ -162,7 +163,64 @@ test('saves local bill and all payment fields before issuing the external docume
     assert.equal(events[0].values[0].free_text, 'Fixture note');
     assert.equal(events[1].values[0].approval_number, 'APPROVAL');
     assert.equal(events[1].values[0].visa_card_type, 'Fixture');
+    assert.equal(Object.hasOwn(events[1].values[0], 'id'), false);
 });
+
+for (const billType of ['receipt_only', 'tax_invoice_receipt']) {
+    test(`${billType} omits payment IDs from actual Supabase insert columns and uses database-generated IDs`, async () => {
+        const requests = [];
+        const supabase = createClient('https://fixture.invalid', 'fixture-key', {
+            auth: { persistSession: false, autoRefreshToken: false },
+            global: {
+                fetch: async (url, options) => {
+                    const requestUrl = new URL(url);
+                    const table = requestUrl.pathname.split('/').at(-1);
+                    const body = options.body ? JSON.parse(options.body) : null;
+                    requests.push({ table, method: options.method, columns: requestUrl.searchParams.get('columns'), body });
+                    if (table === 'bills' && options.method === 'POST') {
+                        return new Response(JSON.stringify({ id: 123 }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+                    }
+                    if (table === 'bill_payments' && options.method === 'POST') {
+                        const columns = (requestUrl.searchParams.get('columns') || '').split(',');
+                        if (columns.includes('"id"') && body.some((payment) => payment.id == null)) {
+                            return new Response(JSON.stringify({
+                                code: '23502', details: null, hint: null,
+                                message: 'null value in column "id" of relation "bill_payments" violates not-null constraint',
+                            }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+                        }
+                        return new Response(null, { status: 201 });
+                    }
+                    throw new Error(`Unexpected fixture request: ${options.method} ${table}`);
+                },
+            },
+        });
+        const paymentFixtures = [
+            { payment_type: 'cash', amount: 18 },
+            { id: 'old-payment-id', bill_id: 'old-bill-id', payment_type: 'visa', amount: 100, approval_number: 'APPROVAL', visa_card_type: 'Fixture', visa_installments: 2, visa_last_four: '1234' },
+            { payment_type: 'cash', amount: 0 },
+        ];
+        const { submit, events, context } = loadSubmit({ billType, payments: paymentFixtures, supabase });
+        await submit();
+        assert.deepEqual(requests.map((request) => [request.table, request.method]), [['bills', 'POST'], ['bill_payments', 'POST']]);
+        const paymentRequest = requests[1];
+        assert.ok(!paymentRequest.columns.split(',').includes('"id"'));
+        assert.equal(paymentRequest.body.length, 2);
+        for (const payment of paymentRequest.body) {
+            assert.equal(Object.hasOwn(payment, 'id'), false);
+            assert.equal(payment.bill_id, 123);
+            assert.equal(payment.created_at, requests[0].body[0].created_at);
+        }
+        assert.equal(paymentRequest.body[0].amount, 18);
+        assert.equal(paymentRequest.body[1].amount, 100);
+        assert.equal(paymentRequest.body[1].approval_number, 'APPROVAL');
+        assert.equal(paymentRequest.body[1].visa_installments, 2);
+        assert.equal(paymentRequest.body[1].visa_last_four, '1234');
+        assert.equal(paymentFixtures[1].id, 'old-payment-id');
+        assert.equal(paymentFixtures[1].bill_id, 'old-bill-id');
+        assert.equal(events.filter((event) => event.action === 'issue').length, 1);
+        assert.equal(context.alerts.at(-1).type, 'success');
+    });
+}
 
 test('uncertain issuance retains local records and blocks a second submission', async () => {
     const { context, submit, events } = loadSubmit({ outcome: 'uncertain' });
