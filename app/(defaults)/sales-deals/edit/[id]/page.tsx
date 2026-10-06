@@ -132,12 +132,7 @@ interface BillPayment {
     check_holder_name?: string;
 }
 
-class TranzilaReconciliationRequiredError extends Error {
-    constructor(billId: number, details: string) {
-        super(`Bill ${billId} requires reconciliation. A Tranzila document may already exist. The local bill was retained. Do not retry; check Tranzila and reconcile this bill first. ${details}`);
-        this.name = 'TranzilaReconciliationRequiredError';
-    }
-}
+import { createAndStoreTranzilaDocument, TranzilaReconciliationRequiredError } from '@/utils/tranzila-document';
 
 const createTranzilaDocument = async (
     billId: number,
@@ -149,8 +144,6 @@ const createTranzilaDocument = async (
     carsTakenFromClient: Car[] = [],
 ) => {
     const { t } = getTranslation();
-    let creationMayHaveSucceeded = false;
-    let documentNumber: string | number | undefined;
     try {
         // Map bill type to Tranzila document type
         // Document types from Tranzila API:
@@ -616,58 +609,9 @@ const createTranzilaDocument = async (
             tranzilaRequestData.relation_type = 1;
         }
 
-        creationMayHaveSucceeded = true;
-        const response = await fetch('/api/tranzila', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                action: 'create_document',
-                data: tranzilaRequestData,
-            }),
-        });
-
-        const result = await response.json();
-
-        // Check if Tranzila returned an error
-        if (!result?.ok || !result.response || result.response.status_code !== 0) {
-            if (result?.ok && typeof result.response?.status_code === 'number' && result.response.status_code !== 0) {
-                creationMayHaveSucceeded = false;
-            }
-            const errorMsg = result?.response?.status_msg || result?.error || result?.message || 'Unknown Tranzila error';
-            const statusCode = result?.response?.status_code ?? 'N/A';
-            throw new Error(`Tranzila error (${statusCode}): ${errorMsg}`);
-        }
-
-        const document = result.response.document;
-        documentNumber = document?.number;
-        if (!document?.id || !document?.number || !document?.retrieval_key) {
-            throw new Error('Tranzila reported success (status_code 0) but omitted required document details (id, number, or retrieval_key).');
-        }
-
-        // Document created successfully, update bill record with Tranzila info
-        const { error: updateError } = await supabase
-            .from('bills')
-            .update({
-                tranzila_document_id: document.id,
-                tranzila_document_number: document.number,
-                tranzila_retrieval_key: document.retrieval_key,
-                tranzila_created_at: billData.date ? new Date(billData.date + 'T00:00:00').toISOString() : document.created_at,
-            })
-            .eq('id', billId);
-
-        if (updateError) {
-            throw new Error('Failed to update bill with Tranzila data: ' + updateError.message);
-        }
-
-        console.log('Tranzila document created successfully:', document.number);
+        await createAndStoreTranzilaDocument(billId, billData.date, tranzilaRequestData);
     } catch (error) {
         console.error('Error calling Tranzila API:', error);
-        if (creationMayHaveSucceeded) {
-            const details = error instanceof Error ? error.message : 'Unknown error';
-            throw new TranzilaReconciliationRequiredError(billId, `${documentNumber ? `Tranzila document: ${documentNumber}. ` : ''}${details}`);
-        }
         throw error;
     }
 };

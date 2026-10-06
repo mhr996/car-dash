@@ -10,26 +10,18 @@ import IconPhone from '@/components/icon/icon-phone';
 import IconMapPin from '@/components/icon/icon-map-pin';
 import IconCreditCard from '@/components/icon/icon-credit-card';
 import IconPlus from '@/components/icon/icon-plus';
-import IconPdf from '@/components/icon/icon-pdf';
+import BillsTable from '@/components/bills/bills-table';
 import supabase from '@/lib/supabase';
 import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import Image from 'next/image';
-import { CarContract } from '@/types/contract';
+import { createPurchaseContractData } from '@/utils/purchase-contract';
+import { PurchaseBill } from '@/utils/purchase-billing';
 import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
 import { usePermissions } from '@/hooks/usePermissions';
-
-interface PurchaseBill {
-    id: number;
-    created_at: string;
-    date: string;
-    bill_type: string;
-    status: string;
-    total_with_tax: number;
-    tranzila_document_number?: string;
-    tranzila_retrieval_key?: string;
-}
+import { usePurchaseSignature } from '@/hooks/usePurchaseSignature';
+import { PurchaseSignatureControl } from '@/components/contracts/purchase-signature-control';
 
 interface Car {
     id: string;
@@ -67,13 +59,14 @@ interface Car {
         name: string;
         phone: string;
         age: number;
-        id_number?: string;
+        id_number?: string | number;
+        address?: string;
     };
 }
 
 const CarDealPreview = () => {
     const { t } = getTranslation();
-    const { hasPermission } = usePermissions();
+    const { hasPermission, loading: permissionsLoading } = usePermissions();
     const params = useParams();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -95,6 +88,7 @@ const CarDealPreview = () => {
     const [downloadingPdf, setDownloadingPdf] = useState<number | null>(null);
     const canViewBills = hasPermission('view_bills');
     const canManageBills = hasPermission('manage_bills');
+    const purchaseSignature = usePurchaseSignature(car);
 
     useEffect(() => {
         const fetchCar = async () => {
@@ -157,32 +151,40 @@ const CarDealPreview = () => {
             try {
                 const { data, error } = await supabase
                     .from('bills')
-                    .select('id, created_at, date, bill_type, status, total_with_tax, tranzila_document_number, tranzila_retrieval_key')
-                    .ilike('free_text', `%purchase_car_id:${car.id}%`)
+                    .select('*, bill_payments(*)')
+                    .eq('purchase_car_id', car.id)
                     .order('created_at', { ascending: false })
-                    .limit(100);
+                    .returns<PurchaseBill[]>();
 
                 if (error) throw error;
-                setBills((data || []) as PurchaseBill[]);
+                setBills(data || []);
             } catch (error) {
                 console.error('Error fetching purchase bills:', error);
+                setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
             } finally {
                 setLoadingBills(false);
             }
         };
 
-        if (activeTab === 'bills') {
+        if (activeTab === 'bills' && !permissionsLoading) {
             fetchBills();
         }
         // Intentionally depend on stable primitives only
-    }, [activeTab, car?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t changes every render
+    }, [activeTab, car?.id, canViewBills, permissionsLoading]);
 
     useEffect(() => {
         const loadCompanyInfo = async () => {
-            const info = await getCompanyInfo();
-            setCompanyInfo(info);
+            try {
+                const info = await getCompanyInfo(false, true);
+                setCompanyInfo(info);
+            } catch (error) {
+                console.error('Failed to load company info:', error);
+                setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
+            }
         };
         loadCompanyInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t changes every render; load settings once
     }, []);
 
     const getCookie = (name: string) => {
@@ -192,14 +194,11 @@ const CarDealPreview = () => {
         return null;
     };
 
-    const getBillTypeLabel = (type: string) => {
-        const key = `bill_type_${type}`;
-        const translated = t(key);
-        return translated !== key ? translated : type;
-    };
-
     const handleViewBillPdf = (bill: PurchaseBill) => {
-        if (!bill.tranzila_retrieval_key) return;
+        if (!bill.tranzila_retrieval_key) {
+            setAlert({ visible: true, message: t('bill_not_created_with_tranzila'), type: 'danger' });
+            return;
+        }
         setDownloadingPdf(bill.id);
         try {
             window.open(`/api/tranzila/download-pdf?key=${encodeURIComponent(bill.tranzila_retrieval_key)}`, '_blank');
@@ -259,59 +258,25 @@ const CarDealPreview = () => {
 
                     {companyInfo && hasPermission('view_car_purchase_price') && (
                         <div className="flex gap-2">
+                            <PurchaseSignatureControl
+                                signature={purchaseSignature}
+                                canSign={hasPermission('manage_purchases_deals') || canManageBills}
+                                onAlert={(message, type) => setAlert({ visible: true, message, type })}
+                            />
                             <button
                                 className="btn btn-success gap-2"
-                                disabled={generatingContract}
+                                disabled={generatingContract || purchaseSignature.loading || purchaseSignature.saving || !!purchaseSignature.error}
                                 onClick={async () => {
                                     if (!car) return;
 
                                     setGeneratingContract(true);
                                     try {
-                                        const sourceEntity =
-                                            car.source_type === 'provider'
-                                                ? car.providers
-                                                : car.source_type === 'brokerage' || car.source_type === 'broker'
-                                                  ? car.customers
-                                                  : car.customers;
-
-                                        const contractData: CarContract = {
-                                            dealType: 'normal',
-                                            dealDate: new Date(car.created_at).toISOString().split('T')[0],
-                                            companyName: companyInfo.name,
-                                            companyTaxNumber: companyInfo.tax_number || '',
-                                            companyAddress: companyInfo.address || '',
-                                            companyPhone: companyInfo.phone || '',
-                                            sellerName: sourceEntity?.name || 'N/A',
-                                            sellerTaxNumber:
-                                                car.source_type === 'brokerage' || car.source_type === 'broker' || car.source_type === 'customer'
-                                                    ? (car.customers)?.id_number?.toString() || ''
-                                                    : car.providers?.id_number?.toString() || '',
-                                            sellerAddress:
-                                                car.source_type === 'brokerage' || car.source_type === 'broker' || car.source_type === 'customer'
-                                                    ? (car.customers as any)?.address || ''
-                                                    : car.providers?.address || '',
-                                            sellerPhone: sourceEntity?.phone || '',
-                                            buyerName: companyInfo.name,
-                                            buyerId: companyInfo.tax_number || '',
-                                            buyerAddress: companyInfo.address || '',
-                                            buyerPhone: companyInfo.phone || '',
-                                            carType: car.type || 'sedan',
-                                            carMake: car.brand,
-                                            carModel: car.title,
-                                            carYear: car.year,
-                                            carBuyPrice: car.buy_price,
-                                            carPlateNumber: car.car_number || '',
-                                            carVin: '',
-                                            carEngineNumber: '',
-                                            carKilometers: car.kilometers,
-                                            dealAmount: car.buy_price,
-                                            ownershipTransferDays: 30,
-                                        };
+                                        const contractData = createPurchaseContractData(car, companyInfo, purchaseSignature.signatureUrl);
 
                                         const lang = getCookie('i18nextLng') || 'he';
                                         const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
 
-                                        const carIdentifier = car.car_number || `CAR-${car.id.slice(-6).toUpperCase()}`;
+                                        const carIdentifier = contractData.carPlateNumber;
                                         const filename = `car-purchase-contract-${carIdentifier}-${new Date().toISOString().split('T')[0]}.pdf`;
 
                                         await CarPurchaseContractPDFGenerator.generateFromContract(contractData, {
@@ -744,73 +709,14 @@ const CarDealPreview = () => {
                             )}
                         </div>
 
-                        {loadingBills ? (
-                            <div className="flex justify-center py-10">
-                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                            </div>
-                        ) : bills.length === 0 ? (
-                            <div className="text-center py-10 text-gray-500">
-                                <IconDocument className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                                <p>{t('no_bills_found')}</p>
-                            </div>
-                        ) : (
-                            <div className="table-responsive">
-                                <table className="table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>{t('invoice_number')}</th>
-                                            <th>{t('bill_type')}</th>
-                                            <th>{t('total_amount')}</th>
-                                            <th>{t('date')}</th>
-                                            <th>{t('status')}</th>
-                                            <th>{t('actions')}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {bills.map((bill) => (
-                                            <tr key={bill.id}>
-                                                <td className="font-mono font-semibold">
-                                                    {bill.tranzila_document_number || `#${bill.id}`}
-                                                </td>
-                                                <td>
-                                                    <span className="badge badge-outline-info">{getBillTypeLabel(bill.bill_type)}</span>
-                                                </td>
-                                                <td className="font-medium">₪{Number(bill.total_with_tax || 0).toLocaleString()}</td>
-                                                <td>
-                                                    {new Date(bill.date || bill.created_at).toLocaleDateString('en-GB', {
-                                                        year: 'numeric',
-                                                        month: '2-digit',
-                                                        day: '2-digit',
-                                                    })}
-                                                </td>
-                                                <td>
-                                                    <span className="badge badge-outline-primary">{t(bill.status) || bill.status}</span>
-                                                </td>
-                                                <td>
-                                                    {bill.tranzila_retrieval_key ? (
-                                                        <button
-                                                            type="button"
-                                                            className="flex hover:text-success"
-                                                            onClick={() => handleViewBillPdf(bill)}
-                                                            title={t('download_pdf')}
-                                                            disabled={downloadingPdf === bill.id}
-                                                        >
-                                                            {downloadingPdf === bill.id ? (
-                                                                <div className="animate-spin rounded-full h-4.5 w-4.5 border-b-2 border-success"></div>
-                                                            ) : (
-                                                                <IconPdf className="h-4.5 w-4.5" />
-                                                            )}
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-gray-400">—</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                        <BillsTable
+                            bills={bills}
+                            loading={loadingBills}
+                            onDownloadPDF={handleViewBillPdf}
+                            downloadingPDF={downloadingPdf}
+                            readOnly
+                            showStatus
+                        />
                     </div>
                 )}
             </div>

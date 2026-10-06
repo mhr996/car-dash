@@ -37,9 +37,10 @@ const getSupabaseAdmin = () => {
 /**
  * Fetch company information from the database
  * @param useServiceRole - Whether to use service role key (for API routes) or regular client (for client-side)
+ * @param required - Reject missing settings and lookup errors instead of using display defaults
  * @returns Promise<CompanyInfo> - Company information with fallback defaults
  */
-export const getCompanyInfo = async (useServiceRole: boolean = false): Promise<CompanyInfo> => {
+export const getCompanyInfo = async (useServiceRole: boolean = false, required: boolean = false): Promise<CompanyInfo> => {
     try {
         let client = supabase;
 
@@ -48,7 +49,7 @@ export const getCompanyInfo = async (useServiceRole: boolean = false): Promise<C
             try {
                 client = getSupabaseAdmin();
             } catch (error) {
-                console.warn('Failed to create admin client, falling back to regular client:', error);
+                console.warn('Failed to create admin client:', error);
                 // Fallback to regular client if admin client creation fails
                 client = supabase;
             }
@@ -56,9 +57,11 @@ export const getCompanyInfo = async (useServiceRole: boolean = false): Promise<C
 
         const { data, error } = await client.from('company_settings').select('*').limit(1).single();
 
+        if (required && error) throw new Error('Failed to load company settings: ' + error.message);
         if (error && error.code !== 'PGRST116') {
             console.error('Error fetching company info:', error);
             // Return default company info if error
+            if (required) throw new Error('Company settings must be configured before generating a contract');
             return getDefaultCompanyInfo();
         }
 
@@ -69,6 +72,7 @@ export const getCompanyInfo = async (useServiceRole: boolean = false): Promise<C
         return getDefaultCompanyInfo();
     } catch (error) {
         console.error('Error fetching company info:', error);
+        if (required) throw error;
         return getDefaultCompanyInfo();
     }
 };

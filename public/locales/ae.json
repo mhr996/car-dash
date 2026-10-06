@@ -1,4 +1,7 @@
 {
+    "sign_purchase": "توقيع صفقة الشراء",
+    "purchase_seller_signature": "توقيع بائع السيارة",
+    "cancellation_full_amount_required": "يجب أن يطابق مبلغ الإلغاء المبلغ الإجمالي للمستند الأصلي.",
     "contract_attachments": "مرفقات العقد",
     "contract_attachments_description": "رفع المستندات المتعلقة بالعقد (صور أو ملفات PDF)",
     "contract_attachment": "مرفق العقد",

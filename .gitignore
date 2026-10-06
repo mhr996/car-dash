@@ -21,6 +21,7 @@
 
 # SQL files and markdown files (contain private data)
 *.sql
+!migrations/add_purchase_billing_and_signatures.sql
 *.md
 sql
 

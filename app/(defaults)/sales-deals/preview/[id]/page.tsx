@@ -95,6 +95,8 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
     const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
     const [customerSignature, setCustomerSignature] = useState<string | null>(null);
+    const [signatureLoading, setSignatureLoading] = useState(true);
+    const [signatureLoadError, setSignatureLoadError] = useState(false);
     const [isSigning, setIsSigning] = useState(false);
     const dealId = params.id;
 
@@ -177,8 +179,9 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 // Add seller data to the deal object
                                 data.seller = {
                                     name: sellerData.name,
-                                    id_number: sellerData.id_number || '',
+                                    id_number: sellerData.id_number?.toString() || '',
                                     address: sellerData.address || '',
+                                    phone: sellerData.phone || '',
                                 };
                             }
                         }
@@ -190,11 +193,13 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                                 // Add buyer data to the deal object
                                 data.buyer = {
                                     name: buyerData.name,
-                                    id_number: buyerData.id_number || '',
+                                    id_number: buyerData.id_number?.toString() || '',
                                     address: buyerData.address || '',
+                                    phone: buyerData.phone || '',
                                 };
                             }
                         }
+                        setDeal({ ...data });
                     } // Fetch car details if car_id exists
                     if (data.car_id) {
                         const { data: carData } = await supabase.from('cars').select('*').eq('id', data.car_id).single();
@@ -261,31 +266,37 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
     useEffect(() => {
         const loadCompanyInfo = async () => {
             try {
-                const info = await getCompanyInfo();
+                const info = await getCompanyInfo(false, true);
                 setCompanyInfo(info);
             } catch (error) {
                 console.error('Failed to load company info:', error);
+                setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
             }
         };
         loadCompanyInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t changes every render; load settings once
     }, []);
 
     // Load existing signature if available
     useEffect(() => {
         const loadSignature = async () => {
             if (!dealId) return;
-
+            setSignatureLoading(true);
             try {
-                const { data, error } = await supabase.from('deal_signatures').select('customer_signature_url').eq('deal_id', dealId).single();
-
-                if (!error && data) {
-                    setCustomerSignature(data.customer_signature_url);
-                }
+                const { data, error } = await supabase.from('deal_signatures').select('customer_signature_url').eq('deal_id', dealId).maybeSingle();
+                if (error) throw error;
+                setCustomerSignature(data?.customer_signature_url || null);
+                setSignatureLoadError(false);
             } catch (error) {
                 console.error('Failed to load signature:', error);
+                setSignatureLoadError(true);
+                setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
+            } finally {
+                setSignatureLoading(false);
             }
         };
         loadSignature();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload signatures only when the deal changes
     }, [dealId]);
 
     const formatCurrency = (value: number) => {
@@ -331,6 +342,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             if (error) throw error;
 
             setCustomerSignature(signatureUrl);
+            setSignatureLoadError(false);
             setAlert({
                 visible: true,
                 message: t('deal_signed_successfully'),
@@ -454,29 +466,29 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
             // For intermediary deals, these are the actual seller and buyer
             // For regular deals, seller is the company and buyer is the customer
             sellerName: isIntermediaryDeal ? deal.seller?.name || t('unknown_seller') : companyInfo?.name || t('car_dealership'),
-            sellerTaxNumber: isIntermediaryDeal ? '' : companyInfo?.tax_number || '',
-            sellerAddress: isIntermediaryDeal ? '' : companyInfo?.address || '',
-            sellerPhone: isIntermediaryDeal ? '' : companyInfo?.phone || '',
+            sellerTaxNumber: isIntermediaryDeal ? deal.seller?.id_number?.toString() || '' : companyInfo?.tax_number || '',
+            sellerAddress: isIntermediaryDeal ? deal.seller?.address || '' : companyInfo?.address || '',
+            sellerPhone: isIntermediaryDeal ? deal.seller?.phone || '' : companyInfo?.phone || '',
 
             buyerName: isIntermediaryDeal ? deal.buyer?.name || t('unknown_buyer') : customer?.name || t('unknown_customer'),
-            buyerId: isIntermediaryDeal ? deal.buyer?.id_number || '' : customer?.id_number || '',
+            buyerId: isIntermediaryDeal ? deal.buyer?.id_number?.toString() || '' : customer?.id_number?.toString() || '',
             buyerAddress: isIntermediaryDeal ? deal.buyer?.address || '' : customer?.address || '',
-            buyerPhone: isIntermediaryDeal ? '' : customer?.phone || '',
+            buyerPhone: isIntermediaryDeal ? deal.buyer?.phone || '' : customer?.phone || '',
 
             // Mark as intermediary deal and include additional info
             ...(isIntermediaryDeal && {
                 isIntermediaryDeal: true,
                 actualSeller: {
                     name: deal.seller?.name || t('unknown_seller'),
-                    id: deal.seller?.id_number || '',
+                    id: deal.seller?.id_number?.toString() || '',
                     address: deal.seller?.address || '',
-                    phone: '',
+                    phone: deal.seller?.phone || '',
                 },
                 actualBuyer: {
                     name: deal.buyer?.name || t('unknown_buyer'),
-                    id: deal.buyer?.id_number || '',
+                    id: deal.buyer?.id_number?.toString() || '',
                     address: deal.buyer?.address || '',
-                    phone: '',
+                    phone: deal.buyer?.phone || '',
                 },
             }),
 
@@ -606,7 +618,7 @@ const PreviewDeal = ({ params }: { params: { id: string } }) => {
                     </button>
                     <button
                         className={`btn btn-outline-success gap-2${generatingContract ? ' opacity-60 pointer-events-none' : ''}`}
-                        disabled={generatingContract}
+                        disabled={generatingContract || isSigning || signatureLoading || signatureLoadError || !companyInfo}
                         onClick={async () => {
                             setGeneratingContract(true);
                             try {

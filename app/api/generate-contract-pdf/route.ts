@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFService } from '@/utils/pdf-service';
 import { CarContract } from '@/types/contract';
+import { CompanyInfo } from '@/lib/company-info';
+import { parseContractPayload } from '@/utils/contract-payload';
 import { formatTradeInCarsLabel, resolveTradeInCars, TradeInCarInfo } from '@/utils/trade-in-cars';
 
 function renderTradeInCarsBlock(
@@ -52,29 +54,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Contract HTML is required' }, { status: 400 });
         }
 
-        let htmlContent: string;
-
-        // Check if contractHtml is a JSON string (new format) or HTML (old format)
-        try {
-            const parsedData = JSON.parse(contractHtml);
-
-            if (parsedData.contract && parsedData.template) {
-                // New format: generate HTML from template
-                htmlContent = await generateContractHTML(parsedData.contract, parsedData.template);
-            } else {
-                throw new Error('Invalid data format');
-            }
-        } catch (parseError) {
-            // Old format: assume it's already HTML
-            htmlContent = contractHtml;
-        }
+        const parsedData = parseContractPayload(contractHtml);
+        const htmlContent = parsedData ? await generateContractHTML(parsedData.contract, parsedData.template) : contractHtml;
 
         // Generate PDF using Puppeteer
         const pdfService = PDFService.getInstance();
         const pdfBuffer = await pdfService.generateContractPDF({
-            contractHtml: htmlContent,
             filename,
             ...options,
+            contractHtml: htmlContent,
+            baseUrl: request.nextUrl.origin,
         });
 
         // Return PDF as response
@@ -96,50 +85,26 @@ export async function POST(request: NextRequest) {
  * Generate HTML from contract template on server-side
  */
 async function generateContractHTML(contract: CarContract, template: string): Promise<string> {
-    // Import company info function
     const { getCompanyInfo } = await import('@/lib/company-info');
 
-    try {
-        const companyInfo = await getCompanyInfo(true); // Use service role for API routes
-
-        // Generate HTML based on template
-        switch (template) {
-            case 'english':
-                return generateEnglishContractHTML(contract, companyInfo);
-            case 'arabic':
-                return generateArabicContractHTML(contract, companyInfo);
-            case 'hebrew':
-                return generateHebrewContractHTML(contract, companyInfo);
-            default:
-                return generateEnglishContractHTML(contract, companyInfo);
-        }
-    } catch (error) {
-        console.warn('Failed to load company info, using defaults:', error);
-        const defaultCompanyInfo = {
-            name: 'Car Dealership',
-            address: null,
-            phone: null,
-            tax_number: null,
-            logo_url: null,
-        };
-
-        switch (template) {
-            case 'english':
-                return generateEnglishContractHTML(contract, defaultCompanyInfo);
-            case 'arabic':
-                return generateArabicContractHTML(contract, defaultCompanyInfo);
-            case 'hebrew':
-                return generateHebrewContractHTML(contract, defaultCompanyInfo);
-            default:
-                return generateEnglishContractHTML(contract, defaultCompanyInfo);
-        }
+    const companyInfo = await getCompanyInfo(true, true);
+    contract = { ...contract, companySignatureUrl: contract.companySignatureUrl || companyInfo.signature_url };
+    switch (template) {
+        case 'english':
+            return generateEnglishContractHTML(contract, companyInfo);
+        case 'arabic':
+            return generateArabicContractHTML(contract, companyInfo);
+        case 'hebrew':
+            return generateHebrewContractHTML(contract, companyInfo);
+        default:
+            return generateEnglishContractHTML(contract, companyInfo);
     }
 }
 
 /**
  * Generate English contract HTML
  */
-function generateEnglishContractHTML(contract: CarContract, companyInfo: any): string {
+function generateEnglishContractHTML(contract: CarContract, companyInfo: CompanyInfo): string {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -613,7 +578,7 @@ function generateEnglishContractHTML(contract: CarContract, companyInfo: any): s
 /**
  * Generate Arabic contract HTML
  */
-function generateArabicContractHTML(contract: CarContract, companyInfo: any): string {
+function generateArabicContractHTML(contract: CarContract, companyInfo: CompanyInfo): string {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -1089,7 +1054,7 @@ function generateArabicContractHTML(contract: CarContract, companyInfo: any): st
 /**
  * Generate Hebrew contract HTML
  */
-function generateHebrewContractHTML(contract: CarContract, companyInfo: any): string {
+function generateHebrewContractHTML(contract: CarContract, companyInfo: CompanyInfo): string {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('he-IL', {
             style: 'currency',
@@ -1239,7 +1204,7 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
             <div class="compact-content space-y-3 w-full">
                 <!-- Parties Information -->
                 ${
-                    contract.dealType === 'intermediary'
+                    contract.isIntermediaryDeal || contract.dealType === 'intermediary'
                         ? `
                         <!-- Three-party layout for intermediary deals -->
                         <div class="compact-section">
@@ -1285,10 +1250,10 @@ function generateHebrewContractHTML(contract: CarContract, companyInfo: any): st
                                         </svg>
                                     </h2>
                                     <div class="grid grid-cols-2 gap-x-2 gap-y-0 text-xs text-right">
-                                        <p><span class="font-semibold text-blue-700">שם:</span> ${contract.buyerName}</p>
-                                        <p><span class="font-semibold text-blue-700">ת.ז.:</span> ${contract.buyerId}</p>
-                                        <p><span class="font-semibold text-blue-700">כתובת:</span> ${contract.buyerAddress}</p>
-                                        <p><span class="font-semibold text-blue-700">טלפון:</span> ${contract.buyerPhone}</p>
+                                        <p><span class="font-semibold text-blue-700">שם:</span> ${contract.actualBuyer?.name || contract.buyerName}</p>
+                                        <p><span class="font-semibold text-blue-700">ת.ז.:</span> ${contract.actualBuyer?.id || contract.buyerId}</p>
+                                        <p><span class="font-semibold text-blue-700">כתובת:</span> ${contract.actualBuyer?.address || contract.buyerAddress}</p>
+                                        <p><span class="font-semibold text-blue-700">טלפון:</span> ${contract.actualBuyer?.phone || contract.buyerPhone}</p>
                                     </div>
                                 </div>
                             </div>

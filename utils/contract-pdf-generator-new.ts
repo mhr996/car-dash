@@ -1,8 +1,9 @@
 import { CarContract } from '@/types/contract';
+import { contractTemplate } from '@/utils/contract-payload';
 
 interface PDFGeneratorOptions {
     filename?: string;
-    language?: 'en' | 'ar' | 'he';
+    language?: 'en' | 'ar' | 'ae' | 'he';
     format?: 'A4' | 'Letter';
     orientation?: 'portrait' | 'landscape';
 }
@@ -91,27 +92,11 @@ export class ContractPDFGenerator {
      * Generate contract HTML for server-side PDF generation
      */
     private static async generateContractHTML(contract: CarContract, language: string): Promise<string> {
-        // Get the template based on language
-        let templateName: string;
-
-        switch (language) {
-            case 'ae':
-                templateName = 'arabic';
-                break;
-            case 'he':
-                templateName = 'hebrew';
-                break;
-            case 'en':
-            default:
-                templateName = 'english';
-                break;
-        }
-
         // Return a simple HTML structure that the server can render
         // The server will handle the actual template rendering
         return JSON.stringify({
             contract,
-            template: templateName,
+            template: contractTemplate(language),
             language,
         });
     }

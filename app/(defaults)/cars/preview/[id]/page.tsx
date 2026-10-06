@@ -15,6 +15,9 @@ import { getTranslation } from '@/i18n';
 import Link from 'next/link';
 import Image from 'next/image';
 import { CarContract } from '@/types/contract';
+import { createPurchaseContractData } from '@/utils/purchase-contract';
+import { usePurchaseSignature } from '@/hooks/usePurchaseSignature';
+import { PurchaseSignatureControl } from '@/components/contracts/purchase-signature-control';
 import { CarPurchaseContractPDFGenerator } from '@/utils/car-purchase-contract-pdf-generator';
 import { getCompanyInfo, CompanyInfo } from '@/lib/company-info';
 import { Alert } from '@/components/elements/alerts/elements-alerts-default';
@@ -56,7 +59,8 @@ interface Car {
         name: string;
         phone: string;
         age: number;
-        id_number?: string;
+        id_number?: string | number;
+        address?: string;
     };
 }
 
@@ -66,6 +70,7 @@ const CarPreview = () => {
     const router = useRouter();
     const { hasPermission } = usePermissions();
     const [car, setCar] = useState<Car | null>(null);
+    const purchaseSignature = usePurchaseSignature(car);
     const [loading, setLoading] = useState(true);
     const [imageUrls, setImageUrls] = useState<string[]>([]);
     const [contractImageUrl, setContractImageUrl] = useState<string>('');
@@ -91,7 +96,7 @@ const CarPreview = () => {
                         `
                         *,
                         providers!cars_provider_fkey(id, name, address, phone, id_number),
-                        customers!cars_source_customer_id_fkey(id, name, phone, age, id_number)
+                        customers!cars_source_customer_id_fkey(id, name, phone, age, id_number, address)
                     `,
                     )
                     .eq('id', params.id)
@@ -157,13 +162,15 @@ const CarPreview = () => {
     useEffect(() => {
         const loadCompanyInfo = async () => {
             try {
-                const info = await getCompanyInfo();
+                const info = await getCompanyInfo(false, true);
                 setCompanyInfo(info);
             } catch (error) {
                 console.error('Failed to load company info:', error);
+                setAlert({ visible: true, message: t('error_loading_data'), type: 'danger' });
             }
         };
         loadCompanyInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t changes every render; load settings once
     }, []);
 
     const getStatusBadgeClass = (status: string) => {
@@ -194,78 +201,8 @@ const CarPreview = () => {
 
     const createCarContractData = (): CarContract => {
         if (!car) throw new Error('Car data is required to generate contract');
-
-        // Determine seller info based on car source
-        let sellerName = '';
-        let sellerAddress = '';
-        let sellerPhone = '';
-        let sellerTaxNumber = '';
-
-        if (car.source_type === 'customer' && car.customers) {
-            // Seller is a customer
-            sellerName = car.customers.name;
-            sellerAddress = (car.customers as any)?.address || '';
-            sellerPhone = car.customers.phone || '';
-            sellerTaxNumber = car.customers.id_number || '';
-        } else if ((car.source_type === 'brokerage' || car.source_type === 'broker') && car.customers) {
-            const party = car.customers;
-            sellerName = party.name;
-            sellerAddress = (party as { address?: string }).address || '';
-            sellerPhone = party.phone || '';
-            sellerTaxNumber = party.id_number || '';
-        } else if (car.source_type === 'provider' && car.providers) {
-            // Seller is a provider
-            sellerName = car.providers.name;
-            sellerAddress = car.providers.address || '';
-            sellerPhone = car.providers.phone || '';
-            sellerTaxNumber = car.providers.id_number || '';
-        } else {
-            // Fallback to provider string if no detailed info
-            sellerName = car.provider || '[Seller Name - To Be Filled]';
-            sellerAddress = '[Seller Address - To Be Filled]';
-            sellerPhone = '[Seller Phone - To Be Filled]';
-            sellerTaxNumber = '[Seller Tax Number - To Be Filled]';
-        }
-
-        return {
-            dealType: 'normal',
-            dealDate: new Date().toISOString().split('T')[0],
-
-            // Company info (always the dealership)
-            companyName: companyInfo?.name || 'Car Dealership',
-            companyTaxNumber: companyInfo?.tax_number || '',
-            companyAddress: companyInfo?.address || '',
-            companyPhone: companyInfo?.phone || '',
-
-            // Seller info - the provider or customer we got the car from
-            sellerName,
-            sellerTaxNumber,
-            sellerAddress,
-            sellerPhone,
-
-            // Buyer info - our company (the car dealership)
-            buyerName: companyInfo?.name || 'Car Dealership',
-            buyerId: companyInfo?.tax_number || '[Company Tax Number]',
-            buyerAddress: companyInfo?.address || '[Company Address]',
-            buyerPhone: companyInfo?.phone || '[Company Phone]',
-
-            // Car info
-            carType: car.type || 'Vehicle',
-            carMake: car.brand,
-            carModel: car.title,
-            carYear: car.year,
-            carBuyPrice: car.buy_price,
-            carPlateNumber: car.car_number || `CAR-${car.id.slice(-6).toUpperCase()}`,
-            carVin: '', // Would need to be added to car data
-            carEngineNumber: '', // Would need to be added to car data
-            carKilometers: car.kilometers,
-
-            // Deal amount - using buy price (what we paid for the car)
-            dealAmount: car.buy_price,
-
-            // Standard terms
-            ownershipTransferDays: 30,
-        };
+        if (!companyInfo) throw new Error('Company details are required to generate contract');
+        return createPurchaseContractData(car, companyInfo, purchaseSignature.signatureUrl);
     };
 
     if (loading) {
@@ -337,9 +274,14 @@ const CarPreview = () => {
                     </div>
                     {car && (
                         <div className="flex gap-3">
+                            <PurchaseSignatureControl
+                                signature={purchaseSignature}
+                                canSign={hasPermission('manage_purchases_deals') || hasPermission('manage_bills')}
+                                onAlert={(message, type) => setAlert({ visible: true, message, type })}
+                            />
                             <button
                                 className={`btn btn-outline-success gap-2${generatingContract ? ' opacity-60 pointer-events-none' : ''}`}
-                                disabled={generatingContract}
+                                disabled={generatingContract || !companyInfo || purchaseSignature.loading || purchaseSignature.saving || !!purchaseSignature.error}
                                 onClick={async () => {
                                     setGeneratingContract(true);
                                     try {
@@ -362,7 +304,7 @@ const CarPreview = () => {
                                         const lang = getCookie('i18nextLng') || 'he';
                                         const normalizedLang = lang.toLowerCase().split('-')[0] as 'en' | 'ar' | 'he';
 
-                                        const carIdentifier = car.car_number || `CAR-${car.id.slice(-6).toUpperCase()}`;
+                                        const carIdentifier = contractData.carPlateNumber;
                                         const filename = `car-purchase-contract-${carIdentifier}-${new Date().toISOString().split('T')[0]}.pdf`;
 
                                         // Use the car purchase contract PDF generator

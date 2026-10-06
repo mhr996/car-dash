@@ -88,6 +88,7 @@ export class PDFService {
             },
             printBackground = true,
             scale = 1,
+            baseUrl,
         } = options;
 
         const browser = await this.getBrowser();
@@ -101,8 +102,10 @@ export class PDFService {
             page.setDefaultNavigationTimeout(60000);
             page.setDefaultTimeout(60000);
 
-            // Load the HTML content - use 'domcontentloaded' instead of 'networkidle0' for faster loading
-            await page.setContent(contractHtml, {
+            const html = baseUrl
+                ? contractHtml.replace(/<head([^>]*)>/i, `<head$1><base href="${new URL(baseUrl).origin}/">`)
+                : contractHtml;
+            await page.setContent(html, {
                 waitUntil: 'domcontentloaded',
                 timeout: 60000,
             });
@@ -115,6 +118,18 @@ export class PDFService {
                 console.log('Tailwind ready flag not found, using fallback wait');
                 await new Promise((resolve) => setTimeout(resolve, 1000));
             }
+
+            await (page as Page).waitForFunction(() => Array.from(document.images).every((image) => image.complete), { timeout: 60000 });
+            await (page as Page).evaluate(async () => {
+                await document.fonts.ready;
+                await Promise.all(Array.from(document.images).map(async (image) => {
+                    try {
+                        await image.decode();
+                    } catch {
+                        throw new Error(`Failed to load contract image: ${image.alt || 'unnamed image'}`);
+                    }
+                }));
+            });
 
             // Generate PDF
             const pdfBuffer = await page.pdf({

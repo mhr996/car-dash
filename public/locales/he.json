@@ -1,4 +1,7 @@
 {
+    "sign_purchase": "חתימה על עסקת רכישה",
+    "purchase_seller_signature": "חתימת מוכר הרכב",
+    "cancellation_full_amount_required": "סכום הביטול חייב להיות זהה לסכום הכולל של המסמך המקורי.",
     "contract_attachments": "קבצי חוזה מצורפים",
     "contract_attachments_description": "העלאת מסמכים הקשורים לחוזה (תמונות או קבצי PDF)",
     "contract_attachment": "קובץ חוזה מצורף",

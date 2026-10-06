@@ -11,7 +11,8 @@ interface BillsTableProps {
     bills: any[];
     loading?: boolean;
     onDownloadPDF?: (bill: any) => void;
-    downloadingPDF?: string | null;
+    downloadingPDF?: string | number | null;
+    showStatus?: boolean;
     readOnly?: boolean; // For preview mode
     className?: string;
     deal?: any; // Deal information for exchange deals
@@ -28,6 +29,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
     loading = false,
     onDownloadPDF,
     downloadingPDF,
+    showStatus = false,
     readOnly = false,
     className = '',
     deal,
@@ -235,6 +237,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('amount')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('bank_transfer_details')}</th>
                             <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('created_date')}</th>
+                            {showStatus && <th className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">{t('status')}</th>}
                             <th className="px-4 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">{t('actions')}</th>
                         </tr>
                     </thead>
@@ -267,6 +270,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                         <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(deal.created_at)}</td>
+                                    {showStatus && <td className="px-4 py-3 text-sm">-</td>}
                                     <td className="px-4 py-3 text-center">
                                         <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
                                     </td>
@@ -295,6 +299,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                         <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(order.created_at)}</td>
+                                    {showStatus && <td className="px-4 py-3 text-sm">-</td>}
                                     <td className="px-4 py-3 text-center">
                                         <span className="text-gray-500 dark:text-gray-400 text-xs">-</span>
                                     </td>
@@ -343,6 +348,7 @@ const BillsTable: React.FC<BillsTableProps> = ({
                                         })()}
                                     </td>
                                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{formatDate(bill.created_at)}</td>
+                                    {showStatus && <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{t(bill.status)}</td>}
                                     <td className="px-4 py-3 text-center">
                                         <div className="flex items-center justify-center gap-2">
                                             {onDownloadPDF && (

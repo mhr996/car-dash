@@ -12,8 +12,13 @@ const helper = sourceFile.statements.find(
     (statement) => ts.isVariableStatement(statement) && statement.declarationList.declarations.some((declaration) => declaration.name.getText(sourceFile) === 'createTranzilaDocument'),
 );
 assert.ok(helper, 'Tranzila helper must exist');
-const reconciliationError = sourceFile.statements.find((statement) => ts.isClassDeclaration(statement) && statement.name?.text === 'TranzilaReconciliationRequiredError');
+const sharedPath = path.join(__dirname, '../utils/tranzila-document.ts');
+const sharedSourceFile = ts.createSourceFile(sharedPath, fs.readFileSync(sharedPath, 'utf8'), ts.ScriptTarget.Latest, true);
+const reconciliationError = sharedSourceFile.statements.find((statement) => ts.isClassDeclaration(statement) && statement.name?.text === 'TranzilaReconciliationRequiredError');
 assert.ok(reconciliationError, 'Reconciliation error must exist');
+const reconciliationSource = reconciliationError.getText(sharedSourceFile).replace(/^export /, '');
+const storeDocument = sharedSourceFile.statements.find((statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'createAndStoreTranzilaDocument');
+const storeDocumentSource = storeDocument.getText(sharedSourceFile).replace(/^export /, '');
 
 function loadHelper(responseBody, { updateError = null, fetchError = null, jsonError = null } = {}) {
     const updates = [];
@@ -43,7 +48,7 @@ function loadHelper(responseBody, { updateError = null, fetchError = null, jsonE
             }),
         },
     });
-    const compiled = ts.transpileModule(`${reconciliationError.getText(sourceFile)}\n${helper.getText(sourceFile)}`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+    const compiled = ts.transpileModule(`${reconciliationSource}\n${storeDocumentSource}\n${helper.getText(sourceFile)}`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
     vm.runInContext(`${compiled}\nglobalThis.createDocument = createTranzilaDocument;`, context);
     return { createDocument: context.createDocument, updates, requests };
 }
@@ -73,6 +78,14 @@ test('requires reconciliation for incomplete document details', async () => {
         const document = { id: 'external-id', number: 'external-number', retrieval_key: 'offline-key' };
         delete document[missingField];
         const { createDocument, updates } = loadHelper({ ok: true, response: { status_code: 0, document } });
+        await assert.rejects(createDocument(123, bill, payments), { name: 'TranzilaReconciliationRequiredError' });
+        assert.equal(updates.length, 0);
+    }
+});
+
+test('requires reconciliation for invalid document identifier and retrieval key types', async () => {
+    for (const values of [{ id: {} }, { number: ' ' }, { number: [] }, { retrieval_key: 123 }, { retrieval_key: ' ' }]) {
+        const { createDocument, updates } = loadHelper({ ok: true, response: { status_code: 0, document: { id: 'external-id', number: 'external-number', retrieval_key: 'offline-key', ...values } } });
         await assert.rejects(createDocument(123, bill, payments), { name: 'TranzilaReconciliationRequiredError' });
         assert.equal(updates.length, 0);
     }
@@ -155,7 +168,7 @@ function loadSubmitHandler(needsReconciliation) {
             }),
         },
     });
-    const code = `${reconciliationError.getText(sourceFile)}
+    const code = `${reconciliationSource}
         const createTranzilaDocument = async () => {
             if (needsReconciliation) throw new TranzilaReconciliationRequiredError(123, 'Offline uncertain response');
             throw new Error('Offline confirmed rejection');

@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import supabase from '@/lib/supabase';
@@ -16,6 +16,9 @@ import IconMinusCircle from '@/components/icon/icon-minus-circle';
 import CommissionTypeSelect from '@/components/commission-type-select/commission-type-select';
 import { MultiplePaymentForm } from '@/components/forms/multiple-payment-form';
 import { BillPayment } from '@/types/payment';
+import { cancellablePurchaseBills, PurchaseBill, resolvePurchaseSeller } from '@/utils/purchase-billing';
+import { createAndStoreTranzilaDocument, TranzilaReconciliationRequiredError } from '@/utils/tranzila-document';
+import { getPurchaseSignature, validPurchaseSignature } from '@/utils/purchase-signature';
 
 interface InvoiceItem {
     id: string;
@@ -29,7 +32,7 @@ interface PartyInfo {
     name: string;
     address?: string;
     phone?: string;
-    id_number?: string;
+    id_number?: string | number;
     kind: 'provider' | 'customer';
 }
 
@@ -40,23 +43,22 @@ interface CarInfo {
     year?: number;
     car_number?: string;
     buy_price?: number;
+    source_type?: string | null;
     providers?: {
         id: string | number;
         name: string;
         address?: string;
         phone?: string;
-        id_number?: string;
+        id_number?: string | number;
     } | null;
     customers?: {
         id: string | number;
         name: string;
         phone?: string;
-        id_number?: string;
+        id_number?: string | number;
         address?: string;
     } | null;
 }
-
-const PURCHASE_CAR_MARKER = (carId: string | number) => `purchase_car_id:${carId}`;
 
 const AddPurchaseInvoice = () => {
     const { t } = getTranslation();
@@ -67,9 +69,12 @@ const AddPurchaseInvoice = () => {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const submitting = useRef(false);
+    const [billCreationReviewMessage, setBillCreationReviewMessage] = useState<string | null>(null);
     const [alert, setAlert] = useState<{ message: string; type: 'success' | 'danger' } | null>(null);
     const [car, setCar] = useState<CarInfo | null>(null);
     const [party, setParty] = useState<PartyInfo | null>(null);
+    const [hasSellerSignature, setHasSellerSignature] = useState(false);
 
     const [billType, setBillType] = useState('');
     const [billDate, setBillDate] = useState(new Date().toISOString().split('T')[0]);
@@ -83,7 +88,7 @@ const AddPurchaseInvoice = () => {
     const [cancelTranzilaDocNumber, setCancelTranzilaDocNumber] = useState('');
     const [cancelAmount, setCancelAmount] = useState('');
     const [cancelDescription, setCancelDescription] = useState('');
-    const [carBills, setCarBills] = useState<any[]>([]);
+    const [carBills, setCarBills] = useState<PurchaseBill[]>([]);
 
     useEffect(() => {
         let cancelled = false;
@@ -94,55 +99,61 @@ const AddPurchaseInvoice = () => {
                 return;
             }
             setLoading(true);
+            setCar(null);
+            setParty(null);
+            setHasSellerSignature(false);
+            setCarBills([]);
+            setBillCreationReviewMessage(null);
+            setAlert(null);
             try {
                 const { data, error } = await supabase
                     .from('cars')
                     .select(
                         `
-                        id, title, brand, year, car_number, buy_price,
+                        id, title, brand, year, car_number, buy_price, source_type,
                         providers!cars_provider_fkey(id, name, address, phone, id_number),
-                        customers!cars_source_customer_id_fkey(id, name, phone, id_number)
+                        customers!cars_source_customer_id_fkey(id, name, address, phone, id_number)
                     `,
                     )
                     .eq('id', carId)
+                    .returns<CarInfo[]>()
                     .single();
 
                 if (error) throw error;
                 if (cancelled) return;
 
-                const carData = data as unknown as CarInfo;
+                const carData = data;
                 setCar(carData);
 
-                if (carData.providers) {
+                const seller = resolvePurchaseSeller(carData);
+                if (seller) {
                     setParty({
-                        id: carData.providers.id,
-                        name: carData.providers.name,
-                        address: carData.providers.address,
-                        phone: carData.providers.phone,
-                        id_number: carData.providers.id_number,
-                        kind: 'provider',
+                        ...seller,
+                        kind: seller === carData.providers ? 'provider' : 'customer',
                     });
-                } else if (carData.customers) {
-                    setParty({
-                        id: carData.customers.id,
-                        name: carData.customers.name,
-                        address: carData.customers.address,
-                        phone: carData.customers.phone,
-                        id_number: carData.customers.id_number,
-                        kind: 'customer',
-                    });
+                } else {
+                    setParty(null);
                 }
 
-                const { data: bills } = await supabase
+                const { data: bills, error: billsError } = await supabase
                     .from('bills')
-                    .select('id, bill_type, total_with_tax, tranzila_document_id, tranzila_document_number, date, created_at')
-                    .ilike('free_text', `%${PURCHASE_CAR_MARKER(carId)}%`)
-                    .in('bill_type', ['tax_invoice', 'receipt_only', 'tax_invoice_receipt'])
-                    .not('tranzila_document_number', 'is', null)
-                    .order('created_at', { ascending: false });
+                    .select('id, bill_type, status, total_with_tax, tranzila_document_id, tranzila_document_number, tranzila_retrieval_key, cancel_tranzila_doc_number, cancel_tranzila_doc_id, date, created_at')
+                    .eq('purchase_car_id', carId)
+                    .order('created_at', { ascending: false })
+                    .returns<PurchaseBill[]>();
 
+                if (billsError) throw billsError;
                 if (cancelled) return;
                 setCarBills(bills || []);
+                const signature = await getPurchaseSignature(carData.id);
+                if (cancelled) return;
+                setHasSellerSignature(validPurchaseSignature(signature, carData));
+                const unresolvedBill = bills?.find((bill) => !bill.tranzila_retrieval_key);
+                if (unresolvedBill) {
+                    const message = new TranzilaReconciliationRequiredError(unresolvedBill.id, 'This purchase has an unresolved bill.').message;
+                    setBillCreationReviewMessage(message);
+                    setAlert({ message, type: 'danger' });
+                }
 
                 if (carData.buy_price && carData.buy_price > 0) {
                     setItems([
@@ -157,6 +168,7 @@ const AddPurchaseInvoice = () => {
             } catch (e) {
                 if (cancelled) return;
                 console.error(e);
+                setBillCreationReviewMessage(t('error_loading_data'));
                 setAlert({ message: t('error_loading_data'), type: 'danger' });
             } finally {
                 if (!cancelled) setLoading(false);
@@ -182,18 +194,20 @@ const AddPurchaseInvoice = () => {
         setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: field === 'item_description' ? value : typeof value === 'string' ? parseFloat(value) || 0 : value } : i)));
     };
 
-    const itemsTotal = items.reduce((sum, i) => sum + (i.unit_price || 0) * (i.quantity || 1), 0);
-    const itemsTotalBeforeTax = itemsTotal / 1.18;
-    const taxAmount = itemsTotalBeforeTax * 0.18;
+    const itemsTotal = Math.round(items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0) * 100) / 100;
+    const itemsTotalBeforeTax = Math.round((itemsTotal / 1.18) * 100) / 100;
+    const taxAmount = Math.round((itemsTotal - itemsTotalBeforeTax) * 100) / 100;
     const totalWithTax = itemsTotal;
     const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
     const totalAmountForPaymentForm = billType === 'tax_invoice_receipt' ? totalWithTax : totalPaid;
+    const billsToCancel = cancellablePurchaseBills(carBills, billType);
 
     const carDetailsText = car
         ? `${car.brand || ''} ${car.title || ''} ${car.year || ''}${car.car_number ? ` - ${car.car_number}` : ''}`.trim()
         : '';
 
     const createTranzilaDocument = async (
+        billId: number,
         billData: { bill_type: string; date: string; cancel_tranzila_doc_number?: string; cancel_amount?: number; cancel_description?: string },
         billItems: InvoiceItem[],
         billPayments: BillPayment[],
@@ -218,7 +232,17 @@ const AddPurchaseInvoice = () => {
         const isRefundReceipt = billData.bill_type === 'refund_receipt';
         const isCancelDocument = isCreditNote || isRefundReceipt;
 
-        let tranzilaItems: any[] = [];
+        let tranzilaItems: Array<{
+            type: string;
+            code: null;
+            name: string;
+            price_type: string;
+            unit_price: number;
+            units_number: number;
+            unit_type: number;
+            currency_code: string;
+            to_doc_currency_exchange_rate: number;
+        }> = [];
 
         if (isCreditNote || isRefundReceipt) {
             const amount = billData.cancel_amount || 0;
@@ -250,7 +274,7 @@ const AddPurchaseInvoice = () => {
                 name: item.item_description.trim(),
                 price_type: 'G',
                 unit_price: item.unit_price,
-                units_number: item.quantity || 1,
+                units_number: item.quantity,
                 unit_type: 1,
                 currency_code: 'ILS',
                 to_doc_currency_exchange_rate: 1,
@@ -274,7 +298,7 @@ const AddPurchaseInvoice = () => {
             ];
         }
 
-        let tranzilaPayments: any[] = [];
+        let tranzilaPayments: Record<string, string | number>[] = [];
         if (!isCancelDocument && (documentType === 'RE' || documentType === 'IR')) {
             tranzilaPayments = billPayments
                 .filter((p) => p.amount && p.amount > 0)
@@ -289,7 +313,7 @@ const AddPurchaseInvoice = () => {
                         to_doc_currency_exchange_rate: 1,
                     };
                     if (payment.payment_type === 'visa') {
-                        const visaFields: Record<string, any> = {};
+                        const visaFields: Record<string, string | number> = {};
                         if (payment.visa_last_four) visaFields.cc_last_4_digits = payment.visa_last_four;
                         if (payment.visa_installments && payment.visa_installments >= 2) {
                             visaFields.cc_credit_term = 8;
@@ -321,17 +345,19 @@ const AddPurchaseInvoice = () => {
             if (tranzilaPayments.length === 0) throw new Error('Receipt requires at least one valid payment');
         }
 
-        let tranzilaPaymentsForRequest: any[] = [];
+        let tranzilaPaymentsForRequest: Record<string, string | number>[] = [];
         if (isRefundReceipt) {
             if (!cancelBillId) throw new Error('Refund receipt requires selecting an original receipt');
             const { data: originalPaymentsData, error: paymentsError } = await supabase
                 .from('bill_payments')
                 .select('payment_type, amount')
-                .eq('bill_id', parseInt(cancelBillId, 10));
-            if (paymentsError || !originalPaymentsData?.length) {
+                .eq('bill_id', parseInt(cancelBillId, 10))
+                .returns<Pick<BillPayment, 'payment_type' | 'amount'>[]>();
+            if (paymentsError) throw new Error('Failed to load original receipt payments: ' + paymentsError.message);
+            if (!originalPaymentsData?.length) {
                 throw new Error('Original receipt has no payment information');
             }
-            tranzilaPaymentsForRequest = originalPaymentsData.map((payment: any) => ({
+            tranzilaPaymentsForRequest = originalPaymentsData.map((payment) => ({
                 payment_method: paymentMethodMap[payment.payment_type],
                 payment_date: billData.date,
                 amount: payment.amount,
@@ -343,12 +369,7 @@ const AddPurchaseInvoice = () => {
         }
 
         const vatPercent = isCreditNote ? 18 : documentType === 'RE' ? 0 : 18;
-        const response = await fetch('/api/tranzila', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'create_document',
-                data: {
+        await createAndStoreTranzilaDocument(billId, billData.date, {
                     document_type: documentType,
                     document_date: billData.date || new Date().toISOString().split('T')[0],
                     document_currency_code: 'ILS',
@@ -356,7 +377,7 @@ const AddPurchaseInvoice = () => {
                     action: isCancelDocument ? 3 : 1,
                     client_company: client.name || '',
                     client_name: client.name || '',
-                    client_id: client.id_number || '',
+                    client_id: client.id_number?.toString() || '',
                     client_email: 'no-reply@car-dash.com',
                     client_phone: client.phone || '',
                     client_address_line_1: client.address || null,
@@ -371,18 +392,14 @@ const AddPurchaseInvoice = () => {
                               relation_type: 1,
                           }
                         : {}),
-                },
-            }),
         });
-
-        const result = await response.json();
-        if (!result.ok || !result.response || result.response.status_code !== 0) {
-            throw new Error(`Tranzila error (${result.response?.status_code || 'N/A'}): ${result.response?.status_msg || 'Unknown Tranzila error'}`);
-        }
-        return result.response.document;
     };
 
     const validateForm = () => {
+        if (!hasSellerSignature) {
+            setAlert({ message: t('signature_required_for_bill'), type: 'danger' });
+            return false;
+        }
         if (!party) {
             setAlert({ message: t('no_details_available'), type: 'danger' });
             return false;
@@ -392,12 +409,17 @@ const AddPurchaseInvoice = () => {
             return false;
         }
         if (billType === 'credit_note' || billType === 'refund_receipt') {
-            if (!cancelBillId) {
+            const originalBill = billsToCancel.find((bill) => String(bill.id) === cancelBillId);
+            if (!originalBill || !cancelTranzilaDocNumber) {
                 setAlert({ message: t('select_bill_to_cancel') || t('select_commission_to_cancel'), type: 'danger' });
                 return false;
             }
             if ((parseFloat(cancelAmount) || 0) <= 0) {
                 setAlert({ message: t('cancel_amount_required'), type: 'danger' });
+                return false;
+            }
+            if (Math.round(Number(cancelAmount) * 100) !== Math.round(originalBill.total_with_tax * 100)) {
+                setAlert({ message: t('cancellation_full_amount_required'), type: 'danger' });
                 return false;
             }
             if (billType === 'refund_receipt' && !cancelTranzilaDocId) {
@@ -406,12 +428,16 @@ const AddPurchaseInvoice = () => {
             }
             return true;
         }
-        if ((billType === 'tax_invoice' || billType === 'tax_invoice_receipt') && !items.some((i) => (i.item_description || '').trim() && (i.unit_price || 0) > 0)) {
+        if ((billType === 'tax_invoice' || billType === 'tax_invoice_receipt') && (items.length === 0 || !items.every((i) => i.item_description.trim() && Number.isFinite(i.unit_price) && i.unit_price > 0 && Number.isFinite(i.quantity) && i.quantity > 0))) {
             setAlert({ message: t('commission_items_required'), type: 'danger' });
             return false;
         }
-        if ((billType === 'receipt_only' || billType === 'tax_invoice_receipt') && totalPaid <= 0) {
+        if ((billType === 'receipt_only' || billType === 'tax_invoice_receipt') && (totalPaid <= 0 || !payments.every((p) => Number.isFinite(p.amount) && p.amount >= 0))) {
             setAlert({ message: t('payment_amount_required'), type: 'danger' });
+            return false;
+        }
+        if (billType === 'tax_invoice_receipt' && Math.abs(Math.round(totalPaid * 100) - Math.round(totalWithTax * 100)) > 1) {
+            setAlert({ message: t('tax_invoice_receipt_exact_match_required'), type: 'danger' });
             return false;
         }
         return true;
@@ -419,10 +445,17 @@ const AddPurchaseInvoice = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (submitting.current || billCreationReviewMessage) {
+            if (billCreationReviewMessage) setAlert({ message: billCreationReviewMessage, type: 'danger' });
+            return;
+        }
         if (!validateForm() || !party || !car) return;
 
+        submitting.current = true;
         setSaving(true);
+        let succeeded = false;
         try {
+            if (!validPurchaseSignature(await getPurchaseSignature(car.id), car)) throw new Error(t('signature_required_for_bill'));
             const isCancelDoc = billType === 'credit_note' || billType === 'refund_receipt';
             let total = 0;
             let tax_amount = 0;
@@ -447,77 +480,87 @@ const AddPurchaseInvoice = () => {
                 tax_amount = 0;
             }
 
-            const tranzilaDoc = await createTranzilaDocument(
-                {
-                    bill_type: billType,
-                    date: billDate,
-                    cancel_tranzila_doc_number: cancelTranzilaDocNumber || undefined,
-                    cancel_amount: parseFloat(cancelAmount) || undefined,
-                    cancel_description: cancelDescription || undefined,
-                },
-                items,
-                payments,
-                party,
-            );
-
-            const marker = PURCHASE_CAR_MARKER(car.id);
-            const combinedFreeText = [marker, freeText].filter(Boolean).join('\n');
-
-            const billData: any = {
+            const billData = {
                 deal_id: null,
+                purchase_car_id: car.id,
                 bill_type: billType,
-                bill_direction: billType === 'tax_invoice' || billType === 'credit_note' ? 'negative' : 'positive',
+                bill_direction: billType === 'tax_invoice' || billType === 'refund_receipt' || (billType === 'tax_invoice_receipt' && totalPaid <= (car.buy_price || 0)) ? 'negative' : 'positive',
                 status,
                 customer_name: party.name,
                 phone: party.phone || null,
                 date: billDate,
                 car_details: carDetailsText,
-                free_text: combinedFreeText,
+                free_text: freeText,
                 total,
                 tax_amount,
                 total_with_tax,
-                tranzila_document_id: tranzilaDoc.id,
-                tranzila_document_number: tranzilaDoc.number,
-                tranzila_retrieval_key: tranzilaDoc.retrieval_key,
+                bill_amount: isCancelDoc ? total_with_tax : null,
+                bill_description: isCancelDoc ? cancelDescription || null : null,
+                cancel_tranzila_doc_number: isCancelDoc ? cancelTranzilaDocNumber : null,
+                cancel_tranzila_doc_id: isCancelDoc ? cancelTranzilaDocId || null : null,
                 created_at: billDate ? new Date(billDate + 'T00:00:00').toISOString() : new Date().toISOString(),
             };
 
             const { data: billResult, error } = await supabase.from('bills').insert([billData]).select('id').single();
             if (error) throw error;
+            if (!billResult) throw new Error('Failed to create bill');
 
-            if (!isCancelDoc && (billType === 'receipt_only' || billType === 'tax_invoice_receipt')) {
-                const paymentInserts = payments
-                    .filter((p) => (p.amount || 0) > 0)
-                    .map((p) => ({
-                        bill_id: billResult.id,
-                        payment_type: p.payment_type,
-                        amount: p.amount,
-                        visa_installments: p.visa_installments || null,
-                        visa_last_four: p.visa_last_four || null,
-                        transfer_bank_name: p.transfer_bank_name || null,
-                        transfer_branch: p.transfer_branch || null,
-                        transfer_account_number: p.transfer_account_number || null,
-                        check_bank_name: p.check_bank_name || null,
-                        check_number: p.check_number || null,
-                        check_branch: p.check_branch || null,
-                        check_account_number: p.check_account_number || null,
-                    }));
-                if (paymentInserts.length > 0) {
-                    const { error: paymentsError } = await supabase.from('bill_payments').insert(paymentInserts);
-                    if (paymentsError) {
-                        await supabase.from('bills').delete().eq('id', billResult.id);
-                        throw paymentsError;
+            try {
+                if (!isCancelDoc && (billType === 'receipt_only' || billType === 'tax_invoice_receipt')) {
+                    const paymentInserts = payments
+                        .filter((p) => (p.amount || 0) > 0)
+                        .map((p) => ({
+                            ...p,
+                            id: undefined,
+                            bill_id: billResult.id,
+                            created_at: billData.created_at,
+                        }));
+                    if (paymentInserts.length > 0) {
+                        const { error: paymentsError } = await supabase.from('bill_payments').insert(paymentInserts);
+                        if (paymentsError) throw paymentsError;
                     }
                 }
+                await createTranzilaDocument(
+                    billResult.id,
+                    {
+                        bill_type: billType,
+                        date: billDate,
+                        cancel_tranzila_doc_number: cancelTranzilaDocNumber || undefined,
+                        cancel_amount: parseFloat(cancelAmount) || undefined,
+                        cancel_description: cancelDescription || undefined,
+                    },
+                    items,
+                    payments,
+                    party,
+                );
+            } catch (creationError) {
+                if (creationError instanceof TranzilaReconciliationRequiredError) {
+                    setBillCreationReviewMessage(creationError.message);
+                    throw creationError;
+                }
+                const { error: paymentsDeleteError } = await supabase.from('bill_payments').delete().eq('bill_id', billResult.id);
+                const { error: billDeleteError } = paymentsDeleteError
+                    ? { error: paymentsDeleteError }
+                    : await supabase.from('bills').delete().eq('id', billResult.id);
+                if (billDeleteError) {
+                    const message = `Bill ${billResult.id} could not be rolled back: ${billDeleteError.message}. Review this bill before retrying.`;
+                    setBillCreationReviewMessage(message);
+                    throw new Error(message);
+                }
+                throw creationError;
             }
 
+            succeeded = true;
             setAlert({ message: t('bill_created_successfully'), type: 'success' });
             setTimeout(() => router.push(returnTo), 1200);
         } catch (err) {
             console.error(err);
             setAlert({ message: err instanceof Error ? err.message : t('error_creating_bill'), type: 'danger' });
         } finally {
-            setSaving(false);
+            if (!succeeded) {
+                submitting.current = false;
+                setSaving(false);
+            }
         }
     };
 
@@ -582,6 +625,11 @@ const AddPurchaseInvoice = () => {
 
                 {!party ? (
                     <div className="panel py-10 text-center text-gray-500">{t('no_details_available')}</div>
+                ) : !hasSellerSignature ? (
+                    <div className="panel space-y-4 py-10 text-center">
+                        <p>{t('signature_required_for_bill')}</p>
+                        <Link href={`/purchases-deals/preview/${car.id}`} className="btn btn-primary inline-flex">{t('sign_purchase')}</Link>
+                    </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="panel border-2 border-primary/20 bg-gradient-to-r from-primary/10 to-secondary/10">
@@ -647,9 +695,7 @@ const AddPurchaseInvoice = () => {
                             <div className="panel">
                                 <div className="mb-4">
                                     <label className="mb-2 block text-sm font-medium">{t('select_bill_to_cancel') || t('select_commission_to_cancel')}</label>
-                                    {carBills.filter((b) =>
-                                        billType === 'credit_note' ? b.bill_type === 'tax_invoice' : b.bill_type === 'receipt_only' || b.bill_type === 'tax_invoice_receipt',
-                                    ).length > 0 ? (
+                                    {billsToCancel.length > 0 ? (
                                         <select
                                             className="form-select"
                                             value={cancelBillId}
@@ -662,12 +708,7 @@ const AddPurchaseInvoice = () => {
                                             }}
                                         >
                                             <option value="">{t('select')}</option>
-                                            {carBills
-                                                .filter((b) =>
-                                                    billType === 'credit_note'
-                                                        ? b.bill_type === 'tax_invoice'
-                                                        : b.bill_type === 'receipt_only' || b.bill_type === 'tax_invoice_receipt',
-                                                )
+                                            {billsToCancel
                                                 .map((b) => (
                                                     <option key={b.id} value={b.id}>
                                                         #{b.tranzila_document_number || b.id} — ₪{Number(b.total_with_tax || 0).toLocaleString()}
@@ -786,7 +827,7 @@ const AddPurchaseInvoice = () => {
                                 <button type="button" className="btn btn-outline-secondary" onClick={() => router.back()} disabled={saving}>
                                     {t('cancel')}
                                 </button>
-                                <button type="submit" className="btn btn-primary" disabled={saving}>
+                                <button type="submit" className="btn btn-primary" disabled={saving || !!billCreationReviewMessage}>
                                     {saving ? t('saving') : t('create_bill')}
                                 </button>
                             </div>

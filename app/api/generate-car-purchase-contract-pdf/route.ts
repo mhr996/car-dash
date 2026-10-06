@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFService } from '@/utils/pdf-service';
 import { CarContract } from '@/types/contract';
+import { CompanyInfo } from '@/lib/company-info';
+import { parseContractPayload } from '@/utils/contract-payload';
 
 export async function POST(request: NextRequest) {
     try {
@@ -10,29 +12,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Contract HTML is required' }, { status: 400 });
         }
 
-        let htmlContent: string;
-
-        // Check if contractHtml is a JSON string (new format) or HTML (old format)
-        try {
-            const parsedData = JSON.parse(contractHtml);
-
-            if (parsedData.contract && parsedData.template && parsedData.contractType === 'car-purchase') {
-                // New format: generate HTML from car purchase template
-                htmlContent = await generateCarPurchaseContractHTML(parsedData.contract, parsedData.template);
-            } else {
-                throw new Error('Invalid data format');
-            }
-        } catch (parseError) {
-            // Old format: assume it's already HTML
-            htmlContent = contractHtml;
-        }
+        const parsedData = parseContractPayload(contractHtml, 'car-purchase');
+        const htmlContent = parsedData ? await generateCarPurchaseContractHTML(parsedData.contract, parsedData.template) : contractHtml;
 
         // Generate PDF using Puppeteer
         const pdfService = PDFService.getInstance();
         const pdfBuffer = await pdfService.generateContractPDF({
-            contractHtml: htmlContent,
             filename,
             ...options,
+            contractHtml: htmlContent,
+            baseUrl: request.nextUrl.origin,
         });
 
         // Return PDF as response
@@ -54,43 +43,19 @@ export async function POST(request: NextRequest) {
  * Generate HTML from car purchase contract template on server-side
  */
 async function generateCarPurchaseContractHTML(contract: CarContract, template: string): Promise<string> {
-    // Import company info function
     const { getCompanyInfo } = await import('@/lib/company-info');
 
-    try {
-        const companyInfo = await getCompanyInfo(true); // Use service role for API routes
-
-        // Generate HTML based on template
-        switch (template) {
-            case 'english':
-                return generateEnglishCarPurchaseContractHTML(contract, companyInfo);
-            case 'arabic':
-                return generateArabicCarPurchaseContractHTML(contract, companyInfo);
-            case 'hebrew':
-                return generateHebrewCarPurchaseContractHTML(contract, companyInfo);
-            default:
-                return generateEnglishCarPurchaseContractHTML(contract, companyInfo);
-        }
-    } catch (error) {
-        console.warn('Failed to load company info, using defaults:', error);
-        const defaultCompanyInfo = {
-            name: 'Car Dealership',
-            address: null,
-            phone: null,
-            tax_number: null,
-            logo_url: null,
-        };
-
-        switch (template) {
-            case 'english':
-                return generateEnglishCarPurchaseContractHTML(contract, defaultCompanyInfo);
-            case 'arabic':
-                return generateArabicCarPurchaseContractHTML(contract, defaultCompanyInfo);
-            case 'hebrew':
-                return generateHebrewCarPurchaseContractHTML(contract, defaultCompanyInfo);
-            default:
-                return generateEnglishCarPurchaseContractHTML(contract, defaultCompanyInfo);
-        }
+    const companyInfo = await getCompanyInfo(true, true);
+    contract = { ...contract, companySignatureUrl: contract.companySignatureUrl || companyInfo.signature_url };
+    switch (template) {
+        case 'english':
+            return generateEnglishCarPurchaseContractHTML(contract, companyInfo);
+        case 'arabic':
+            return generateArabicCarPurchaseContractHTML(contract, companyInfo);
+        case 'hebrew':
+            return generateHebrewCarPurchaseContractHTML(contract, companyInfo);
+        default:
+            return generateEnglishCarPurchaseContractHTML(contract, companyInfo);
     }
 }
 
@@ -98,7 +63,7 @@ async function generateCarPurchaseContractHTML(contract: CarContract, template: 
  * Generate English car purchase contract HTML
  * For car purchase contracts: seller = provider/customer, buyer = our company
  */
-function generateEnglishCarPurchaseContractHTML(contract: CarContract, companyInfo: any): string {
+function generateEnglishCarPurchaseContractHTML(contract: CarContract, companyInfo: CompanyInfo): string {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -303,12 +268,12 @@ function generateEnglishCarPurchaseContractHTML(contract: CarContract, companyIn
                 <div class="grid grid-cols-2 gap-3 pt-3 w-full">
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-xs text-gray-700">Seller's Signature</h3>
-                        <div class="border-b-2 border-gray-300 mb-2 h-8"></div>
+                        <div class="border-b-2 border-gray-300 mb-2 h-12 flex items-center justify-center">${contract.customerSignatureUrl ? `<img src="${contract.customerSignatureUrl}" alt="Seller Signature" style="max-height:48px;max-width:100%;object-fit:contain" />` : ''}</div>
                         <p class="text-xs text-gray-600">Date: ______________</p>
                     </div>
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-xs text-gray-700">Buyer's Signature</h3>
-                        <div class="border-b-2 border-gray-300 mb-2 h-8"></div>
+                        <div class="border-b-2 border-gray-300 mb-2 h-12 flex items-center justify-center">${contract.companySignatureUrl ? `<img src="${contract.companySignatureUrl}" alt="Company Signature" style="max-height:48px;max-width:100%;object-fit:contain" />` : ''}</div>
                         <p class="text-xs text-gray-600">Date: ______________</p>
                     </div>
                 </div>
@@ -321,7 +286,7 @@ function generateEnglishCarPurchaseContractHTML(contract: CarContract, companyIn
 /**
  * Generate Arabic car purchase contract HTML
  */
-function generateArabicCarPurchaseContractHTML(contract: CarContract, companyInfo: any): string {
+function generateArabicCarPurchaseContractHTML(contract: CarContract, companyInfo: CompanyInfo): string {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('ar', {
             style: 'currency',
@@ -528,12 +493,12 @@ function generateArabicCarPurchaseContractHTML(contract: CarContract, companyInf
                 <div class="grid grid-cols-2 gap-3 pt-3 w-full">
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-xs text-gray-700">توقيع البائع</h3>
-                        <div class="border-b-2 border-gray-300 mb-2 h-8"></div>
+                        <div class="border-b-2 border-gray-300 mb-2 h-12 flex items-center justify-center">${contract.customerSignatureUrl ? `<img src="${contract.customerSignatureUrl}" alt="Seller Signature" style="max-height:48px;max-width:100%;object-fit:contain" />` : ''}</div>
                         <p class="text-xs text-gray-600">التاريخ: ______________</p>
                     </div>
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-xs text-gray-700">توقيع المشتري</h3>
-                        <div class="border-b-2 border-gray-300 mb-2 h-8"></div>
+                        <div class="border-b-2 border-gray-300 mb-2 h-12 flex items-center justify-center">${contract.companySignatureUrl ? `<img src="${contract.companySignatureUrl}" alt="Company Signature" style="max-height:48px;max-width:100%;object-fit:contain" />` : ''}</div>
                         <p class="text-xs text-gray-600">التاريخ: ______________</p>
                     </div>
                 </div>
@@ -549,7 +514,7 @@ function generateArabicCarPurchaseContractHTML(contract: CarContract, companyInf
 /**
  * Generate Hebrew car purchase contract HTML
  */
-function generateHebrewCarPurchaseContractHTML(contract: CarContract, companyInfo: any): string {
+function generateHebrewCarPurchaseContractHTML(contract: CarContract, companyInfo: CompanyInfo): string {
     const formatCurrency = (value: number) => {
         return new Intl.NumberFormat('he-IL', {
             style: 'currency',
@@ -754,12 +719,12 @@ function generateHebrewCarPurchaseContractHTML(contract: CarContract, companyInf
                 <div class="grid grid-cols-2 gap-3 pt-3 w-full">
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-xs text-gray-700">חתימת המוכר</h3>
-                        <div class="border-b-2 border-gray-300 mb-2 h-8"></div>
+                        <div class="border-b-2 border-gray-300 mb-2 h-12 flex items-center justify-center">${contract.customerSignatureUrl ? `<img src="${contract.customerSignatureUrl}" alt="Seller Signature" style="max-height:48px;max-width:100%;object-fit:contain" />` : ''}</div>
                         <p class="text-xs text-gray-600">תאריך: ______________</p>
                     </div>
                     <div class="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-3 border border-gray-200 text-center">
                         <h3 class="font-bold mb-2 text-xs text-gray-700">חתימת הקונה</h3>
-                        <div class="border-b-2 border-gray-300 mb-2 h-8"></div>
+                        <div class="border-b-2 border-gray-300 mb-2 h-12 flex items-center justify-center">${contract.companySignatureUrl ? `<img src="${contract.companySignatureUrl}" alt="Company Signature" style="max-height:48px;max-width:100%;object-fit:contain" />` : ''}</div>
                         <p class="text-xs text-gray-600">תאריך: ______________</p>
                     </div>
                 </div>
